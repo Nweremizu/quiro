@@ -1,0 +1,26 @@
+{
+  "app": {
+    "name": "Quiro",
+    "editorTitle": "Quiro Editor",
+    "subtitle": "Enregistrement et édition d’écran",
+    "language": "Langue",
+    "manageRecordings": "Ouvrir le dossier des enregistrements"
+  },
+  "actions": {
+    "cancel": "Annuler",
+    "close": "Fermer",
+    "export": "Exporter",
+    "load": "Charger",
+    "redo": "Rétablir",
+    "reset": "Réinitialiser",
+    "save": "Enregistrer",
+    "undo": "Annuler",
+    "delete": "Supprimer",
+    "done": "Terminé"
+  },
+  "errors": {
+    "invalidFileType": "Type de fichier invalide",
+    "failedToUploadImage": "Échec du téléchargement de l’image",
+    "fileReadError": "Une erreur s’est produite lors de la lecture du fichier."
+  }
+}

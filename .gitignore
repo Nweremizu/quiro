@@ -1,0 +1,47 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-electron
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+release/**
+*.kiro/
+# npx electron-builder --mac --win
+.tmp/
+.history/
+extension-sources/
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+
+# Native capture build artifacts
+electron/native/wgc-capture/build/
+electron/native/cursor-monitor/build/
+electron/native/gpu-export-probe/build/
+electron/native/nvidia-cuda-compositor/build/
+electron/native/bin/*/whisper-*
+electron/native/bin/*/whisper-runtime.json
+
+# Local debug helpers
+tmp-*.ps1
+.tmp-*.ps1
+gpu-export-probe.mp4

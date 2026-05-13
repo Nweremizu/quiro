@@ -1,0 +1,41 @@
+{
+  "zoom": {
+    "cannotPlace": "Impossible de placer le zoom ici",
+    "existsOrNoSpace": "Un zoom existe déjà à cet emplacement ou il n’y a pas assez d’espace disponible.",
+    "suggestHandlerUnavailable": "Gestionnaire de suggestion de zoom indisponible",
+    "noTelemetry": "Aucune télémétrie du curseur disponible",
+    "recordFirst": "Enregistrez d’abord un screencast pour générer des suggestions basées sur le curseur.",
+    "noUsableTelemetry": "Aucune télémétrie du curseur exploitable",
+    "notEnoughMovement": "L’enregistrement ne contient pas assez de données de mouvement du curseur.",
+    "noInteractionMoments": "Aucun moment d’interaction clair trouvé",
+    "tryRecording": "Essayez un enregistrement avec des pauses ou des clics autour des actions importantes.",
+    "noAutoZoomSlots": "Aucun emplacement de zoom automatique disponible",
+    "dwellPointsOverlap": "Des points d’arrêt détectés se chevauchent avec des zones de zoom existantes.",
+    "addedSuggestions": "Suggestions de zoom basées sur l'interaction ajoutées : {{count}}",
+    "label": "Zoom {{index}}",
+    "addZoom": "Ajouter un zoom ",
+    "suggestZooms": "Suggérer des zooms à partir du curseur"
+  },
+  "trim": {
+    "cannotPlace": "Impossible de placer le découpage ici",
+    "existsOrNoSpace": "Un découpage existe déjà à cet emplacement ou il n’y a pas assez d’espace disponible.",
+    "label": "Découpage {{index}}",
+    "addTrim": "Ajouter un découpage (T)"
+  },
+  "speed": {
+    "cannotPlace": "Impossible de placer la vitesse ici",
+    "existsOrNoSpace": "Une zone de vitesse existe déjà à cet emplacement ou il n’y a pas assez d’espace disponible.",
+    "label": "Vitesse"
+  },
+  "annotation": {
+    "label": "Annotation",
+    "image": "Image",
+    "addAnnotation": "Ajouter une annotation (A)"
+  },
+  "audio": {
+    "label": "Audio"
+  },
+  "addSpeed": "Ajouter une vitesse (S)",
+  "resizeLeft": "Redimensionner vers la gauche",
+  "resizeRight": "Redimensionner vers la droite"
+}

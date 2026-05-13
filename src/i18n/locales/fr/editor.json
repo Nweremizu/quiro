@@ -1,0 +1,137 @@
+{
+	"playback": {
+		"play": "Lecture",
+		"pause": "Pause",
+		"skipBack": "Reculer",
+		"skipForward": "Avancer",
+		"muteUnmute": "Activer/Désactiver le son"
+	},
+	"annotations": {
+		"settings": "Paramètres des annotations",
+		"active": "Actif",
+		"text": "Texte",
+		"image": "Image",
+		"arrow": "Flèche",
+		"blur": "Flou",
+		"textContent": "Contenu du texte",
+		"textPlaceholder": "Entrez votre texte...",
+		"fontStyle": "Style de police",
+		"selectStyle": "Sélectionner un style",
+		"size": "Taille",
+		"toggleBold": "Activer/désactiver le gras",
+		"toggleItalic": "Activer/désactiver l’italique",
+		"toggleUnderline": "Activer/désactiver le soulignement",
+		"alignLeft": "Aligner à gauche",
+		"alignCenter": "Centrer",
+		"alignRight": "Aligner à droite",
+		"textColor": "Couleur du texte",
+		"background": "Arrière-plan",
+		"none": "Aucun",
+		"clearBackground": "Supprimer l’arrière-plan",
+		"uploadImage": "Importer une image",
+		"supportedFormats": "Formats pris en charge : JPG, PNG, GIF, WebP",
+		"arrowDirection": "Direction de la flèche",
+		"strokeWidth": "Épaisseur du trait : {{width}} px",
+		"arrowColor": "Couleur de la flèche",
+		"deleteAnnotation": "Supprimer l’annotation",
+		"shortcutsAndTips": "Raccourcis et conseils",
+		"tipSelectAnnotation": "Déplacez la tête de lecture vers une zone d’annotations superposées et sélectionnez un élément.",
+		"tipCycleForward": "Utilisez Tab pour parcourir les éléments superposés.",
+		"tipCycleBackward": "Utilisez Maj+Tab pour parcourir en arrière.",
+		"imageUploadSuccess": "Image importée avec succès !",
+		"imageUploadError": "Veuillez importer une image JPG, PNG, GIF ou WebP.",
+		"blurStrength": "Intensité du flou : {{strength}}",
+		"solidColor": "Couleur unie (censure)",
+		"borderRadius": "Rayon de bordure"
+	},
+
+	"fontStyles": {
+		"classic": "Classique",
+		"editor": "Éditeur",
+		"strong": "Fort",
+		"typewriter": "Machine à écrire",
+		"deco": "Décoratif",
+		"simple": "Simple",
+		"modern": "Moderne",
+		"clean": "Épuré"
+	},
+	"format": {
+		"mp4Video": "Vidéo MP4",
+		"mp4Description": "Fichier vidéo de haute qualité",
+		"gifAnimation": "Animation GIF",
+		"gifDescription": "Image animée à partager"
+	},
+	"gifOptions": {
+		"frameRate": "Fréquence d’images",
+		"outputSize": "Taille de sortie",
+		"outputDimensions": "Sortie : {{width}} × {{height}} px",
+		"loopAnimation": "Boucler l’animation",
+		"loopDescription": "Le GIF sera lu en continu"
+	},
+	"tutorial": {
+		"howTrimmingWorks": "Fonctionnement du découpage",
+		"title": "Comment fonctionne le découpage",
+		"understanding": "Comprendre comment supprimer les parties indésirables de votre vidéo.",
+		"descriptionP1": "L’outil de découpage fonctionne en définissant les segments que vous souhaitez",
+		"descriptionRemove": "supprimer",
+		"descriptionP2": "de votre vidéo.",
+		"descriptionP3": "Toute partie de la timeline couverte par un segment rouge sera supprimée lors de l’exportation.",
+		"visualExample": "Exemple visuel",
+		"removed": "SUPPRIMÉ",
+		"kept": "Conservé",
+		"finalVideo": "Vidéo finale",
+		"part": "Partie {{number}}",
+		"addTrimStep": "1. Ajouter un découpage",
+		"addTrimDesc": "Appuyez sur T ou cliquez sur l’icône des ciseaux pour marquer une section à supprimer.",
+		"adjustStep": "2. Ajuster",
+		"adjustDesc": "Faites glisser les bords de la zone rouge pour couvrir exactement ce que vous souhaitez retirer."
+	},
+	"feedback": {
+		"trigger": "Retour",
+		"title": "Retour et contact",
+		"description": "Contactez-nous directement ou ouvrez un ticket si quelque chose ne fonctionne pas ou manque.",
+		"emailLabel": "Email",
+		"xLabel": "X",
+		"reportIssue": "Signaler un problème / envoyer un retour",
+		"openFailed": "Échec de l’ouverture du lien."
+	},
+	"keyboardShortcuts": {
+		"trigger": "Raccourcis",
+		"title": "Raccourcis clavier",
+		"description": "Référence rapide pour la timeline et les contrôles de l’éditeur.",
+		"customizeTooltip": "Personnaliser les raccourcis",
+		"customize": "Personnaliser",
+		"panTimeline": "Déplacer la timeline",
+		"zoomTimeline": "Zoomer la timeline",
+		"cycleAnnotations": "Parcourir les annotations",
+		"tab": "Tab"
+	},
+	"actions": {
+		"saveAgain": "Enregistrer à nouveau",
+		"showInFolder": "Afficher dans le dossier"
+	},
+	"project": {
+		"untitled": "Sans titre"
+	},
+	"exportStatus": {
+		"exporting": "Exportation",
+		"renderingFile": "Rendu de votre fichier.",
+		"preparing": "Préparation de l’export...",
+		"completePercent": "{{percent}} % terminé",
+		"issue": "Problème d’exportation",
+		"complete": "Exportation terminée",
+		"savedSuccessfully": "Votre fichier a été enregistré avec succès."
+	},
+	"export": {
+		"processingAudioEdits": "Traitement de l’audio avec modifications de vitesse/superposition"
+	},
+	"toolbar": {
+		"addLayer": "Ajouter une couche",
+		"splitClip": "Diviser le clip (C)"
+	},
+	"timeline": {
+		"expand": "Développer la timeline",
+		"collapse": "Réduire la timeline"
+	},
+	"openRecordingsFolder": "Ouvrir le dossier des enregistrements"
+}

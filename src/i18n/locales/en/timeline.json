@@ -1,0 +1,41 @@
+{
+  "zoom": {
+    "cannotPlace": "Cannot place zoom here",
+    "existsOrNoSpace": "Zoom already exists at this location or not enough space available.",
+    "suggestHandlerUnavailable": "Zoom suggestion handler unavailable",
+    "noTelemetry": "No cursor telemetry available",
+    "recordFirst": "Record a screencast first to generate cursor-based suggestions.",
+    "noUsableTelemetry": "No usable cursor telemetry",
+    "notEnoughMovement": "The recording does not include enough cursor movement data.",
+    "noInteractionMoments": "No clear interaction moments found",
+    "tryRecording": "Try a recording with pauses or clicks around important actions.",
+    "noAutoZoomSlots": "No auto-zoom slots available",
+    "dwellPointsOverlap": "Detected dwell points overlap existing zoom regions.",
+    "addedSuggestions": "Added {{count}} interaction-based zoom suggestion(s)",
+    "label": "Zoom {{index}}",
+    "addZoom": "Add Zoom",
+    "suggestZooms": "Suggest Zooms from Cursor"
+  },
+  "trim": {
+    "cannotPlace": "Cannot place trim here",
+    "existsOrNoSpace": "Trim already exists at this location or not enough space available.",
+    "label": "Trim {{index}}",
+    "addTrim": "Add Trim (T)"
+  },
+  "speed": {
+    "cannotPlace": "Cannot place speed here",
+    "existsOrNoSpace": "Speed region already exists at this location or not enough space available.",
+    "label": "Speed"
+  },
+  "annotation": {
+    "label": "Annotation",
+    "image": "Image",
+    "addAnnotation": "Add Annotation (A)"
+  },
+  "audio": {
+    "label": "Audio"
+  },
+  "addSpeed": "Add Speed (S)",
+  "resizeLeft": "Resize left",
+  "resizeRight": "Resize right"
+}
