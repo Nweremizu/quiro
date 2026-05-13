@@ -1,0 +1,363 @@
+@font-face {
+  font-family: "Satoshi";
+  src: url("./assets/fonts/Satoshi-Variable.woff2") format("woff2");
+
+  font-weight: 300 900;
+  font-style: normal;
+}
+
+/* Custom Scrollbar for Source Selector */
+.source-selector-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.source-selector-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.source-selector-scroll::-webkit-scrollbar-thumb {
+  background: rgba(83, 83, 94, 0.2);
+  border-radius: 20px;
+  transition: var(--color-background) 0.2s ease;
+}
+
+.source-selector-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 107, 120, 0.4);
+}
+
+/* Support for Firefox */
+.source-selector-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(107, 107, 120, 0.2) transparent;
+}
+
+/* Timeline Glass Styles - Zoom */
+.glass-purple {
+  position: relative;
+  border-radius: 8px;
+  background: #4a2a69;
+  border: 1px solid #5c3385;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.glass-purple:hover {
+  background: #593180;
+  border-color: #733da7;
+}
+
+.glass-purple.selected {
+  background: #643690;
+  border-color: #a855f7;
+  box-shadow: inset 0 0 0 1.5px #a855f7;
+  z-index: 10;
+}
+
+/* Timeline Glass Styles - Trim */
+.glass-red {
+  position: relative;
+  border-radius: 8px;
+  background: #652425;
+  border: 1px solid #802a2b;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.glass-red:hover {
+  background: #7b292a;
+  border-color: #a13232;
+}
+
+.glass-red.selected {
+  background: #8b2d2d;
+  border-color: #ef4444;
+  box-shadow: inset 0 0 0 1.5px #ef4444;
+  z-index: 10;
+}
+
+/* Timeline Glass Styles - Clip */
+.glass-cyan {
+  position: relative;
+  border-radius: 8px;
+  background: #183065;
+  border: 1px solid #1b3a7f;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.glass-cyan:hover {
+  background: #1a387a;
+  border-color: #1e469f;
+}
+
+.glass-cyan.selected {
+  background: #1c3e89;
+  border-color: #2563eb;
+  box-shadow: inset 0 0 0 1.5px #2563eb;
+  z-index: 10;
+}
+
+/* Timeline Glass Styles - Speed */
+.glass-amber {
+  position: relative;
+  border-radius: 8px;
+  background: #67460f;
+  border: 1px solid #83570f;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.glass-amber:hover {
+  background: #7e540f;
+  border-color: #a56c0d;
+}
+
+.glass-amber.selected {
+  background: #8e5e0e;
+  border-color: #f59e0b;
+  box-shadow: inset 0 0 0 1.5px #f59e0b;
+  z-index: 10;
+}
+
+/* Timeline Glass Styles - Audio */
+.glass-dark-green {
+  position: relative;
+  border-radius: 8px;
+  background: #164f2d;
+  border: 1px solid #196b38;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.glass-dark-green:hover {
+  background: #186234;
+  border-color: #1c8643;
+}
+
+.glass-dark-green.selected {
+  background: #196e3a;
+  border-color: #22c55e;
+  box-shadow: inset 0 0 0 1.5px #22c55e;
+  z-index: 10;
+}
+
+/* Timeline Glass Styles - Annotation */
+.glass-yellow {
+  position: relative;
+  border-radius: 8px;
+  background: #4e4726;
+  border: 1px solid #62582c;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.glass-yellow:hover {
+  background: #5f552b;
+  border-color: #7a6d34;
+}
+
+.glass-yellow.selected {
+  background: #6a5f2f;
+  border-color: #b4a046;
+  box-shadow: inset 0 0 0 1.5px #b4a046;
+  z-index: 10;
+}
+
+/* Timeline Glass Styles - Green (Green variant) */
+.glass-green {
+  position: relative;
+  border-radius: 8px;
+  background: #183065;
+  border: 1px solid #1b3a7f;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.glass-green:hover {
+  background: #1a387a;
+  border-color: #1e469f;
+}
+
+.glass-green.selected {
+  background: #1c3e89;
+  border-color: #2563eb;
+  box-shadow: inset 0 0 0 1.5px #2563eb;
+  z-index: 10;
+}
+
+/* Glass resize handle — visible on hover */
+.zoom-end-cap {
+  position: absolute;
+  top: 50%;
+  bottom: auto;
+  height: 70%;
+  width: 4px;
+  pointer-events: auto;
+  z-index: 2;
+  opacity: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.88);
+  transition:
+    opacity 0.15s ease,
+    background 0.15s ease;
+}
+
+.zoom-end-cap.left {
+  left: 0;
+}
+
+.zoom-end-cap.right {
+  right: 0;
+}
+
+.glass-purple:hover .zoom-end-cap,
+.glass-red:hover .zoom-end-cap,
+.glass-cyan:hover .zoom-end-cap,
+.glass-amber:hover .zoom-end-cap,
+.glass-dark-green:hover .zoom-end-cap,
+.glass-yellow:hover .zoom-end-cap,
+.glass-green:hover .zoom-end-cap {
+  opacity: 1;
+}
+
+/* Timeline Scrollbar Styles */
+.timeline-scroll-area {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--foreground) / 0.25) transparent;
+}
+
+.timeline-scroll-area::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+  background-color: transparent;
+}
+
+.timeline-scroll-area::-webkit-scrollbar-corner {
+  background-color: transparent;
+}
+
+.timeline-scroll-area::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--foreground) / 0.25);
+  border-radius: 10px;
+  border: 2px solid hsl(var(--color-background));
+}
+
+.timeline-scroll-area::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--foreground) / 0.35);
+}
+
+.timeline-scroll-area::-webkit-scrollbar-thumb:active {
+  background-color: hsl(var(--foreground) / 0.45);
+}
+
+/* Light mode overrides for glass styles */
+:root:not(.dark) .glass-green,
+:root:not(.dark) .glass-cyan {
+  background: linear-gradient(180deg, #dbeafe 0%, #93c5fd 100%);
+  border-color: #60a5fa;
+}
+
+:root:not(.dark) .glass-green:hover,
+:root:not(.dark) .glass-cyan:hover {
+  background: linear-gradient(180deg, #bfdbfe 0%, #60a5fa 100%);
+  border-color: #3b82f6;
+}
+
+:root:not(.dark) .glass-green.selected,
+:root:not(.dark) .glass-cyan.selected {
+  background: linear-gradient(180deg, #93c5fd 0%, #3b82f6 100%);
+  border-color: #2563eb;
+  box-shadow: inset 0 0 0 1.5px #2563eb;
+}
+
+:root:not(.dark) .glass-red {
+  background: linear-gradient(180deg, #fee2e2 0%, #fca5a5 100%);
+  border-color: #f87171;
+}
+
+:root:not(.dark) .glass-red:hover {
+  background: linear-gradient(180deg, #fecaca 0%, #f87171 100%);
+  border-color: #ef4444;
+}
+
+:root:not(.dark) .glass-red.selected {
+  background: linear-gradient(180deg, #fca5a5 0%, #ef4444 100%);
+  border-color: #ef4444;
+  box-shadow: inset 0 0 0 1.5px #ef4444;
+}
+
+:root:not(.dark) .glass-amber {
+  background: linear-gradient(180deg, #fef3c7 0%, #fcd34d 100%);
+  border-color: #fbbf24;
+}
+
+:root:not(.dark) .glass-amber:hover {
+  background: linear-gradient(180deg, #fde68a 0%, #fbbf24 100%);
+  border-color: #f59e0b;
+}
+
+:root:not(.dark) .glass-amber.selected {
+  background: linear-gradient(180deg, #fcd34d 0%, #f59e0b 100%);
+  border-color: #f59e0b;
+  box-shadow: inset 0 0 0 1.5px #f59e0b;
+}
+
+:root:not(.dark) .glass-purple {
+  background: linear-gradient(180deg, #f3e8ff 0%, #e9d5ff 100%);
+  border-color: #d8b4fe;
+}
+
+:root:not(.dark) .glass-purple:hover {
+  background: linear-gradient(180deg, #e9d5ff 0%, #d8b4fe 100%);
+  border-color: #c084fc;
+}
+
+:root:not(.dark) .glass-purple.selected {
+  background: linear-gradient(180deg, #d8b4fe 0%, #c084fc 100%);
+  border-color: #a855f7;
+  box-shadow: inset 0 0 0 1.5px #a855f7;
+}
+
+:root:not(.dark) .glass-dark-green {
+  background: linear-gradient(180deg, #dcfce7 0%, #bbf7d0 100%);
+  border-color: #86efac;
+}
+
+:root:not(.dark) .glass-dark-green:hover {
+  background: linear-gradient(180deg, #bbf7d0 0%, #86efac 100%);
+  border-color: #4ade80;
+}
+
+:root:not(.dark) .glass-dark-green.selected {
+  background: linear-gradient(180deg, #86efac 0%, #4ade80 100%);
+  border-color: #22c55e;
+  box-shadow: inset 0 0 0 1.5px #22c55e;
+}
+
+:root:not(.dark) .glass-yellow {
+  background: linear-gradient(180deg, #fef08a 0%, #fde047 100%);
+  border-color: #facc15;
+}
+
+:root:not(.dark) .glass-yellow:hover {
+  background: linear-gradient(180deg, #fde047 0%, #facc15 100%);
+  border-color: #eab308;
+}
+
+:root:not(.dark) .glass-yellow.selected {
+  background: linear-gradient(180deg, #facc15 0%, #eab308 100%);
+  border-color: #b4a046;
+  box-shadow: inset 0 0 0 1.5px #b4a046;
+}

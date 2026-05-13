@@ -1,0 +1,41 @@
+{
+  "zoom": {
+    "cannotPlace": "无法在此处放置缩放",
+    "existsOrNoSpace": "此位置已存在缩放或空间不足。",
+    "suggestHandlerUnavailable": "缩放建议处理不可用",
+    "noTelemetry": "无光标遥测数据",
+    "recordFirst": "请先录制屏幕以生成基于光标的建议。",
+    "noUsableTelemetry": "无可用的光标遥测数据",
+    "notEnoughMovement": "录制中未包含足够的光标移动数据。",
+    "noInteractionMoments": "未找到明显的交互时刻",
+    "tryRecording": "尝试在关键操作附近有停顿或点击的录制。",
+    "noAutoZoomSlots": "没有可用的自动缩放位置",
+    "dwellPointsOverlap": "检测到的停留点与现有缩放区域重叠。",
+    "addedSuggestions": "已添加 {{count}} 个基于交互的缩放建议",
+    "label": "缩放 {{index}}",
+    "addZoom": "添加缩放 ",
+    "suggestZooms": "从光标建议缩放"
+  },
+  "trim": {
+    "cannotPlace": "无法在此处放置修剪",
+    "existsOrNoSpace": "此位置已存在修剪或空间不足。",
+    "label": "修剪 {{index}}",
+    "addTrim": "添加修剪 (T)"
+  },
+  "speed": {
+    "cannotPlace": "无法在此处放置变速",
+    "existsOrNoSpace": "此位置已存在变速区域或空间不足。",
+    "label": "变速"
+  },
+  "annotation": {
+    "label": "注释",
+    "image": "图片",
+    "addAnnotation": "添加注释 (A)"
+  },
+  "audio": {
+    "label": "音频"
+  },
+  "addSpeed": "添加变速 (S)",
+  "resizeLeft": "向左调整",
+  "resizeRight": "向右调整"
+}
