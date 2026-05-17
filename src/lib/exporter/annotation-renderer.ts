@@ -3,6 +3,7 @@ import {
   type ArrowDirection,
   BLUR_ANNOTATION_STRENGTH,
 } from "@/types/editor";
+import { resolveAnnotationAtTime } from "@/components/editor/utils/annotation-keyframes";
 
 export interface AnnotationRenderAssets {
   imageCache: Map<string, HTMLImageElement>;
@@ -343,19 +344,33 @@ export async function renderAnnotations(
   scaleFactor: number = 1.0,
   assets?: AnnotationRenderAssets,
 ): Promise<void> {
-  const activeAnnotations = annotations.filter(
-    (ann) => currentTimeMs >= ann.startMs && currentTimeMs <= ann.endMs,
-  );
+  const activeAnnotations = annotations
+    .filter(
+      (ann) =>
+        ann.visible !== false &&
+        currentTimeMs >= ann.startMs &&
+        currentTimeMs <= ann.endMs,
+    )
+    .map((annotation) => resolveAnnotationAtTime(annotation, currentTimeMs));
 
   const sortedAnnotations = [...activeAnnotations].sort(
     (a, b) => a.zIndex - b.zIndex,
   );
 
   for (const annotation of sortedAnnotations) {
-    const x = (annotation.position.x / 100) * canvasWidth;
-    const y = (annotation.position.y / 100) * canvasHeight;
-    const width = (annotation.size.width / 100) * canvasWidth;
-    const height = (annotation.size.height / 100) * canvasHeight;
+    const baseX = (annotation.position.x / 100) * canvasWidth;
+    const baseY = (annotation.position.y / 100) * canvasHeight;
+    const baseWidth = (annotation.size.width / 100) * canvasWidth;
+    const baseHeight = (annotation.size.height / 100) * canvasHeight;
+    const scale = annotation.scale ?? 1;
+    const width = baseWidth * scale;
+    const height = baseHeight * scale;
+    const x = baseX + (baseWidth - width) / 2;
+    const y = baseY + (baseHeight - height) / 2;
+    const opacity = annotation.opacity ?? 1;
+
+    ctx.save();
+    ctx.globalAlpha *= Math.min(1, Math.max(0, opacity));
 
     switch (annotation.type) {
       case "text":
@@ -427,6 +442,8 @@ export async function renderAnnotations(
         break;
       }
     }
+
+    ctx.restore();
   }
 }
 

@@ -45,6 +45,9 @@ function getEditorWindowQuery(): Record<string, string> {
   if (process.env.QUIRO_DEV_OPEN_RECORDING_WEBCAM) {
     query.devOpenWebcam = process.env.QUIRO_DEV_OPEN_RECORDING_WEBCAM;
   }
+  if (process.env.QUIRO_E2E === "1") {
+    query.e2e = "1";
+  }
 
   if (process.env.QUIRO_SMOKE_EXPORT === "1") {
     query.smokeExport = "1";
@@ -525,10 +528,10 @@ export function createHudOverlayWindow(): BrowserWindow {
   });
 
   // open the dev tools as a separate window since undocked dev tools can cause focus issues on the HUD window
-  win.webContents.setDevToolsWebContents(
-    new BrowserWindow({ show: true }).webContents,
-  );
-  win.webContents.openDevTools({ mode: "detach" });
+  // win.webContents.setDevToolsWebContents(
+  //   new BrowserWindow({ show: true }).webContents,
+  // );
+  // win.webContents.openDevTools({ mode: "detach" });
 
   if (VITE_DEV_SERVER_URL) {
     win.loadURL(VITE_DEV_SERVER_URL + "?windowType=hud-overlay");
@@ -787,6 +790,12 @@ export function createEditorWindow(): BrowserWindow {
     win.show();
   });
 
+  if (VITE_DEV_SERVER_URL) {
+    win.webContents.setDevToolsWebContents(
+      new BrowserWindow({ show: true }).webContents,
+    );
+    win.webContents.openDevTools({ mode: "detach" });
+  }
   win.webContents.on("did-finish-load", () => {
     console.log("[editor-window] did-finish-load", win.webContents.getURL());
     win?.webContents.send("main-process-message", new Date().toLocaleString());

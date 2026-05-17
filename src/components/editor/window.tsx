@@ -1,35 +1,21 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import {
-  Bookmark01Icon,
-  Tick02Icon,
   ArrowDown01Icon,
   ArrowUp01Icon,
-  ClosedCaptionIcon,
   CropIcon,
-  CursorIcon,
-  Download01Icon,
   FolderOpenIcon,
-  Settings01Icon,
-  PauseIcon,
-  Camera01Icon,
-  PlayIcon,
-  PlusSignIcon,
-  PuzzleIcon,
   RedoIcon,
   Scissor01Icon,
-  PreviousIcon,
-  NextIcon,
-  SparklesIcon,
-  Undo02Icon,
-  UserCircleIcon,
   VolumeLowIcon,
   VolumeOffIcon,
   VolumeHighIcon,
   MagicWand01Icon,
-  Cancel01Icon,
-  ZoomIcon,
   SearchAddIcon,
+  Tick02Icon,
+  TimelineListIcon,
+  UndoIcon,
 } from "@/components/icons";
 import {
   IconPlayerPauseFilled,
@@ -38,15 +24,10 @@ import {
   IconPlayerTrackPrevFilled,
 } from "@tabler/icons-react";
 import type { Span } from "dnd-timeline";
-import { animate, motion } from "motion/react";
+import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { Toaster } from "@/components/ui/sonner";
 import { useI18n } from "@/contexts/I18nContext";
 import { useShortcuts } from "@/contexts/shortcut-context";
@@ -60,14 +41,12 @@ import {
   type ExportPipelineModel,
   type ExportProgress,
   type ExportQuality,
-  type ExportRenderBackend,
   type ExportSettings,
   FrameRenderer,
   GIF_SIZE_PRESETS,
   GifExporter,
   type GifFrameRate,
   type GifSizePreset,
-  isValidMp4FrameRate,
   ModernVideoExporter,
   probeSupportedMp4Dimensions,
   type SupportedMp4Dimensions,
@@ -86,11 +65,8 @@ import {
   getMediaSyncPlaybackRate,
 } from "@/lib/mediaTiming";
 import { matchesShortcut } from "@/lib/shortcuts";
-import { cn } from "@/lib/utils";
 import {
-  ASPECT_RATIOS,
   type AspectRatio,
-  getAspectRatioLabel,
   getAspectRatioValue,
 } from "@electron/utils/aspectRatioUtils";
 // import { ExtensionIcon } from "./ExtensionIcon";
@@ -103,12 +79,16 @@ import {
   type ClipRegion,
   type CropRegion,
   type CursorStyle,
+  type CursorClickEffectSettings,
   type CursorTelemetryPoint,
+  type AnnotationKeyframe,
+  type AnnotationAnimationSettings,
   clampFocusToDepth,
   clipsToTrims,
   DEFAULT_ANNOTATION_POSITION,
   DEFAULT_ANNOTATION_SIZE,
   DEFAULT_ANNOTATION_STYLE,
+  DEFAULT_ANNOTATION_ANIMATION,
   DEFAULT_AUTO_CAPTION_SETTINGS,
   DEFAULT_AUTO_ZOOM_DEPTH,
   DEFAULT_CONNECTED_ZOOM_DURATION_MS,
@@ -116,7 +96,9 @@ import {
   DEFAULT_CONNECTED_ZOOM_GAP_MS,
   DEFAULT_CROP_REGION,
   DEFAULT_CURSOR_STYLE,
+  DEFAULT_CURSOR_CLICK_EFFECT,
   DEFAULT_FIGURE_DATA,
+  DEFAULT_OVERLAY_LAYER_ORDER,
   DEFAULT_WEBCAM_OVERLAY,
   DEFAULT_WEBCAM_TIME_OFFSET_MS,
   DEFAULT_ZOOM_IN_DURATION_MS,
@@ -130,6 +112,7 @@ import {
   type FigureData,
   getClipSourceEndMs,
   type Padding,
+  type OverlayLayerOrder,
   mapSourceTimeToTimelineTime as resolveSourceTimeToTimelineTime,
   mapTimelineTimeToSourceTime as resolveTimelineTimeToSourceTime,
   type SpeedRegion,
@@ -140,6 +123,7 @@ import {
   type ZoomFocus,
   type ZoomMode,
   type ZoomMotionBlurTuning,
+  type ZoomPresetId,
   type ZoomRegion,
   type ZoomTransitionEasing,
 } from "@/types/editor";
@@ -176,8 +160,10 @@ import {
   createProjectData,
   deriveNextId,
   EditorProjectData,
+  type ProjectSnapshot,
   fromFileUrl,
   normalizeProjectEditor,
+  normalizeProjectSnapshots,
   resolveVideoUrl,
   toFileUrl,
   validateProjectData,
@@ -186,63 +172,80 @@ import { normalizeCursorTelemetrySamples } from "@/lib/cursorTelemetry";
 import TimelineEditor, {
   type TimelineEditorHandle,
 } from "@/components/editor/timeline/TimelineEditor";
+import {
+  TIMELINE_DENSITY_OPTIONS,
+  type TimelineDensityMode,
+} from "@/components/editor/timeline/timelineLayout";
 import { resolveAutoCaptionSourcePath } from "@/components/editor/utils/auto-caption-source";
 import {
   buildLoopedCursorTelemetry,
   getDisplayedTimelineWindowMs,
 } from "@/components/editor/videoPlayback/cursorLoopTelemetry";
 import VideoPlayback, { VideoPlaybackRef } from "@/components/editor/playback";
-import { openExternalLink, QUIRO_ISSUES_URL } from "@/components/editor/help";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button, buttonVariants } from "@/components/ui/button";
+  APP_HEADER_ICON_BUTTON_CLASS,
+  FeedbackDialog,
+  openExternalLink,
+  QUIRO_ISSUES_URL,
+} from "@/components/editor/help";
+import { Button } from "@/components/ui/button";
 import Scrubber from "@/components/ui/scrubber";
 import ProjectBrowserDialog from "@/components/editor/dialog/ProjectBrowserDialog";
 import { Spinner } from "@/components/ui/spinner";
+import { SettingsPanel } from "@/components/editor/SettingsPanel";
+import { AddLayerDropdown } from "@/components/editor/editor-window/AddLayerDropdown";
+import { AspectRatioDropdown } from "@/components/editor/editor-window/AspectRatioDropdown";
+import { CropEditorDialog } from "@/components/editor/editor-window/CropEditorDialog";
+import { EditorSectionRail } from "@/components/editor/editor-window/EditorSectionRail";
+import { EditorExportDropdown } from "@/components/editor/editor-window/EditorExportDropdown";
+import { EditorPresetPopover } from "@/components/editor/editor-window/EditorPresetPopover";
+import { EditorHistoryPopover } from "@/components/editor/editor-window/EditorHistoryPopover";
+import { NativeCaptureUnavailableDialog } from "@/components/editor/editor-window/NativeCaptureUnavailableDialog";
+import { useEditorSectionButtons } from "@/components/editor/editor-window/useEditorSectionButtons";
+import type {
+  CancelableExporter,
+  EditorHistoryEntry,
+  EditorHistorySnapshot,
+  PendingExportSave,
+} from "@/components/editor/editor-window/types";
+import {
+  appendHistoryEntry,
+  createHistoryEntry,
+  describeHistoryChange,
+  findHistoryIndex,
+} from "@/components/editor/editor-window/history";
+import { Separator } from "@/components/ui/separator";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { cva } from "class-variance-authority";
-import { Kbd } from "@/components/ui/kbd";
-import { CropControl } from "@/components/editor/CropControl";
-import { SettingsPanel } from "@/components/editor/SettingsPanel";
 
-type EditorHistorySnapshot = {
-  zoomRegions: ZoomRegion[];
-  clipRegions: ClipRegion[];
-  speedRegions: SpeedRegion[];
-  annotationRegions: AnnotationRegion[];
-  audioRegions: AudioRegion[];
-  autoCaptions: CaptionCue[];
-  selectedZoomId: string | null;
-  selectedClipId: string | null;
-  selectedAnnotationId: string | null;
-  selectedAudioId: string | null;
-};
-
-type PendingExportSave = {
-  fileName: string;
-  // Exactly one of these is populated. `tempFilePath` is the preferred form
-  // for MP4 exports — the main process holds the finished file on disk, so
-  // "Save Again" just renames it instead of round-tripping through the
-  // renderer's ArrayBuffer heap.
-  arrayBuffer?: ArrayBuffer;
-  tempFilePath?: string;
-};
-
-type CancelableExporter = {
-  cancel(): void;
-};
+declare global {
+  interface Window {
+    __QUIRO_E2E__?: {
+      state: {
+        duration: number;
+        sourceTime: number;
+        timelineTime: number;
+        isPlaying: boolean;
+        videoPaused: boolean | null;
+        videoCurrentTime: number | null;
+        clipRegions: ClipRegion[];
+        videoPath: string | null;
+      };
+      actions: {
+        playPause: () => void;
+        playMuted: () => Promise<void>;
+        pause: () => void;
+        advanceTimelineMs: (deltaMs: number) => void;
+        seekTimelineMs: (timeMs: number) => void;
+        splitAtTimelineMs: (timeMs: number) => void;
+      };
+    };
+  }
+}
 
 export default function EditorWindow() {
   const { t } = useI18n();
@@ -291,6 +294,7 @@ export default function EditorWindow() {
   const [wallpaper, setWallpaper] = useState<string>(
     initialEditorPreferences.wallpaper,
   );
+  const currentTimeRef = useRef(0);
   const [shadowIntensity, setShadowIntensity] = useState(
     initialEditorPreferences.shadowIntensity,
   );
@@ -319,6 +323,8 @@ export default function EditorWindow() {
     autoApplyFreshRecordingAutoZooms,
     setAutoApplyFreshRecordingAutoZooms,
   ] = useState(initialEditorPreferences.autoApplyFreshRecordingAutoZooms);
+  const [timelineDensityMode, setTimelineDensityMode] =
+    useState<TimelineDensityMode>(initialEditorPreferences.timelineDensityMode);
   const [connectZooms, setConnectZooms] = useState(
     initialEditorPreferences.connectZooms,
   );
@@ -399,8 +405,16 @@ export default function EditorWindow() {
   const [cursorClickBounceDuration, setCursorClickBounceDuration] = useState(
     initialEditorPreferences.cursorClickBounceDuration,
   );
+  const [cursorClickEffect, setCursorClickEffect] =
+    useState<CursorClickEffectSettings>(DEFAULT_CURSOR_CLICK_EFFECT);
   const [cursorSway, setCursorSway] = useState(
     initialEditorPreferences.cursorSway,
+  );
+  const [overlayLayerOrder, setOverlayLayerOrder] = useState<OverlayLayerOrder>(
+    DEFAULT_OVERLAY_LAYER_ORDER,
+  );
+  const [projectSnapshots, setProjectSnapshots] = useState<ProjectSnapshot[]>(
+    [],
   );
   const [borderRadius, setBorderRadius] = useState(
     initialEditorPreferences.borderRadius,
@@ -542,12 +556,15 @@ export default function EditorWindow() {
   const [presetNameDraft, setPresetNameDraft] = useState("");
   const [showCropModal, setShowCropModal] = useState(false);
   const [previewVersion, setPreviewVersion] = useState(0);
+  const [workspaceReloadVersion, setWorkspaceReloadVersion] = useState(0);
   const [isPreviewReady, setIsPreviewReady] = useState(false);
   const [autoSuggestZoomsTrigger, setAutoSuggestZoomsTrigger] = useState(0);
   const headerLeftControlsPaddingClass =
     appPlatform === "darwin" ? "pl-[76px]" : "";
 
   const videoPlaybackRef = useRef<VideoPlaybackRef>(null);
+  const e2ePlaybackRafRef = useRef<number | null>(null);
+  const e2ePlaybackLastFrameRef = useRef<number | null>(null);
   const projectBrowserTriggerRef = useRef<HTMLButtonElement | null>(null);
   const projectBrowserFallbackTriggerRef = useRef<HTMLButtonElement | null>(
     null,
@@ -563,9 +580,8 @@ export default function EditorWindow() {
   const exporterRef = useRef<CancelableExporter | null>(null);
   const autoSuggestedVideoPathRef = useRef<string | null>(null);
   const pendingFreshRecordingAutoZoomPathRef = useRef<string | null>(null);
-  const historyPastRef = useRef<EditorHistorySnapshot[]>([]);
-  const historyFutureRef = useRef<EditorHistorySnapshot[]>([]);
-  const historyCurrentRef = useRef<EditorHistorySnapshot | null>(null);
+  const historyEntriesRef = useRef<EditorHistoryEntry[]>([]);
+  const historyIndexRef = useRef(-1);
   const applyingHistoryRef = useRef(false);
   const pendingExportSaveRef = useRef<PendingExportSave | null>(null);
   const pendingTelemetryRetryTimeoutRef = useRef<number | null>(null);
@@ -652,6 +668,7 @@ export default function EditorWindow() {
       cursorMotionBlur,
       cursorClickBounce,
       cursorClickBounceDuration,
+      cursorClickEffect,
       cursorSway,
       borderRadius,
       padding: { ...padding },
@@ -703,6 +720,7 @@ export default function EditorWindow() {
       cursorMotionBlur,
       cursorClickBounce,
       cursorClickBounceDuration,
+      cursorClickEffect,
       cursorSway,
       borderRadius,
       padding,
@@ -809,6 +827,7 @@ export default function EditorWindow() {
       setCursorMotionBlur(snapshot.cursorMotionBlur);
       setCursorClickBounce(snapshot.cursorClickBounce);
       setCursorClickBounceDuration(snapshot.cursorClickBounceDuration);
+      setCursorClickEffect(snapshot.cursorClickEffect);
       setCursorSway(snapshot.cursorSway);
       setBorderRadius(snapshot.borderRadius);
       setPadding({ ...snapshot.padding });
@@ -1234,6 +1253,12 @@ export default function EditorWindow() {
     setPreviewVersion((version) => version + 1);
   }, []);
 
+  const remountProjectWorkspace = useCallback(() => {
+    setIsPreviewReady(false);
+    setPreviewVersion((version) => version + 1);
+    setWorkspaceReloadVersion((version) => version + 1);
+  }, []);
+
   const clearPendingProjectAutosave = useCallback(() => {
     if (projectAutosaveTimeoutRef.current !== null) {
       window.clearTimeout(projectAutosaveTimeoutRef.current);
@@ -1315,8 +1340,13 @@ export default function EditorWindow() {
     void refreshProjectLibrary();
   }, [refreshProjectLibrary]);
 
-  const canUndo = historyPastRef.current.length > 0;
-  const canRedo = historyFutureRef.current.length > 0;
+  const historyEntries = historyEntriesRef.current;
+  const historyIndex = historyIndexRef.current;
+  const currentHistoryEntry =
+    historyIndex >= 0 ? historyEntries[historyIndex] : null;
+  const canUndo = historyIndex > 0;
+  const canRedo =
+    historyEntries.length > 0 && historyIndex < historyEntries.length - 1;
 
   void historyVersion;
 
@@ -1446,67 +1476,7 @@ export default function EditorWindow() {
     mp4FrameRate,
   ]);
 
-  // Extension-contributed standalone section pages (no parentSection)
-  const [extensionSectionButtons, setExtensionSectionButtons] = useState<
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    {
-      id: EditorEffectSection;
-      label: string;
-      icon: typeof PuzzleIcon | string;
-    }[]
-  >([]);
-  useEffect(() => {
-    const update = () => {
-      const panels = extensionHost.getSettingsPanels();
-      const standalone = panels
-        .filter((p) => !p.panel.parentSection)
-        .map((p) => ({
-          id: `ext:${p.extensionId}/${p.panel.id}` as EditorEffectSection,
-          label: p.panel.label,
-          icon: p.panel.icon || (PuzzleIcon as typeof PuzzleIcon | string),
-        }));
-      setExtensionSectionButtons(standalone);
-    };
-    update();
-    return extensionHost.onChange(update);
-  }, []);
-
-  const editorSectionButtons = useMemo(
-    () => [
-      {
-        id: "scene" as const,
-        label: t("settings.sections.scene", "Scene"),
-        icon: SparklesIcon,
-      },
-      {
-        id: "cursor" as const,
-        label: t("settings.sections.cursor", "Cursor"),
-        icon: CursorIcon,
-      },
-      {
-        id: "webcam" as const,
-        label: t("settings.sections.webcam", "Webcam"),
-        icon: Camera01Icon,
-      },
-      {
-        id: "captions" as const,
-        label: t("settings.sections.captions", "Captions"),
-        icon: ClosedCaptionIcon,
-      },
-      {
-        id: "settings" as const,
-        label: t("settings.sections.settings", "Settings"),
-        icon: Settings01Icon,
-      },
-      ...extensionSectionButtons,
-      {
-        id: "extensions" as const,
-        label: t("settings.sections.extensions", "Extensions"),
-        icon: PuzzleIcon,
-      },
-    ],
-    [t, extensionSectionButtons],
-  );
+  const editorSectionButtons = useEditorSectionButtons(t);
 
   useEffect(() => {
     if (activeEffectSection === "frame" || activeEffectSection === "crop") {
@@ -1550,7 +1520,9 @@ export default function EditorWindow() {
         cursorMotionBlur: number;
         cursorClickBounce: number;
         cursorClickBounceDuration: number;
+        cursorClickEffect: CursorClickEffectSettings;
         cursorSway: number;
+        overlayLayerOrder: OverlayLayerOrder;
         borderRadius: number;
         padding: Padding;
         frame: string | null;
@@ -1651,7 +1623,7 @@ export default function EditorWindow() {
     return () => {
       cancelled = true;
     };
-  }, [currentSourcePath]);
+  }, [currentSourcePath, workspaceReloadVersion]);
 
   const projectDisplayName = useMemo(() => {
     const fileName =
@@ -1721,7 +1693,9 @@ export default function EditorWindow() {
         cursorMotionBlur,
         cursorClickBounce,
         cursorClickBounceDuration,
+        cursorClickEffect,
         cursorSway,
+        overlayLayerOrder,
         borderRadius,
         padding,
         frame,
@@ -1781,7 +1755,9 @@ export default function EditorWindow() {
       cursorMotionBlur,
       cursorClickBounce,
       cursorClickBounceDuration,
+      cursorClickEffect,
       cursorSway,
+      overlayLayerOrder,
       borderRadius,
       padding,
       cropRegion,
@@ -1875,42 +1851,47 @@ export default function EditorWindow() {
   );
 
   const handleUndo = useCallback(() => {
-    if (historyPastRef.current.length === 0) return;
+    if (historyIndexRef.current <= 0) return;
 
-    const current =
-      historyCurrentRef.current ?? cloneSnapshot(buildHistorySnapshot());
-    const previous = historyPastRef.current.pop();
-    if (!previous) return;
+    const nextIndex = historyIndexRef.current - 1;
+    const entry = historyEntriesRef.current[nextIndex];
+    if (!entry) return;
 
-    historyFutureRef.current.push(cloneSnapshot(current));
-    historyCurrentRef.current = cloneSnapshot(previous);
-    applyHistorySnapshot(previous);
+    historyIndexRef.current = nextIndex;
+    applyHistorySnapshot(entry.snapshot);
     syncHistoryButtons();
-  }, [
-    applyHistorySnapshot,
-    buildHistorySnapshot,
-    cloneSnapshot,
-    syncHistoryButtons,
-  ]);
+  }, [applyHistorySnapshot, syncHistoryButtons]);
 
   const handleRedo = useCallback(() => {
-    if (historyFutureRef.current.length === 0) return;
+    if (historyIndexRef.current >= historyEntriesRef.current.length - 1) {
+      return;
+    }
 
-    const current =
-      historyCurrentRef.current ?? cloneSnapshot(buildHistorySnapshot());
-    const next = historyFutureRef.current.pop();
-    if (!next) return;
+    const nextIndex = historyIndexRef.current + 1;
+    const entry = historyEntriesRef.current[nextIndex];
+    if (!entry) return;
 
-    historyPastRef.current.push(cloneSnapshot(current));
-    historyCurrentRef.current = cloneSnapshot(next);
-    applyHistorySnapshot(next);
+    historyIndexRef.current = nextIndex;
+    applyHistorySnapshot(entry.snapshot);
     syncHistoryButtons();
-  }, [
-    applyHistorySnapshot,
-    buildHistorySnapshot,
-    cloneSnapshot,
-    syncHistoryButtons,
-  ]);
+  }, [applyHistorySnapshot, syncHistoryButtons]);
+
+  const jumpHistoryTo = useCallback(
+    (entryId: string) => {
+      const nextIndex = findHistoryIndex(historyEntriesRef.current, entryId);
+      if (nextIndex < 0 || nextIndex === historyIndexRef.current) {
+        return;
+      }
+
+      const entry = historyEntriesRef.current[nextIndex];
+      if (!entry) return;
+
+      historyIndexRef.current = nextIndex;
+      applyHistorySnapshot(entry.snapshot);
+      syncHistoryButtons();
+    },
+    [applyHistorySnapshot, syncHistoryButtons],
+  );
 
   const applyLoadedProject = useCallback(
     async (candidate: unknown, path?: string | null) => {
@@ -1930,12 +1911,22 @@ export default function EditorWindow() {
       setIsPlaying(false);
       setCurrentTime(0);
       setDuration(0);
+      setCursorTelemetry([]);
+      setCursorTelemetrySourcePath(null);
+      setResolvedWebcamVideoUrl(null);
+      setSourceAudioFallbackPaths([]);
+      setSourceAudioFallbackStartDelayMsByPath({});
+      autoSuggestedVideoPathRef.current = null;
+      pendingFreshRecordingAutoZoomPathRef.current = null;
+      if (pendingTelemetryRetryTimeoutRef.current !== null) {
+        window.clearTimeout(pendingTelemetryRetryTimeoutRef.current);
+        pendingTelemetryRetryTimeoutRef.current = null;
+      }
 
       setError(null);
       setVideoSourcePath(sourcePath);
       setVideoPath(await resolveVideoUrl(sourcePath));
       setCurrentProjectPath(path ?? null);
-      pendingFreshRecordingAutoZoomPathRef.current = null;
       if (normalizedEditor.webcam.sourcePath) {
         await window.electronAPI.setCurrentRecordingSession?.(
           {
@@ -2005,7 +1996,10 @@ export default function EditorWindow() {
       setCursorMotionBlur(normalizedEditor.cursorMotionBlur);
       setCursorClickBounce(normalizedEditor.cursorClickBounce);
       setCursorClickBounceDuration(normalizedEditor.cursorClickBounceDuration);
+      setCursorClickEffect(normalizedEditor.cursorClickEffect);
       setCursorSway(normalizedEditor.cursorSway);
+      setOverlayLayerOrder(normalizedEditor.overlayLayerOrder);
+      setProjectSnapshots(normalizeProjectSnapshots(project.snapshots));
       setBorderRadius(normalizedEditor.borderRadius);
       setPadding(normalizedEditor.padding);
       setFrame(normalizedEditor.frame);
@@ -2060,9 +2054,8 @@ export default function EditorWindow() {
           0,
         ) + 1;
 
-      historyPastRef.current = [];
-      historyFutureRef.current = [];
-      historyCurrentRef.current = null;
+      historyEntriesRef.current = [];
+      historyIndexRef.current = -1;
       applyingHistoryRef.current = false;
       syncHistoryButtons();
 
@@ -2072,13 +2065,20 @@ export default function EditorWindow() {
             sourcePath,
             buildPersistedEditorState(normalizedEditor),
             project.projectId ?? null,
+            normalizeProjectSnapshots(project.snapshots),
           ),
         ),
       );
+      remountProjectWorkspace();
       await refreshProjectLibrary();
       return true;
     },
-    [buildPersistedEditorState, refreshProjectLibrary, syncHistoryButtons],
+    [
+      buildPersistedEditorState,
+      refreshProjectLibrary,
+      remountProjectWorkspace,
+      syncHistoryButtons,
+    ],
   );
 
   const currentProjectSnapshot = useMemo(() => {
@@ -2089,12 +2089,120 @@ export default function EditorWindow() {
       currentSourcePath,
       currentPersistedEditorState,
       lastSavedSnapshot?.projectId ?? null,
+      projectSnapshots,
     );
   }, [
     currentPersistedEditorState,
     currentSourcePath,
     lastSavedSnapshot?.projectId,
+    projectSnapshots,
   ]);
+
+  const createProjectSnapshot = useCallback(
+    (reason: ProjectSnapshot["reason"] = "manual", name?: string) => {
+      const snapshot: ProjectSnapshot = {
+        id: `snapshot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name:
+          name ??
+          (reason === "manual"
+            ? `Snapshot ${new Date().toLocaleTimeString()}`
+            : "Auto snapshot"),
+        createdAt: new Date().toISOString(),
+        reason,
+        editor: cloneStructured(currentPersistedEditorState),
+      };
+      setProjectSnapshots((prev) => [snapshot, ...prev].slice(0, 20));
+      if (reason === "manual") {
+        toast.success("Snapshot created");
+      }
+      return snapshot;
+    },
+    [currentPersistedEditorState],
+  );
+
+  const restoreProjectSnapshot = useCallback(
+    (snapshotId: string) => {
+      const snapshot = projectSnapshots.find((item) => item.id === snapshotId);
+      if (!snapshot) return;
+      createProjectSnapshot("auto", "Before snapshot restore");
+      const normalizedEditor = normalizeProjectEditor(snapshot.editor);
+      setWallpaper(normalizedEditor.wallpaper);
+      setShadowIntensity(normalizedEditor.shadowIntensity);
+      setBackgroundBlur(normalizedEditor.backgroundBlur);
+      setZoomMotionBlur(normalizedEditor.zoomMotionBlur);
+      setZoomMotionBlurTuning(normalizedEditor.zoomMotionBlurTuning);
+      setZoomTemporalMotionBlur(normalizedEditor.zoomTemporalMotionBlur);
+      setZoomMotionBlurSampleCount(normalizedEditor.zoomMotionBlurSampleCount);
+      setZoomMotionBlurShutterFraction(
+        normalizedEditor.zoomMotionBlurShutterFraction,
+      );
+      setConnectZooms(normalizedEditor.connectZooms);
+      setZoomInDurationMs(normalizedEditor.zoomInDurationMs);
+      setZoomInOverlapMs(normalizedEditor.zoomInOverlapMs);
+      setZoomOutDurationMs(normalizedEditor.zoomOutDurationMs);
+      setConnectedZoomGapMs(normalizedEditor.connectedZoomGapMs);
+      setConnectedZoomDurationMs(normalizedEditor.connectedZoomDurationMs);
+      setZoomInEasing(normalizedEditor.zoomInEasing);
+      setZoomOutEasing(normalizedEditor.zoomOutEasing);
+      setConnectedZoomEasing(normalizedEditor.connectedZoomEasing);
+      setShowCursor(normalizedEditor.showCursor);
+      setLoopCursor(normalizedEditor.loopCursor);
+      setCursorStyle(normalizedEditor.cursorStyle);
+      setCursorSize(normalizedEditor.cursorSize);
+      setCursorSmoothing(normalizedEditor.cursorSmoothing);
+      setCursorSpringStiffnessMultiplier(
+        normalizedEditor.cursorSpringStiffnessMultiplier,
+      );
+      setCursorSpringDampingMultiplier(
+        normalizedEditor.cursorSpringDampingMultiplier,
+      );
+      setCursorSpringMassMultiplier(
+        normalizedEditor.cursorSpringMassMultiplier,
+      );
+      setCameraSpringStiffnessMultiplier(
+        normalizedEditor.cameraSpringStiffnessMultiplier,
+      );
+      setCameraSpringDampingMultiplier(
+        normalizedEditor.cameraSpringDampingMultiplier,
+      );
+      setCameraSpringMassMultiplier(
+        normalizedEditor.cameraSpringMassMultiplier,
+      );
+      setZoomSmoothness(normalizedEditor.zoomSmoothness);
+      setZoomClassicMode(normalizedEditor.zoomClassicMode);
+      setCursorMotionBlur(normalizedEditor.cursorMotionBlur);
+      setCursorClickBounce(normalizedEditor.cursorClickBounce);
+      setCursorClickBounceDuration(normalizedEditor.cursorClickBounceDuration);
+      setCursorClickEffect(normalizedEditor.cursorClickEffect);
+      setCursorSway(normalizedEditor.cursorSway);
+      setOverlayLayerOrder(normalizedEditor.overlayLayerOrder);
+      setBorderRadius(normalizedEditor.borderRadius);
+      setPadding(normalizedEditor.padding);
+      setFrame(normalizedEditor.frame);
+      setCropRegion(normalizedEditor.cropRegion);
+      setWebcam(normalizedEditor.webcam);
+      setZoomRegions(normalizedEditor.zoomRegions);
+      setTrimRegions(normalizedEditor.trimRegions);
+      setClipRegions(normalizedEditor.clipRegions);
+      setSpeedRegions(normalizedEditor.speedRegions);
+      setAnnotationRegions(normalizedEditor.annotationRegions);
+      setAudioRegions(normalizedEditor.audioRegions);
+      setAutoCaptions(normalizedEditor.autoCaptions);
+      setAutoCaptionSettings(normalizedEditor.autoCaptionSettings);
+      setAspectRatio(normalizedEditor.aspectRatio);
+      setExportEncodingMode(normalizedEditor.exportEncodingMode);
+      setExportBackendPreference(normalizedEditor.exportBackendPreference);
+      setExportPipelineModel(normalizedEditor.exportPipelineModel);
+      setExportQuality(normalizedEditor.exportQuality);
+      setMp4FrameRate(normalizedEditor.mp4FrameRate);
+      setExportFormat(normalizedEditor.exportFormat);
+      setGifFrameRate(normalizedEditor.gifFrameRate);
+      setGifLoop(normalizedEditor.gifLoop);
+      setGifSizePreset(normalizedEditor.gifSizePreset);
+      toast.success("Snapshot restored");
+    },
+    [createProjectSnapshot, projectSnapshots],
+  );
 
   const syncRecordingSessionWebcam = useCallback(
     async (webcamPath: string | null, timeOffsetMs?: number) => {
@@ -2153,6 +2261,7 @@ export default function EditorWindow() {
       return;
     }
 
+    createProjectSnapshot("auto", "Before replacing webcam");
     setWebcam((prev) => ({
       ...prev,
       enabled: true,
@@ -2165,9 +2274,10 @@ export default function EditorWindow() {
       DEFAULT_WEBCAM_TIME_OFFSET_MS,
     );
     toast.success(t("settings.effects.webcamFootageAdded"));
-  }, [syncRecordingSessionWebcam, t]);
+  }, [createProjectSnapshot, syncRecordingSessionWebcam, t]);
 
   const handleClearWebcam = useCallback(async () => {
+    createProjectSnapshot("auto", "Before clearing webcam");
     setWebcam((prev) => ({
       ...prev,
       enabled: false,
@@ -2177,34 +2287,42 @@ export default function EditorWindow() {
 
     await syncRecordingSessionWebcam(null);
     toast.success(t("settings.effects.webcamFootageRemoved"));
-  }, [syncRecordingSessionWebcam, t]);
+  }, [createProjectSnapshot, syncRecordingSessionWebcam, t]);
 
   useEffect(() => {
     const snapshot = buildHistorySnapshot();
+    const currentEntry =
+      historyIndexRef.current >= 0
+        ? historyEntriesRef.current[historyIndexRef.current]
+        : null;
 
-    if (!historyCurrentRef.current) {
-      historyCurrentRef.current = cloneSnapshot(snapshot);
+    if (!currentEntry) {
+      historyEntriesRef.current = [
+        createHistoryEntry(cloneSnapshot(snapshot), "Initial state"),
+      ];
+      historyIndexRef.current = 0;
       syncHistoryButtons();
       return;
     }
 
     if (applyingHistoryRef.current) {
-      historyCurrentRef.current = cloneSnapshot(snapshot);
       applyingHistoryRef.current = false;
       syncHistoryButtons();
       return;
     }
 
-    if (areDeepEqual(historyCurrentRef.current, snapshot)) {
+    if (areDeepEqual(currentEntry.snapshot, snapshot)) {
       return;
     }
 
-    historyPastRef.current.push(cloneSnapshot(historyCurrentRef.current));
-    if (historyPastRef.current.length > 100) {
-      historyPastRef.current.shift();
-    }
-    historyCurrentRef.current = cloneSnapshot(snapshot);
-    historyFutureRef.current = [];
+    const label = describeHistoryChange(currentEntry.snapshot, snapshot);
+    const next = appendHistoryEntry(
+      historyEntriesRef.current,
+      historyIndexRef.current,
+      createHistoryEntry(cloneSnapshot(snapshot), label),
+    );
+    historyEntriesRef.current = next.entries;
+    historyIndexRef.current = next.index;
     syncHistoryButtons();
   }, [buildHistorySnapshot, cloneSnapshot, syncHistoryButtons]);
 
@@ -2414,7 +2532,7 @@ export default function EditorWindow() {
     return () => {
       cancelled = true;
     };
-  }, [webcam.sourcePath]);
+  }, [webcam.sourcePath, workspaceReloadVersion]);
 
   useEffect(() => {
     if (!autoApplyFreshRecordingAutoZooms) {
@@ -2471,6 +2589,7 @@ export default function EditorWindow() {
       gifFrameRate,
       gifLoop,
       gifSizePreset,
+      timelineDensityMode,
       whisperExecutablePath,
       whisperModelPath,
     });
@@ -2507,6 +2626,7 @@ export default function EditorWindow() {
     cursorMotionBlur,
     cursorClickBounce,
     cursorClickBounceDuration,
+    cursorClickEffect,
     cursorSway,
     borderRadius,
     padding,
@@ -2522,6 +2642,7 @@ export default function EditorWindow() {
     gifFrameRate,
     gifLoop,
     gifSizePreset,
+    timelineDensityMode,
     whisperExecutablePath,
     whisperModelPath,
   ]);
@@ -2711,9 +2832,10 @@ export default function EditorWindow() {
   ]);
 
   const handleClearAutoCaptions = useCallback(() => {
+    createProjectSnapshot("auto", "Before clearing captions");
     setAutoCaptions([]);
     setAutoCaptionSettings((prev) => ({ ...prev, enabled: false }));
-  }, []);
+  }, [createProjectSnapshot]);
 
   const saveProject = useCallback(
     async (forceSaveAs: boolean, options?: SaveProjectOptions) => {
@@ -2738,6 +2860,7 @@ export default function EditorWindow() {
                   currentSourcePath,
                   currentPersistedEditorState,
                   lastSavedSnapshot?.projectId ?? null,
+                  projectSnapshots,
                 );
 
           const fileNameBase =
@@ -2792,6 +2915,7 @@ export default function EditorWindow() {
                 projectData.videoPath,
                 projectData.editor,
                 result.projectId ?? projectData.projectId ?? null,
+                projectData.snapshots,
               ),
             ),
           );
@@ -2897,6 +3021,7 @@ export default function EditorWindow() {
                 currentSourcePath,
                 currentPersistedEditorState,
                 lastSavedSnapshot?.projectId ?? null,
+                projectSnapshots,
               );
         const thumbnailDataUrl = await captureProjectThumbnail();
         const result = await window.electronAPI.saveProjectFileNamed(
@@ -2924,6 +3049,7 @@ export default function EditorWindow() {
               projectData.videoPath,
               projectData.editor,
               result.projectId ?? projectData.projectId ?? null,
+              projectData.snapshots,
             ),
           ),
         );
@@ -2990,6 +3116,12 @@ export default function EditorWindow() {
 
   const handleOpenProjectFromLibrary = useCallback(
     async (projectPath: string) => {
+      const normalizeForCompare = (value: string | null | undefined) =>
+        value?.replace(/\\/g, "/").toLowerCase() ?? null;
+      const isReloadingCurrentProject =
+        normalizeForCompare(projectPath) ===
+        normalizeForCompare(currentProjectPath);
+
       const result =
         await window.electronAPI.openProjectFileAtPath(projectPath);
 
@@ -3013,9 +3145,29 @@ export default function EditorWindow() {
 
       setProjectBrowserOpen(false);
       await refreshProjectLibrary();
-      toast.success(`Project loaded from ${result.path}`);
+      toast.success(
+        isReloadingCurrentProject
+          ? "Project repaired and reloaded"
+          : `Project loaded from ${result.path}`,
+      );
     },
-    [applyLoadedProject, refreshProjectLibrary],
+    [applyLoadedProject, currentProjectPath, refreshProjectLibrary],
+  );
+
+  const repairCurrentProject = useCallback(
+    async (
+      _options: { rebuildEditorCaches: boolean } = {
+        rebuildEditorCaches: true,
+      },
+    ) => {
+      if (!currentProjectPath) {
+        toast.error("No saved project to repair");
+        return;
+      }
+
+      await handleOpenProjectFromLibrary(currentProjectPath);
+    },
+    [currentProjectPath, handleOpenProjectFromLibrary],
   );
 
   const handleOpenProjectBrowser = useCallback(async () => {
@@ -3116,7 +3268,7 @@ export default function EditorWindow() {
         pendingTelemetryRetryTimeoutRef.current = null;
       }
     };
-  }, [videoPath, videoSourcePath]);
+  }, [videoPath, videoSourcePath, workspaceReloadVersion]);
 
   const normalizedCursorTelemetry = useMemo(() => {
     if (cursorTelemetry.length === 0) {
@@ -3217,6 +3369,10 @@ export default function EditorWindow() {
     [clipRegions],
   );
 
+  useEffect(() => {
+    currentTimeRef.current = currentTime;
+  }, [currentTime]);
+
   const mapSourceTimeToTimelineTime = useCallback(
     (timeMs: number) => resolveSourceTimeToTimelineTime(timeMs, clipRegions),
     [clipRegions],
@@ -3224,11 +3380,13 @@ export default function EditorWindow() {
 
   const effectiveZoomRegions = useMemo<ZoomRegion[]>(
     () =>
-      zoomRegions.map((region) => ({
-        ...region,
-        startMs: mapTimelineTimeToSourceTime(region.startMs),
-        endMs: mapTimelineTimeToSourceTime(region.endMs),
-      })),
+      zoomRegions
+        .filter((region) => region.enabled !== false)
+        .map((region) => ({
+          ...region,
+          startMs: mapTimelineTimeToSourceTime(region.startMs),
+          endMs: mapTimelineTimeToSourceTime(region.endMs),
+        })),
     [zoomRegions, mapTimelineTimeToSourceTime],
   );
 
@@ -3281,8 +3439,79 @@ export default function EditorWindow() {
   function handleSeek(time: number) {
     const video = videoPlaybackRef.current?.video;
     if (!video) return;
-    video.currentTime = mapTimelineTimeToSourceTime(time * 1000) / 1000;
+    const nextSourceTime = mapTimelineTimeToSourceTime(time * 1000) / 1000;
+    currentTimeRef.current = nextSourceTime;
+    setCurrentTime(nextSourceTime);
+    video.currentTime = nextSourceTime;
   }
+
+  // useEffect(() => {
+  //   if (timelineClockRafRef.current !== null) {
+  //     cancelAnimationFrame(timelineClockRafRef.current);
+  //     timelineClockRafRef.current = null;
+  //   }
+  //   timelineClockLastFrameRef.current = null;
+
+  //   if (!isPlaying || !isTimelineClipGap) {
+  //     return;
+  //   }
+
+  //   const tick = (timestamp: number) => {
+  //     const previousTimestamp = timelineClockLastFrameRef.current ?? timestamp;
+  //     timelineClockLastFrameRef.current = timestamp;
+  //     const elapsedSeconds = Math.max(
+  //       0,
+  //       (timestamp - previousTimestamp) / 1000,
+  //     );
+  //     const nextTime = Math.min(
+  //       duration,
+  //       currentTimeRef.current + elapsedSeconds,
+  //     );
+  //     currentTimeRef.current = nextTime;
+  //     setCurrentTime(nextTime);
+
+  //     if (nextTime >= duration) {
+  //       setIsPlaying(false);
+  //       timelineClockRafRef.current = null;
+  //       return;
+  //     }
+
+  //     timelineClockRafRef.current = requestAnimationFrame(tick);
+  //   };
+
+  //   timelineClockRafRef.current = requestAnimationFrame(tick);
+
+  //   return () => {
+  //     if (timelineClockRafRef.current !== null) {
+  //       cancelAnimationFrame(timelineClockRafRef.current);
+  //       timelineClockRafRef.current = null;
+  //     }
+  //     timelineClockLastFrameRef.current = null;
+  //   };
+  // }, [duration, isPlaying, isTimelineClipGap]);
+
+  // useEffect(() => {
+  //   const video = videoPlaybackRef.current?.video;
+  //   if (!video) return;
+
+  //   if (sourceTimeForTimeline === null) {
+  //   if (!video.paused) {
+  //     video.pause();
+  //   }
+  //   return;
+  // }
+
+  //   const driftThreshold = isPlaying ? 0.2 : 0.01;
+  //   if (Math.abs(video.currentTime - sourceTimeForTimeline) > driftThreshold) {
+  //     video.currentTime = sourceTimeForTimeline;
+  //   }
+
+  //   if (isPlaying && video.paused) {
+  //     video
+  //       .play()
+  //       .catch((err: any) => console.error("Video play failed:", err));
+  //   }
+  // }, [isPlaying, sourceTimeForTimeline]);
 
   const handleSelectZoom = useCallback((id: string | null) => {
     setSelectedZoomId(id);
@@ -3484,8 +3713,54 @@ export default function EditorWindow() {
     [selectedZoomId],
   );
 
+  const handleZoomPresetChange = useCallback(
+    (presetId: ZoomPresetId) => {
+      if (!selectedZoomId) return;
+      setZoomRegions((prev) =>
+        prev.map((region) => {
+          if (region.id !== selectedZoomId) return region;
+          if (presetId === "follow-cursor") {
+            return { ...region, presetId, mode: "auto", depth: 2 };
+          }
+          if (presetId === "punch-in") {
+            return {
+              ...region,
+              presetId,
+              mode: "manual",
+              depth: 4,
+              focus: clampFocusToDepth(region.focus, 4),
+            };
+          }
+          if (presetId === "pan-and-zoom") {
+            return {
+              ...region,
+              presetId,
+              mode: "manual",
+              depth: region.depth || 2,
+              endFocus: region.endFocus ?? region.focus,
+            };
+          }
+          return { ...region, presetId, mode: "manual", depth: 2 };
+        }),
+      );
+    },
+    [selectedZoomId],
+  );
+
+  const handleZoomVisibilityChange = useCallback(
+    (id: string, enabled: boolean) => {
+      setZoomRegions((prev) =>
+        prev.map((region) =>
+          region.id === id ? { ...region, enabled } : region,
+        ),
+      );
+    },
+    [],
+  );
+
   const handleZoomDelete = useCallback(
     (id: string) => {
+      createProjectSnapshot("auto", "Before deleting zoom");
       setZoomRegions((prev) => prev.filter((region) => region.id !== id));
       if (selectedZoomId === id) {
         setSelectedZoomId(null);
@@ -3495,7 +3770,7 @@ export default function EditorWindow() {
         data: { id },
       });
     },
-    [selectedZoomId],
+    [createProjectSnapshot, selectedZoomId],
   );
 
   const handleSelectClip = useCallback((id: string | null) => {
@@ -3541,6 +3816,145 @@ export default function EditorWindow() {
     },
     [selectedClipId],
   );
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("e2e") !== "1") {
+      return;
+    }
+
+    const video = videoPlaybackRef.current?.video ?? null;
+    const e2eSourceTime = video?.currentTime ?? currentTime;
+    const e2eTimelineTime =
+      resolveSourceTimeToTimelineTime(e2eSourceTime * 1000, clipRegions) / 1000;
+    const stopSyntheticPlayback = () => {
+      if (e2ePlaybackRafRef.current !== null) {
+        window.cancelAnimationFrame(e2ePlaybackRafRef.current);
+        e2ePlaybackRafRef.current = null;
+      }
+      e2ePlaybackLastFrameRef.current = null;
+    };
+    const startSyntheticPlayback = () => {
+      stopSyntheticPlayback();
+      setIsPlaying(true);
+      const tick = (timestamp: number) => {
+        const lastFrame = e2ePlaybackLastFrameRef.current ?? timestamp;
+        e2ePlaybackLastFrameRef.current = timestamp;
+        const elapsedMs = Math.max(0, timestamp - lastFrame);
+        const timelineMs = resolveSourceTimeToTimelineTime(
+          currentTimeRef.current * 1000,
+          clipRegions,
+        );
+        const nextTimelineMs = Math.min(duration * 1000, timelineMs + elapsedMs);
+        const nextSourceSeconds =
+          resolveTimelineTimeToSourceTime(nextTimelineMs, clipRegions) / 1000;
+        currentTimeRef.current = nextSourceSeconds;
+        setCurrentTime(nextSourceSeconds);
+        const targetVideo = videoPlaybackRef.current?.video;
+        if (targetVideo) {
+          targetVideo.currentTime = nextSourceSeconds;
+        }
+        if (nextTimelineMs >= duration * 1000) {
+          setIsPlaying(false);
+          e2ePlaybackRafRef.current = null;
+          e2ePlaybackLastFrameRef.current = null;
+          return;
+        }
+        e2ePlaybackRafRef.current = window.requestAnimationFrame(tick);
+      };
+      e2ePlaybackRafRef.current = window.requestAnimationFrame(tick);
+    };
+    window.__QUIRO_E2E__ = {
+      state: {
+        duration,
+        sourceTime: e2eSourceTime,
+        timelineTime: e2eTimelineTime,
+        isPlaying,
+        videoPaused: video?.paused ?? null,
+        videoCurrentTime: video?.currentTime ?? null,
+        clipRegions,
+        videoPath,
+      },
+      actions: {
+        playPause: togglePlayPause,
+        playMuted: async () => {
+          const playback = videoPlaybackRef.current;
+          const targetVideo = playback?.video;
+          if (!playback || !targetVideo) return;
+          targetVideo.muted = true;
+          void playback.play().catch(() => undefined);
+          if (window.__QUIRO_E2E__) {
+            window.__QUIRO_E2E__.state = {
+              ...window.__QUIRO_E2E__.state,
+              isPlaying: true,
+              videoPaused: false,
+            };
+          }
+          startSyntheticPlayback();
+        },
+        pause: () => {
+          stopSyntheticPlayback();
+          videoPlaybackRef.current?.pause();
+          setIsPlaying(false);
+          if (window.__QUIRO_E2E__) {
+            window.__QUIRO_E2E__.state = {
+              ...window.__QUIRO_E2E__.state,
+              isPlaying: false,
+              videoPaused: true,
+            };
+          }
+        },
+        advanceTimelineMs: (deltaMs: number) => {
+          const timelineMs = resolveSourceTimeToTimelineTime(
+            currentTimeRef.current * 1000,
+            clipRegions,
+          );
+          const nextTimelineMs = Math.min(
+            duration * 1000,
+            timelineMs + Math.max(0, deltaMs),
+          );
+          const nextSourceSeconds =
+            resolveTimelineTimeToSourceTime(nextTimelineMs, clipRegions) / 1000;
+          currentTimeRef.current = nextSourceSeconds;
+          setCurrentTime(nextSourceSeconds);
+          const targetVideo = videoPlaybackRef.current?.video;
+          if (targetVideo) {
+            targetVideo.currentTime = nextSourceSeconds;
+          }
+          if (window.__QUIRO_E2E__) {
+            window.__QUIRO_E2E__.state = {
+              ...window.__QUIRO_E2E__.state,
+              sourceTime: nextSourceSeconds,
+              timelineTime: nextTimelineMs / 1000,
+              videoCurrentTime: nextSourceSeconds,
+            };
+          }
+        },
+        seekTimelineMs: (timeMs: number) => {
+          handleSeek(timeMs / 1000);
+          const nextSourceSeconds =
+            resolveTimelineTimeToSourceTime(timeMs, clipRegions) / 1000;
+          if (window.__QUIRO_E2E__) {
+            window.__QUIRO_E2E__.state = {
+              ...window.__QUIRO_E2E__.state,
+              sourceTime: nextSourceSeconds,
+              timelineTime: timeMs / 1000,
+              videoCurrentTime: nextSourceSeconds,
+            };
+          }
+        },
+        splitAtTimelineMs: (timeMs: number) => handleClipSplit(timeMs),
+      },
+    };
+  }, [
+    clipRegions,
+    currentTime,
+    duration,
+    handleClipSplit,
+    isPlaying,
+    timelinePlayheadTime,
+    videoPath,
+  ]);
 
   const handleClipSpanChange = useCallback(
     (id: string, span: Span) => {
@@ -3793,6 +4207,7 @@ export default function EditorWindow() {
       position: { ...DEFAULT_ANNOTATION_POSITION },
       size: { ...DEFAULT_ANNOTATION_SIZE },
       style: { ...DEFAULT_ANNOTATION_STYLE },
+      animation: { ...DEFAULT_ANNOTATION_ANIMATION },
       zIndex,
       trackIndex,
     };
@@ -3828,12 +4243,132 @@ export default function EditorWindow() {
 
   const handleAnnotationDelete = useCallback(
     (id: string) => {
+      createProjectSnapshot("auto", "Before deleting annotation");
       setAnnotationRegions((prev) => prev.filter((region) => region.id !== id));
       if (selectedAnnotationId === id) {
         setSelectedAnnotationId(null);
       }
     },
-    [selectedAnnotationId],
+    [createProjectSnapshot, selectedAnnotationId],
+  );
+
+  const handleAnnotationVisibilityChange = useCallback(
+    (id: string, visible: boolean) => {
+      setAnnotationRegions((prev) =>
+        prev.map((region) =>
+          region.id === id ? { ...region, visible } : region,
+        ),
+      );
+    },
+    [],
+  );
+
+  const handleAnnotationReorder = useCallback(
+    (id: string, direction: "up" | "down") => {
+      createProjectSnapshot("auto", "Before reordering layers");
+      setAnnotationRegions((prev) => {
+        const sorted = [...prev].sort((a, b) => a.zIndex - b.zIndex);
+        const index = sorted.findIndex((region) => region.id === id);
+        const targetIndex = direction === "up" ? index + 1 : index - 1;
+        if (index < 0 || targetIndex < 0 || targetIndex >= sorted.length) {
+          return prev;
+        }
+        const current = sorted[index];
+        const target = sorted[targetIndex];
+        return prev.map((region) => {
+          if (region.id === current.id) {
+            return { ...region, zIndex: target.zIndex };
+          }
+          if (region.id === target.id) {
+            return { ...region, zIndex: current.zIndex };
+          }
+          return region;
+        });
+      });
+    },
+    [createProjectSnapshot],
+  );
+
+  const handleAnnotationBaseOpacityChange = useCallback(
+    (id: string, opacity: number) => {
+      setAnnotationRegions((prev) =>
+        prev.map((region) =>
+          region.id === id ? { ...region, opacity } : region,
+        ),
+      );
+    },
+    [],
+  );
+
+  const handleAnnotationBaseScaleChange = useCallback(
+    (id: string, scale: number) => {
+      setAnnotationRegions((prev) =>
+        prev.map((region) =>
+          region.id === id ? { ...region, scale } : region,
+        ),
+      );
+    },
+    [],
+  );
+
+  const handleAnnotationAnimationChange = useCallback(
+    (id: string, animation: AnnotationAnimationSettings) => {
+      setAnnotationRegions((prev) =>
+        prev.map((region) =>
+          region.id === id ? { ...region, animation } : region,
+        ),
+      );
+    },
+    [],
+  );
+
+  const handleAnnotationAddKeyframe = useCallback(
+    (id: string) => {
+      const timeMs = Math.round(currentTime * 1000);
+      setAnnotationRegions((prev) =>
+        prev.map((region) =>
+          region.id === id
+            ? {
+                ...region,
+                keyframes: [
+                  ...(region.keyframes ?? []).filter(
+                    (keyframe) => keyframe.timeMs !== timeMs,
+                  ),
+                  {
+                    id: `keyframe-${Date.now()}`,
+                    timeMs,
+                    easing: "ease-in-out",
+                    position: region.position,
+                    opacity: region.opacity ?? 1,
+                    scale: region.scale ?? 1,
+                    blurIntensity: region.blurIntensity,
+                    arrowDirection: region.figureData?.arrowDirection,
+                  } satisfies AnnotationKeyframe,
+                ].sort((left, right) => left.timeMs - right.timeMs),
+              }
+            : region,
+        ),
+      );
+    },
+    [currentTime],
+  );
+
+  const handleAnnotationDeleteKeyframe = useCallback(
+    (id: string, keyframeId: string) => {
+      setAnnotationRegions((prev) =>
+        prev.map((region) =>
+          region.id === id
+            ? {
+                ...region,
+                keyframes: (region.keyframes ?? []).filter(
+                  (keyframe) => keyframe.id !== keyframeId,
+                ),
+              }
+            : region,
+        ),
+      );
+    },
+    [],
   );
 
   const handleAnnotationContentChange = useCallback(
@@ -4503,6 +5038,7 @@ export default function EditorWindow() {
             cursorMotionBlur,
             cursorClickBounce,
             cursorClickBounceDuration,
+            cursorClickEffect,
             cursorSway,
             frame,
             previewWidth,
@@ -4677,6 +5213,7 @@ export default function EditorWindow() {
             cursorMotionBlur,
             cursorClickBounce,
             cursorClickBounceDuration,
+            cursorClickEffect,
             cursorSway,
             frame,
             audioRegions,
@@ -5404,6 +5941,24 @@ export default function EditorWindow() {
               )
     : t("editor.exportStatus.preparing", "Preparing export...");
 
+  const handleAddAnnotationLayer = useCallback(() => {
+    const nextTrackIndex =
+      annotationRegions.length > 0
+        ? Math.max(...annotationRegions.map((r) => r.trackIndex ?? 0)) + 1
+        : 0;
+
+    timelineRef.current?.addAnnotation(nextTrackIndex);
+  }, [annotationRegions]);
+
+  const handleAddAudioLayer = useCallback(() => {
+    const nextTrackIndex =
+      audioRegions.length > 0
+        ? Math.max(...audioRegions.map((region) => region.trackIndex ?? 0)) + 1
+        : 0;
+
+    timelineRef.current?.addAudio(nextTrackIndex);
+  }, [audioRegions]);
+
   const projectBrowser = (
     <ProjectBrowserDialog
       open={projectBrowserOpen}
@@ -5413,37 +5968,25 @@ export default function EditorWindow() {
         error ? projectBrowserFallbackTriggerRef : projectBrowserTriggerRef
       }
       onOpenProject={(projectPath) => {
+        const normalizeForCompare = (value: string | null | undefined) =>
+          value?.replace(/\\/g, "/").toLowerCase() ?? null;
+        if (
+          normalizeForCompare(projectPath) ===
+          normalizeForCompare(currentProjectPath)
+        ) {
+          void repairCurrentProject({ rebuildEditorCaches: true });
+          return;
+        }
+
         void handleOpenProjectFromLibrary(projectPath);
       }}
     />
   );
   const nativeCaptureUnavailableDialog = (
-    <Dialog
+    <NativeCaptureUnavailableDialog
       open={nativeCaptureUnavailableModalOpen}
       onOpenChange={setNativeCaptureUnavailableModalOpen}
-    >
-      <DialogContent className="max-w-md bg-editor-dialog border-foreground/10 text-foreground">
-        <DialogHeader>
-          <DialogTitle>
-            {t(
-              "editor.nativeCaptureUnavailable.title",
-              "Nothing’s broken, but we won’t be able to render an animated cursor overlay.",
-            )}
-          </DialogTitle>
-          <DialogDescription className="text-muted-foreground">
-            {t(
-              "editor.nativeCaptureUnavailable.description",
-              "Your device does not support native capture. This could be for a variety of reasons we haven’t figured out yet. This doesn’t break Quiro, but it does make cursor smoothing impossible.",
-            )}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button onClick={() => setNativeCaptureUnavailableModalOpen(false)}>
-            {t("editor.nativeCaptureUnavailable.confirm", "Okay")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    />
   );
 
   if (loading) {
@@ -5485,84 +6028,185 @@ export default function EditorWindow() {
       <div
         className="relative flex h-11 shrink-0 items-center justify-between bg-editor-header/88 px-5 backdrop-blur-md border-b border-foreground/10 z-50"
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
-      ></div>
+      >
+        <div
+          className={`flex items-center gap-1.5 justify-self-start ${headerLeftControlsPaddingClass} no-drag`}
+        >
+          <Button
+            ref={projectBrowserTriggerRef}
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={handleOpenProjectBrowser}
+            className={APP_HEADER_ICON_BUTTON_CLASS}
+            title={t("editor.project.projects", "Open projects")}
+            aria-label={t("editor.project.projects", "Open projects")}
+          >
+            <FolderOpenIcon className="size-4" />
+          </Button>
+          <FeedbackDialog />
+          <Separator orientation="vertical" className="h-5 my-auto" />
+          <Button
+            type="button"
+            variant={"ghost"}
+            onClick={handleUndo}
+            disabled={!canUndo}
+            className={APP_HEADER_ICON_BUTTON_CLASS}
+            title={t("common.actions.undo", "Undo")}
+            aria-label={t("common.actions.undo", "Undo")}
+          >
+            <UndoIcon className="size-4" />
+          </Button>
+          <Button
+            type="button"
+            variant={"ghost"}
+            onClick={handleRedo}
+            disabled={!canRedo}
+            className={APP_HEADER_ICON_BUTTON_CLASS}
+            title={t("common.actions.redo", "Redo")}
+            aria-label={t("common.actions.redo", "Redo")}
+          >
+            <RedoIcon className="size-4" />
+          </Button>
+          <EditorHistoryPopover
+            entries={historyEntries}
+            currentEntryId={currentHistoryEntry?.id ?? null}
+            onJumpTo={jumpHistoryTo}
+          />
+        </div>
+        <div className="absolute left-1/2 flex min-w-0 -translate-x-1/2 items-center justify-center no-drag">
+          {isEditingProjectName ? (
+            <form
+              onSubmit={(event) => void handleProjectNameSubmit(event)}
+              className="flex max-w-[min(52vw,460px)] items-baseline gap-1 rounded-[7px] border border-foreground/10 bg-background px-2.5 py-1 shadow-[0_10px_28px_rgba(0,0,0,0.18)]"
+            >
+              {hasUnsavedChanges ? (
+                <span className="mt-px size-2 shrink-0 rounded-full bg-brand-400" />
+              ) : null}
+              <Input
+                ref={projectNameInputRef}
+                type="text"
+                value={projectNameDraft}
+                onChange={(event) => setProjectNameDraft(event.target.value)}
+                onBlur={() => {
+                  if (!isSavingProjectName) {
+                    closeProjectNameEditor();
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    closeProjectNameEditor();
+                  }
+                }}
+                disabled={isSavingProjectName}
+                className="min-w-[10ch] max-w-[min(40vw,360px)] bg-transparent text-sm font-semibold tracking-tight text-foreground/95 outline-none placeholder:text-muted-foreground/60 disabled:cursor-wait"
+                style={{ width: `${Math.max(projectNameDraft.length, 10)}ch` }}
+                aria-label={t("editor.project.renameInput", "Project name")}
+              />
+              <span className="shrink-0 text-xs font-medium tracking-tight text-muted-foreground/70">
+                .quiro
+              </span>
+            </form>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsEditingProjectName(true)}
+              title={t("editor.project.renameTitle", "Rename project")}
+              aria-label={t("editor.project.renameTitle", "Rename project")}
+            >
+              {hasUnsavedChanges ? (
+                <span className="mt-px size-2 shrink-0 rounded-full bg-primary" />
+              ) : null}
+              <span className="truncate text-sm font-semibold tracking-tight text-foreground/90">
+                {projectDisplayName}
+              </span>
+              <span className="shrink-0 text-xs font-medium tracking-tight text-muted-foreground/70">
+                .quiro
+              </span>
+            </Button>
+          )}
+        </div>
+        <div className="flex items-center justify-self-end pr-3 no-drag pl-3">
+          <EditorPresetPopover
+            open={presetPopoverOpen}
+            onOpenChange={setPresetPopoverOpen}
+            presets={editorPresets}
+            currentPresetId={currentEditorPreset?.id}
+            currentPresetName={currentEditorPreset?.name}
+            presetNameDraft={presetNameDraft}
+            onPresetNameDraftChange={setPresetNameDraft}
+            onSavePreset={handleSavePresetSubmit}
+            onApplyPreset={handleApplyEditorPreset}
+            onDeletePreset={handleDeleteEditorPreset}
+          />
+          <Separator orientation="vertical" className="h-5 my-auto" />
+          <EditorExportDropdown
+            open={showExportDropdown}
+            onOpenChange={(nextOpen) => {
+              if (nextOpen) {
+                handleOpenExportDropdown();
+                return;
+              }
+
+              setShowExportDropdown(false);
+            }}
+            isExporting={isExporting}
+            isLightningExportInProgress={isLightningExportInProgress}
+            isLegacyExportInProgress={isLegacyExportInProgress}
+            isExportPreparing={isExportPreparing}
+            isExportSaving={isExportSaving}
+            isExportFinalSaveIndeterminate={isExportFinalSaveIndeterminate}
+            isRenderingAudio={isRenderingAudio}
+            exportProgress={exportProgress}
+            exportFinalizingProgress={exportFinalizingProgress}
+            exportPercentLabel={exportPercentLabel}
+            exportRenderSpeedLabel={exportRenderSpeedLabel}
+            exportRuntimeLabel={exportRuntimeLabel}
+            exportNativeSkipLabel={exportNativeSkipLabel}
+            exportError={exportError}
+            exportedFilePath={exportedFilePath}
+            hasPendingExportSave={hasPendingExportSave}
+            onOpenLightningIssues={openLightningIssues}
+            onCancelExport={handleCancelExport}
+            onRetrySaveExport={handleRetrySaveExport}
+            onCloseExportDropdown={handleExportDropdownClose}
+            onRevealExportedFile={revealExportedFile}
+            exportFormat={exportFormat}
+            onExportFormatChange={setExportFormat}
+            exportEncodingMode={exportEncodingMode}
+            onExportEncodingModeChange={setExportEncodingMode}
+            mp4FrameRate={mp4FrameRate}
+            onMp4FrameRateChange={setMp4FrameRate}
+            exportPipelineModel={exportPipelineModel}
+            onExportPipelineModelChange={setExportPipelineModel}
+            exportQuality={exportQuality}
+            onExportQualityChange={setExportQuality}
+            gifFrameRate={gifFrameRate}
+            onGifFrameRateChange={setGifFrameRate}
+            gifLoop={gifLoop}
+            onGifLoopChange={setGifLoop}
+            gifSizePreset={gifSizePreset}
+            onGifSizePresetChange={setGifSizePreset}
+            mp4OutputDimensions={mp4OutputDimensions}
+            gifOutputDimensions={gifOutputDimensions}
+            onStartExport={handleStartExportFromDropdown}
+          />
+        </div>
+      </div>
 
       <div className="relative flex min-h-0 flex-1 flex-col gap-3 p-4">
         <div className="flex min-h-0 flex-1 gap-3 relative z-10">
           {/* Sidebar */}
           <div className="flex shrink-0  gap-1-5">
-            <div className="flex shrink-0 flex-col items-center gap-1 px-2 py-2">
-              {editorSectionButtons.map((button) => {
-                const isActive = activeEffectSection === button.id;
-                return (
-                  <div key={button.id} className="flex items-center">
-                    <motion.button
-                      type="button"
-                      onClick={() => setActiveEffectSection(button.id)}
-                      title={button.label}
-                      className={cn(
-                        "group relative flex size-9 items-center justify-center rounded transition-colors",
-                        "outline-none focus:outline-none focus-visible:outline-none",
-                      )}
-                      animate={{ opacity: isActive ? 1 : 0.6 }}
-                      transition={{ duration: 0.14 }}
-                    >
-                      {isActive && (
-                        <motion.span
-                          layoutId="rail-bg-active"
-                          className="absolute inset-0 rounded-lg bg-foreground/8"
-                          transition={{
-                            type: "spring",
-                            stiffness: 450,
-                            damping: 35,
-                          }}
-                        />
-                      )}
-                      <motion.span
-                        className="relative z-10"
-                        animate={{
-                          color: isActive
-                            ? "#2563EB"
-                            : "hsl(var(--foreground))",
-                        }}
-                        transition={{ duration: 0.14 }}
-                      >
-                        <button.icon className="h-6.75 w-6.75" />
-                      </motion.span>
-                    </motion.button>
-                    <div className="ml-1.5 h-1.5 w-1.5 shrink-0">
-                      {isActive && (
-                        <motion.span
-                          layoutId="rail-active-dot"
-                          className="block h-1.5 w-1.5 rounded-full bg-[#2563EB]"
-                          initial={{ opacity: 0, scale: 0.5 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0.5 }}
-                          transition={{
-                            type: "spring",
-                            stiffness: 500,
-                            damping: 32,
-                          }}
-                        />
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-              <div className="mt-auto flex flex-col items-center gap-0.5 pt-3">
-                <motion.button
-                  type="button"
-                  onClick={() => toast.info("Account coming soon")}
-                  title="Account"
-                  className="group relative flex h-9 w-9 items-center justify-center rounded-lg text-foreground/55 outline-none transition hover:text-foreground focus:outline-none focus-visible:outline-none"
-                  whileHover={{ opacity: 1 }}
-                  initial={{ opacity: 0.55 }}
-                >
-                  <motion.span className="absolute inset-0 rounded-lg bg-foreground/4 opacity-0 transition group-hover:opacity-100" />
-                  <UserCircleIcon className="relative z-10 size-6.75" />
-                </motion.button>
-              </div>
-            </div>
+            <EditorSectionRail
+              activeSection={activeEffectSection}
+              sections={editorSectionButtons}
+              onSectionChange={setActiveEffectSection}
+              onAccountClick={() => toast.info("Account coming soon")}
+            />
             {activeEffectSection === "extensions" ? null : (
               <SettingsPanel
                 panelMode="editor"
@@ -5584,9 +6228,17 @@ export default function EditorWindow() {
                       "auto")
                     : null
                 }
+                selectedZoomPresetId={
+                  selectedZoomId
+                    ? (zoomRegions.find((z) => z.id === selectedZoomId)
+                        ?.presetId ?? null)
+                    : null
+                }
                 onZoomModeChange={(mode) =>
                   selectedZoomId && handleZoomModeChange(mode)
                 }
+                onZoomPresetChange={handleZoomPresetChange}
+                onZoomVisibilityChange={handleZoomVisibilityChange}
                 onZoomDelete={handleZoomDelete}
                 selectedClipId={selectedClipId}
                 selectedClipSpeed={
@@ -5701,6 +6353,8 @@ export default function EditorWindow() {
                 onCursorClickBounceChange={setCursorClickBounce}
                 cursorClickBounceDuration={cursorClickBounceDuration}
                 onCursorClickBounceDurationChange={setCursorClickBounceDuration}
+                cursorClickEffect={cursorClickEffect}
+                onCursorClickEffectChange={setCursorClickEffect}
                 cursorSway={cursorSway}
                 onCursorSwayChange={setCursorSway}
                 borderRadius={borderRadius}
@@ -5723,7 +6377,18 @@ export default function EditorWindow() {
                 aspectRatio={aspectRatio}
                 onAspectRatioChange={setAspectRatio}
                 selectedAnnotationId={selectedAnnotationId}
+                zoomRegions={zoomRegions}
                 annotationRegions={annotationRegions}
+                projectSnapshots={projectSnapshots}
+                onCreateProjectSnapshot={() => createProjectSnapshot("manual")}
+                onRestoreProjectSnapshot={restoreProjectSnapshot}
+                onAnnotationVisibilityChange={handleAnnotationVisibilityChange}
+                onAnnotationReorder={handleAnnotationReorder}
+                onAnnotationOpacityChange={handleAnnotationBaseOpacityChange}
+                onAnnotationScaleChange={handleAnnotationBaseScaleChange}
+                onAnnotationAnimationChange={handleAnnotationAnimationChange}
+                onAnnotationAddKeyframe={handleAnnotationAddKeyframe}
+                onAnnotationDeleteKeyframe={handleAnnotationDeleteKeyframe}
                 autoCaptions={autoCaptions}
                 autoCaptionSettings={autoCaptionSettings}
                 whisperExecutablePath={whisperExecutablePath}
@@ -5762,38 +6427,10 @@ export default function EditorWindow() {
             <div className="flex min-h-0 flex-1 flex-col">
               <div className="relative flex flex-1 min-h-0 flex-col overflow-hidden">
                 <div className="flex items-center justify-center gap-2 py-1.5 shrink-0">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      // @ts-expect-error - cva types are weird
-                      className={cva(
-                        buttonVariants({ variant: "ghost", size: "sm" }),
-                      )}
-                    >
-                      <span className="font-medium">
-                        {getAspectRatioLabel(aspectRatio)}
-                      </span>
-                      <ArrowDown01Icon className="w-3 h-3" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="center"
-                      className={"bg-background border-border shadow-soft-md"}
-                    >
-                      <DropdownMenuGroup>
-                        {ASPECT_RATIOS.map((ratio) => (
-                          <DropdownMenuItem
-                            key={ratio}
-                            onClick={() => setAspectRatio(ratio)}
-                            className="text-muted-foreground hover:text-foreground hover:bg-foreground/10 cursor-pointer flex items-center justify-between gap-3"
-                          >
-                            <span>{getAspectRatioLabel(ratio)}</span>
-                            {aspectRatio === ratio && (
-                              <Tick02Icon className="w-3 h-3 text-primary" />
-                            )}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuGroup>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <AspectRatioDropdown
+                    aspectRatio={aspectRatio}
+                    onAspectRatioChange={setAspectRatio}
+                  />
                   <div className="w-px h-4 bg-foreground/20" />
                   <Button
                     variant="ghost"
@@ -5806,7 +6443,7 @@ export default function EditorWindow() {
                       {t("settings.crop.title")}
                     </span>
                     {isCropped ? (
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#2563EB]" />
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary" />
                     ) : null}
                   </Button>
                 </div>
@@ -5837,7 +6474,7 @@ export default function EditorWindow() {
                       }}
                     >
                       <VideoPlayback
-                        key={`${videoPath || "no-video"}:${previewVersion}`}
+                        key={`${videoPath || "no-video"}:${workspaceReloadVersion}:${previewVersion}`}
                         aspectRatio={aspectRatio}
                         ref={videoPlaybackRef}
                         videoPath={videoPath || ""}
@@ -5910,6 +6547,7 @@ export default function EditorWindow() {
                         cursorMotionBlur={cursorMotionBlur}
                         cursorClickBounce={cursorClickBounce}
                         cursorClickBounceDuration={cursorClickBounceDuration}
+                        cursorClickEffect={cursorClickEffect}
                         cursorSway={cursorSway}
                         volume={shouldMutePreviewVideo ? 0 : previewVolume}
                         suspendRendering={shouldSuspendPreviewRendering}
@@ -5921,63 +6559,15 @@ export default function EditorWindow() {
             </div>
             <div className="relative flex shrink-0 items-center p-1">
               <div className="z-10 flex min-w-0 flex-1 items-center gap-1.5">
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    // @ts-expect-error - cva types are weird
-                    className={cva(
-                      buttonVariants({ variant: "ghost", size: "sm" }),
-                    )}
-                  >
-                    <PlusSignIcon className="w-3.5 h-3.5" />
-                    <span className="font-medium">
-                      {t("editor.toolbar.addLayer")}
-                    </span>
-                    <ArrowDown01Icon className="w-3 h-3" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="start"
-                    className={"bg-background border-border shadow-soft-md"}
-                  >
-                    <DropdownMenuItem
-                      onClick={() => {
-                        const nextTrackIndex =
-                          annotationRegions.length > 0
-                            ? Math.max(
-                                ...annotationRegions.map(
-                                  (r) => r.trackIndex ?? 0,
-                                ),
-                              ) + 1
-                            : 0;
-                        timelineRef.current?.addAnnotation(nextTrackIndex);
-                      }}
-                      className="text-muted-foreground hover:text-foreground hover:bg-foreground/10 cursor-pointer"
-                    >
-                      {t("timeline.annotation.label")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => {
-                        const nextTrackIndex =
-                          audioRegions.length > 0
-                            ? Math.max(
-                                ...audioRegions.map(
-                                  (region) => region.trackIndex ?? 0,
-                                ),
-                              ) + 1
-                            : 0;
-                        timelineRef.current?.addAudio(nextTrackIndex);
-                      }}
-                      className="text-muted-foreground hover:text-foreground hover:bg-foreground/10 cursor-pointer"
-                    >
-                      {t("timeline.audio.label")}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <AddLayerDropdown
+                  onAddAnnotation={handleAddAnnotationLayer}
+                  onAddAudio={handleAddAudioLayer}
+                />
                 <div className="w-px h-4 bg-foreground/20" />
                 <Button
                   variant="ghost"
                   size="icon"
-                  // @ts-expect-error - reference to method that doesn't exist yet
-                  onClick={() => timelineRef.current?.addZoomRegion()}
+                  onClick={() => timelineRef.current?.addZoom()}
                   title={t("timeline.zoom.addZoom")}
                 >
                   <SearchAddIcon className="w-3.5 h-3.5" />
@@ -6071,6 +6661,48 @@ export default function EditorWindow() {
 
               {/* Right: collapse + volume */}
               <div className="z-10 ml-auto flex items-center gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      title="Timeline density"
+                      className="h-7 w-7 rounded-full text-muted-foreground transition-all hover:bg-foreground/10 hover:text-foreground"
+                    >
+                      <TimelineListIcon className="w-3.5 h-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    sideOffset={8}
+                    className="w-52"
+                  >
+                    {TIMELINE_DENSITY_OPTIONS.map((option) => (
+                      <DropdownMenuItem
+                        key={option.mode}
+                        onClick={() => setTimelineDensityMode(option.mode)}
+                        className="items-start gap-2"
+                      >
+                        <span
+                          className="mt-1 size-1.5 rounded-full bg-muted-foreground/35 data-[active=true]:bg-primary"
+                          data-active={timelineDensityMode === option.mode}
+                        />
+                        <span className="min-w-0">
+                          <span className="block text-[12px] font-medium">
+                            {option.label}
+                          </span>
+                          <span className="block text-[10px] leading-3 text-muted-foreground/70">
+                            {option.description}
+                          </span>
+                        </span>
+                        {timelineDensityMode === option.mode ? (
+                          <Tick02Icon className="ml-auto mt-0.5 size-3 text-primary" />
+                        ) : null}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -6133,10 +6765,10 @@ export default function EditorWindow() {
                     min={0}
                     onValueChange={setPreviewVolume}
                     showValue={false}
-                    size="xs"
+                    size="sm"
                     step={0.01}
                     ticks={0}
-                    // thumbClassName="bg-foreground/95 shadow-[0_0_10px_rgba(37,99,235,0.28)]"
+                    // thumbClassName="bg-foreground/95 shadow-[0_0_10px_rgba(240,128,48,0.28)]"
                     // trackClassName="rounded-full border border-border bg-background shadow-soft-lg"
                     value={previewVolume}
                   />
@@ -6168,11 +6800,13 @@ export default function EditorWindow() {
           // }}
         >
           <TimelineEditor
+            key={`${videoPath || "no-video"}:${workspaceReloadVersion}`}
             ref={timelineRef}
             hideToolbar
             videoDuration={duration}
             currentTime={currentTime}
             playheadTime={timelinePlayheadTime}
+            densityMode={timelineDensityMode}
             onSeek={handleSeek}
             videoPath={videoPath}
             cursorTelemetry={normalizedCursorTelemetry}
@@ -6208,49 +6842,15 @@ export default function EditorWindow() {
         </motion.div>
       </div>
 
-      {showCropModal ? (
-        <>
-          <div
-            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
-            onClick={handleCancelCropEditor}
-          />
-          <div className="fixed left-1/2 top-1/2 z-[60] max-h-[90vh] w-[90vw] max-w-5xl -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-2xl border border-foreground/10 bg-editor-dialog p-8 shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="mb-6 flex items-center justify-between">
-              <div>
-                <span className="text-xl font-bold text-foreground">
-                  {t("settings.crop.title")}
-                </span>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {t("settings.crop.instruction")}
-                </p>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleCancelCropEditor}
-                className="text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
-              >
-                <Cancel01Icon className="h-5 w-5" />
-              </Button>
-            </div>
-            <CropControl
-              videoElement={videoPlaybackRef.current?.video || null}
-              cropRegion={cropRegion}
-              onCropChange={setCropRegion}
-              aspectRatio={aspectRatio}
-            />
-            <div className="mt-6 flex justify-end">
-              <Button
-                onClick={handleCloseCropEditor}
-                size="lg"
-                className="bg-[#2563EB] text-white hover:bg-[#2563EB]/90"
-              >
-                {t("common.actions.done")}
-              </Button>
-            </div>
-          </div>
-        </>
-      ) : null}
+      <CropEditorDialog
+        open={showCropModal}
+        videoElement={videoPlaybackRef.current?.video || null}
+        cropRegion={cropRegion}
+        onCropChange={setCropRegion}
+        aspectRatio={aspectRatio}
+        onCancel={handleCancelCropEditor}
+        onDone={handleCloseCropEditor}
+      />
 
       {projectBrowser}
       {nativeCaptureUnavailableDialog}

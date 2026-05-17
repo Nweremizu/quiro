@@ -11,7 +11,6 @@ import { useMemo } from "react";
 import { useScopedT } from "@/contexts/I18nContext";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import styles from "./LaunchWindow.module.css";
 
 interface RecordingControlsProps {
   paused: boolean;
@@ -45,13 +44,13 @@ export const RecordingControls = ({
           <div
             className={`h-1.75 w-1.75 rounded-full ${
               paused
-                ? "bg-yellow-500"
-                : `bg-red-500 size-3 rounded-full animate-pulse transition-all duration-300 ease-in-out`
+                ? "bg-[#d6a13d]"
+                : `size-3 rounded-full bg-[#b7332f] recording-active transition-[background-color,box-shadow] duration-300 ease-in-out`
             }`}
           />
           <span
             className={`text-[10px] font-bold tracking-[0.06em] ${
-              paused ? "text-yellow-500" : "text-red-500"
+              paused ? "text-[#d6a13d]" : "text-[#e9b6a4]"
             }`}
           >
             {paused ? t("recording.paused") : t("recording.rec")}
@@ -60,7 +59,7 @@ export const RecordingControls = ({
 
         <span
           className={`min-w-13 text-center font-mono text-xs font-semibold tracking-[0.02em] ${
-            paused ? "text-yellow-500" : "text-red-500"
+            paused ? "text-[#d6a13d]" : "text-[#e9b6a4]"
           }`}
         >
           {formatTime(elapsed)}
@@ -72,7 +71,7 @@ export const RecordingControls = ({
           <Button
             variant="ghost"
             size="icon-lg"
-            className={microphoneEnabled ? styles.ibActive : ""}
+            className={microphoneEnabled ? "text-primary" : ""}
             aria-label={t("recording.micToggleDisabledTip")}
             disabled
             onClick={onToggleMicrophone}
@@ -85,7 +84,7 @@ export const RecordingControls = ({
           </Button>
         </span>
 
-        <Separator orientation="vertical" className="mx-[5px] h-6" />
+        <Separator orientation="vertical" className="mx-1.25 h-6" />
 
         <Button
           variant={paused ? "default" : "ghost"}
@@ -93,7 +92,11 @@ export const RecordingControls = ({
           onClick={onPauseResume}
           title={paused ? t("recording.resume") : t("recording.pause")}
           aria-label={paused ? t("recording.resume") : t("recording.pause")}
-          className={paused ? styles.ibGreen : ""}
+          className={
+            paused
+              ? "bg-primary text-primary-foreground shadow-[0_8px_18px_rgba(112,45,10,0.22)] hover:bg-primary/90"
+              : ""
+          }
         >
           {paused ? <PlayIcon size={18} /> : <PauseIcon size={18} />}
         </Button>
@@ -104,7 +107,9 @@ export const RecordingControls = ({
           onClick={onStopRecording}
           title={t("recording.stop")}
           aria-label={t("recording.stop")}
-          className={styles.ibRed}
+          className={
+            "bg-[#b7332f] text-white shadow-[0_8px_18px_rgba(112,45,10,0.24),inset_0_1px_0_rgba(255,255,255,0.18)] hover:bg-[#a52d2a]"
+          }
         >
           <SquareIcon size={16} />
         </Button>

@@ -40,7 +40,7 @@ export function AnnotationOverlay({
 
   const renderArrow = () => {
     const direction = annotation.figureData?.arrowDirection || "right";
-    const color = annotation.figureData?.color || "#2563EB";
+    const color = annotation.figureData?.color || "#f08030";
     const strokeWidth = annotation.figureData?.strokeWidth || 4;
 
     const ArrowComponent = getArrowComponent(direction);
@@ -180,14 +180,14 @@ export function AnnotationOverlay({
       className={cn(
         "cursor-move transition-all",
         isSelected &&
-          "ring-2 ring-[#2563EB] ring-offset-2 ring-offset-transparent",
+          "ring-2 ring-primary ring-offset-2 ring-offset-transparent",
       )}
       style={{
         zIndex: isSelectedBoost ? zIndex + 1000 : zIndex, // Boost selected annotation to ensure it's on top
         pointerEvents: "auto",
-        border: isSelected ? "2px solid rgba(37, 99, 235, 0.8)" : "none",
-        backgroundColor: isSelected ? "rgba(37, 99, 235, 0.1)" : "transparent",
-        boxShadow: isSelected ? "0 0 0 1px rgba(37, 99, 235, 0.35)" : "none",
+        border: isSelected ? "2px solid rgba(240, 128, 48, 0.8)" : "none",
+        backgroundColor: isSelected ? "rgba(240, 128, 48, 0.1)" : "transparent",
+        boxShadow: isSelected ? "0 0 0 1px rgba(240, 128, 48, 0.35)" : "none",
       }}
       enableResizing={isSelected}
       disableDragging={!isSelected}
@@ -196,7 +196,7 @@ export function AnnotationOverlay({
           width: "12px",
           height: "12px",
           backgroundColor: isSelected ? "white" : "transparent",
-          border: isSelected ? "2px solid #2563EB" : "none",
+          border: isSelected ? "2px solid #f08030" : "none",
           borderRadius: "50%",
           left: "-6px",
           top: "-6px",
@@ -206,7 +206,7 @@ export function AnnotationOverlay({
           width: "12px",
           height: "12px",
           backgroundColor: isSelected ? "white" : "transparent",
-          border: isSelected ? "2px solid #2563EB" : "none",
+          border: isSelected ? "2px solid #f08030" : "none",
           borderRadius: "50%",
           right: "-6px",
           top: "-6px",
@@ -216,7 +216,7 @@ export function AnnotationOverlay({
           width: "12px",
           height: "12px",
           backgroundColor: isSelected ? "white" : "transparent",
-          border: isSelected ? "2px solid #2563EB" : "none",
+          border: isSelected ? "2px solid #f08030" : "none",
           borderRadius: "50%",
           left: "-6px",
           bottom: "-6px",
@@ -226,7 +226,7 @@ export function AnnotationOverlay({
           width: "12px",
           height: "12px",
           backgroundColor: isSelected ? "white" : "transparent",
-          border: isSelected ? "2px solid #2563EB" : "none",
+          border: isSelected ? "2px solid #f08030" : "none",
           borderRadius: "50%",
           right: "-6px",
           bottom: "-6px",
@@ -242,6 +242,11 @@ export function AnnotationOverlay({
           annotation.type === "figure" && "bg-transparent",
           isSelected && "shadow-lg",
         )}
+        style={{
+          opacity: annotation.opacity ?? 1,
+          transform: `scale(${annotation.scale ?? 1})`,
+          transformOrigin: "center",
+        }}
       >
         {renderContent()}
       </div>

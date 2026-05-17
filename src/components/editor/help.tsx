@@ -10,6 +10,7 @@ import {
 } from "@/components/icons/generated";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Kbd } from "@/components/ui/kbd";
 import {
   Dialog,
   DialogContent,
@@ -27,16 +28,22 @@ import {
 } from "@/lib/shortcuts";
 import { formatShortcut } from "@electron/utils/platformUtils";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
-export const QUIRO_ISSUES_URL =
-  "https://github.com/webadderallorg/QUIRO/issues";
+export const QUIRO_ISSUES_URL = "https://github.com/nweremizu/QUIRO/issues";
 const QUIRO_DISCORD_URL = "https://discord.gg/sdv2FBVNgE";
-const QUIRO_X_URL = "https://x.com/webadderall";
-const CONTACT_EMAIL = "youngchen3442@gmail.com";
+const QUIRO_X_URL = "https://x.com/brunex790";
+const CONTACT_EMAIL = "bnweremizu@gmail.com";
 export const APP_HEADER_ACTION_BUTTON_CLASS =
   "h-7 px-2 text-xs text-muted-foreground hover:bg-foreground/10 hover:text-foreground transition-all gap-1.5";
 export const APP_HEADER_ICON_BUTTON_CLASS =
   "h-7 w-7 p-0 text-muted-foreground hover:bg-foreground/10 hover:text-foreground transition-all";
+const COMPACT_DIALOG_CONTENT_CLASS =
+  "max-w-md bg-card shadow-lg border-(--border-default) text-foreground [&>button]:text-muted-foreground [&>button:hover]:text-foreground";
+const SHORTCUT_ROW_CLASS =
+  "flex min-h-8 items-center justify-between gap-3 rounded-md px-1.5 py-1 text-xs";
+const SHORTCUT_KEY_CLASS =
+  "shrink-0 border border-foreground/10 bg-foreground/[0.04] px-2 font-mono text-[11px] text-foreground";
 
 interface KeyboardShortcutsDialogProps {
   triggerLabel?: string;
@@ -90,21 +97,20 @@ export function FeedbackDialog() {
 
   return (
     <Dialog>
-      <DialogTrigger>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={APP_HEADER_ICON_BUTTON_CLASS}
-          title={t("feedback.trigger", "Feedback")}
-          aria-label={t("feedback.trigger", "Feedback")}
-        >
-          <BubbleChatIcon className="h-3.5 w-3.5" />
-        </Button>
+      <DialogTrigger
+        className={cn(
+          APP_HEADER_ICON_BUTTON_CLASS,
+          "flex items-center justify-center rounded-full!",
+        )}
+        title={t("feedback.trigger", "Feedback")}
+        aria-label={t("feedback.trigger", "Feedback")}
+      >
+        <BubbleChatIcon className="h-3.5 w-3.5" />
       </DialogTrigger>
-      <DialogContent className="max-w-lg bg-editor-dialog border-foreground/10 [&>button]:text-muted-foreground [&>button:hover]:text-foreground">
+      <DialogContent className="max-w-lg bg-card border-foreground/10 [&>button]:text-muted-foreground [&>button:hover]:text-foreground">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold text-foreground flex items-center gap-2">
-            <BubbleChatIcon className="h-5 w-5 text-[#2563EB]" />{" "}
+            <BubbleChatIcon className="h-5 w-5 text-primary" />{" "}
             {t("feedback.title", "Feedback & contact")}
           </DialogTitle>
           <DialogDescription className="text-muted-foreground">
@@ -115,7 +121,7 @@ export function FeedbackDialog() {
           </DialogDescription>
         </DialogHeader>
         <div className="mt-4 space-y-4">
-          <div className="rounded-xl border border-foreground/10 bg-foreground/[0.03] p-4 space-y-3">
+          <div className="rounded-xl border border-foreground/10 bg-muted/3 p-4 space-y-3">
             <div className="flex items-center justify-between gap-3 rounded-lg border border-foreground/5 bg-foreground/5 px-3 py-3">
               <div>
                 <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground/70">
@@ -220,58 +226,54 @@ export function KeyboardShortcutsDialog({
           ) : null}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-lg bg-editor-dialog border-foreground/10 [&>button]:text-muted-foreground [&>button:hover]:text-foreground">
+      <DialogContent className={COMPACT_DIALOG_CONTENT_CLASS}>
         <DialogHeader>
-          <DialogTitle className="text-xl font-semibold text-foreground flex items-center gap-2">
-            <KeyboardIcon className="h-5 w-5 text-[#2563EB]" />{" "}
+          <DialogTitle className="text-[15px] font-semibold tracking-[-0.02em] text-foreground">
             {t("keyboardShortcuts.title")}
           </DialogTitle>
-          <DialogDescription className="text-muted-foreground">
+          <DialogDescription className="text-muted-foreground leading-relaxed text-[13px]">
             {t(
               "keyboardShortcuts.description",
               "Quick reference for the timeline and editor controls.",
             )}
           </DialogDescription>
         </DialogHeader>
-        <div className="mt-4 space-y-4">
-          <div className="rounded-xl border border-foreground/10 bg-foreground/[0.03] p-4 space-y-2 text-xs">
+        <div className="mt-1 space-y-4">
+          <div className="space-y-1">
             {SHORTCUT_ACTIONS.map((action) => (
-              <div
-                key={action}
-                className="flex items-center justify-between gap-3 rounded-lg border border-foreground/5 bg-foreground/5 px-3 py-2.5"
-              >
+              <div key={action} className={SHORTCUT_ROW_CLASS}>
                 <span className="text-muted-foreground">
                   {SHORTCUT_LABELS[action]}
                 </span>
-                <kbd className="rounded border border-foreground/10 bg-foreground/10 px-2 py-1 font-mono text-[#2563EB]">
+                <Kbd className={SHORTCUT_KEY_CLASS}>
                   {formatBinding(shortcuts[action], isMac)}
-                </kbd>
+                </Kbd>
               </div>
             ))}
-            <div className="grid grid-cols-1 gap-2 pt-2 sm:grid-cols-3">
-              <div className="rounded-lg border border-foreground/5 bg-foreground/5 px-3 py-2.5">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground/70">
+            <div className="mt-2 grid grid-cols-1 gap-2 pt-3 sm:grid-cols-3">
+              <div className="space-y-2">
+                <p className="text-[11px] font-medium text-muted-foreground">
                   {t("keyboardShortcuts.panTimeline")}
                 </p>
-                <kbd className="mt-2 inline-flex rounded border border-foreground/10 bg-foreground/10 px-2 py-1 font-mono text-[#2563EB]">
+                <Kbd className={SHORTCUT_KEY_CLASS}>
                   {scrollLabels.pan}
-                </kbd>
+                </Kbd>
               </div>
-              <div className="rounded-lg border border-foreground/5 bg-foreground/5 px-3 py-2.5">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground/70">
+              <div className="space-y-2">
+                <p className="text-[11px] font-medium text-muted-foreground">
                   {t("keyboardShortcuts.zoomTimeline")}
                 </p>
-                <kbd className="mt-2 inline-flex rounded border border-foreground/10 bg-foreground/10 px-2 py-1 font-mono text-[#2563EB]">
+                <Kbd className={SHORTCUT_KEY_CLASS}>
                   {scrollLabels.zoom}
-                </kbd>
+                </Kbd>
               </div>
-              <div className="rounded-lg border border-foreground/5 bg-foreground/5 px-3 py-2.5">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground/70">
+              <div className="space-y-2">
+                <p className="text-[11px] font-medium text-muted-foreground">
                   {t("keyboardShortcuts.cycleAnnotations")}
                 </p>
-                <kbd className="mt-2 inline-flex rounded border border-foreground/10 bg-foreground/10 px-2 py-1 font-mono text-[#2563EB]">
+                <Kbd className={SHORTCUT_KEY_CLASS}>
                   {t("keyboardShortcuts.tab")}
-                </kbd>
+                </Kbd>
               </div>
             </div>
           </div>

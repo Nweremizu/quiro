@@ -33,7 +33,7 @@ export function CountdownPopover({
       trigger={trigger}
       align="center"
     >
-      <div className={"px-1 pt-2.5 text-xs uppercase"}>
+      <div className="px-2.5 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-stone-400">
         {t("recording.countdownDelay")}
       </div>
       {COUNTDOWN_OPTIONS.map((delay) => (

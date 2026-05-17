@@ -4,7 +4,7 @@ import {
 	CLICK_CLUSTER_PAD_MS,
 	buildInteractionZoomSuggestions,
 } from "./zoomSuggestionUtils";
-import type { CursorTelemetryPoint } from "../types";
+import type { CursorTelemetryPoint } from "@/types/editor";
 
 function makeClick(
 	timeMs: number,

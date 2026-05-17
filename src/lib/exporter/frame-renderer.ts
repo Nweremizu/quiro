@@ -13,6 +13,7 @@ import type {
   AutoCaptionSettings,
   CaptionCue,
   CropRegion,
+  CursorClickEffectSettings,
   CursorStyle,
   CursorTelemetryPoint,
   Padding,
@@ -59,7 +60,7 @@ import {
 import {
   getWebcamCropSourceRect,
   getWebcamOverlayPosition,
-  getWebcamOverlaySizePx,
+  getWebcamOverlaySizeRect,
 } from "@/components/editor/utils/webcam-overlay";
 import {
   getAssetPath,
@@ -149,6 +150,7 @@ interface FrameRenderConfig {
   cursorMotionBlur?: number;
   cursorClickBounce?: number;
   cursorClickBounceDuration?: number;
+  cursorClickEffect?: CursorClickEffectSettings;
   cursorSway?: number;
   frame?: string | null;
 }
@@ -486,6 +488,8 @@ export class FrameRenderer {
         clickBounceDuration:
           this.config.cursorClickBounceDuration ??
           DEFAULT_CURSOR_CONFIG.clickBounceDuration,
+        clickEffect:
+          this.config.cursorClickEffect ?? DEFAULT_CURSOR_CONFIG.clickEffect,
         sway: this.config.cursorSway ?? DEFAULT_CURSOR_CONFIG.sway,
       });
     }
@@ -2436,18 +2440,22 @@ export class FrameRenderer {
     }
 
     const margin = webcam.margin ?? 24;
-    const size = getWebcamOverlaySizePx({
+    const overlaySize = getWebcamOverlaySizeRect({
       containerWidth: width,
       containerHeight: height,
       sizePercent: webcam.size ?? 50,
       margin,
       zoomScale: this.animationState.appliedScale || 1,
       reactToZoom: webcam.reactToZoom ?? true,
+      aspectRatio: webcam.aspectRatio ?? 1,
+      layoutMode: webcam.layoutMode ?? "overlay",
     });
     const { x, y } = getWebcamOverlayPosition({
       containerWidth: width,
       containerHeight: height,
-      size,
+      size: overlaySize.height,
+      width: overlaySize.width,
+      height: overlaySize.height,
       margin,
       positionPreset: webcam.positionPreset ?? webcam.corner,
       positionX: webcam.positionX ?? 1,
@@ -2458,13 +2466,14 @@ export class FrameRenderer {
 
     const bubbleCanvas =
       this.webcamBubbleCanvas ?? document.createElement("canvas");
-    const bubbleSize = Math.max(1, Math.ceil(size));
+    const bubbleWidth = Math.max(1, Math.ceil(overlaySize.width));
+    const bubbleHeight = Math.max(1, Math.ceil(overlaySize.height));
     if (
-      bubbleCanvas.width !== bubbleSize ||
-      bubbleCanvas.height !== bubbleSize
+      bubbleCanvas.width !== bubbleWidth ||
+      bubbleCanvas.height !== bubbleHeight
     ) {
-      bubbleCanvas.width = bubbleSize;
-      bubbleCanvas.height = bubbleSize;
+      bubbleCanvas.width = bubbleWidth;
+      bubbleCanvas.height = bubbleHeight;
     }
     this.webcamBubbleCanvas = bubbleCanvas;
     const bubbleCtx =
@@ -2537,36 +2546,36 @@ export class FrameRenderer {
         ? webcamFrameSource.displayWidth
         : "videoWidth" in webcamFrameSource
           ? webcamFrameSource.videoWidth
-          : webcamFrameSource.width) || size;
+          : webcamFrameSource.width) || overlaySize.width;
     const sourceHeight =
       ("displayHeight" in webcamFrameSource
         ? webcamFrameSource.displayHeight
         : "videoHeight" in webcamFrameSource
           ? webcamFrameSource.videoHeight
-          : webcamFrameSource.height) || size;
+          : webcamFrameSource.height) || overlaySize.height;
     const { sx, sy, sw, sh } = getWebcamCropSourceRect(
       webcam.cropRegion,
       sourceWidth,
       sourceHeight,
     );
-    const coverScale = Math.max(size / sw, size / sh);
+    const coverScale = Math.max(overlaySize.width / sw, overlaySize.height / sh);
     const drawWidth = sw * coverScale;
     const drawHeight = sh * coverScale;
-    const drawX = (size - drawWidth) / 2;
-    const drawY = (size - drawHeight) / 2;
+    const drawX = (overlaySize.width - drawWidth) / 2;
+    const drawY = (overlaySize.height - drawHeight) / 2;
 
     bubbleCtx.save();
     drawSquircleOnCanvas(bubbleCtx, {
       x: 0,
       y: 0,
-      width: size,
-      height: size,
+      width: overlaySize.width,
+      height: overlaySize.height,
       radius,
     });
     bubbleCtx.clip();
     if (webcam.mirror) {
       bubbleCtx.save();
-      bubbleCtx.translate(size, 0);
+      bubbleCtx.translate(overlaySize.width, 0);
       bubbleCtx.scale(-1, 1);
       bubbleCtx.drawImage(
         webcamFrameSource,
@@ -2598,13 +2607,13 @@ export class FrameRenderer {
     if ((webcam.shadow ?? 0) > 0) {
       const shadow = Math.max(0, Math.min(1, webcam.shadow));
       ctx.save();
-      ctx.filter = `drop-shadow(0 ${Math.round(size * 0.06)}px ${Math.round(size * 0.22)}px rgba(0,0,0,${shadow}))`;
-      ctx.drawImage(bubbleCanvas, x, y, size, size);
+      ctx.filter = `drop-shadow(0 ${Math.round(overlaySize.height * 0.06)}px ${Math.round(overlaySize.height * 0.22)}px rgba(0,0,0,${shadow}))`;
+      ctx.drawImage(bubbleCanvas, x, y, overlaySize.width, overlaySize.height);
       ctx.restore();
       return;
     }
 
-    ctx.drawImage(bubbleCanvas, x, y, size, size);
+    ctx.drawImage(bubbleCanvas, x, y, overlaySize.width, overlaySize.height);
   }
 
   private closeWebcamDecodedFrame(): void {

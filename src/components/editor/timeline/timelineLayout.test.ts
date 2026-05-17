@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	getTimelineContentMinHeightPx,
+	getTimelineDensityConfig,
 	getTimelineRowsMinHeightPx,
 	getTimelineViewportStretchFactor,
 	TIMELINE_AXIS_HEIGHT_PX,
@@ -37,5 +38,20 @@ describe("timelineLayout", () => {
 		expect(getTimelineViewportStretchFactor(4)).toBe(2);
 		expect(getTimelineViewportStretchFactor(5)).toBe(2.5);
 		expect(getTimelineViewportStretchFactor(0)).toBe(1);
+	});
+
+	it("applies compact and detailed density dimensions", () => {
+		expect(getTimelineDensityConfig("compact").rowMinHeightPx).toBeLessThan(
+			TIMELINE_ROW_MIN_HEIGHT_PX,
+		);
+		expect(getTimelineRowsMinHeightPx(3, "compact")).toBe(
+			3 * getTimelineDensityConfig("compact").rowMinHeightPx,
+		);
+		expect(getTimelineContentMinHeightPx(3, "detailed")).toBe(
+			getTimelineDensityConfig("detailed").axisHeightPx +
+				3 * getTimelineDensityConfig("detailed").rowMinHeightPx,
+		);
+		expect(getTimelineViewportStretchFactor(3, "compact")).toBe(1);
+		expect(getTimelineViewportStretchFactor(3, "detailed")).toBe(1.5);
 	});
 });

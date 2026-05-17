@@ -21,7 +21,6 @@ export default function Track({
     rowWrapperStyle,
     rowStyle,
     rowSidebarStyle,
-    setSidebarRef,
   } = useRow({
     id,
   });
@@ -36,7 +35,7 @@ export default function Track({
         ...trackStyle,
       }}
     >
-      <div ref={setSidebarRef} style={rowSidebarStyle} />
+      <div style={rowSidebarStyle} />
       <div
         ref={setNodeRef}
         className="relative flex-1 overflow-hidden"

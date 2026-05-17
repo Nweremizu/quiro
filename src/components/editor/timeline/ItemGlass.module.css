@@ -3,399 +3,220 @@
 .glassYellow,
 .glassAmber,
 .glassPurple,
-.glassCyan,
+.glassBrand,
 .glassDarkGreen {
+  --timeline-item-gradient-start: var(--color-stone-300);
+  --timeline-item-gradient-mid: var(--color-stone-500);
+  --timeline-item-gradient-end: var(--color-stone-600);
+  --timeline-item-border: var(--border-default);
+  --timeline-item-border-hover: var(--border-strong);
+  --timeline-item-accent: var(--color-stone-500);
+  --timeline-item-accent-soft: rgba(126, 120, 110, 0.18);
+  --timeline-item-foreground: #fff7ee;
+  --timeline-item-text-shadow: 0 1px 2px rgba(13, 12, 10, 0.28);
+  --timeline-item-highlight: rgba(255, 255, 255, 0.22);
+  --timeline-waveform-stroke: rgba(255, 255, 255, 0.72);
+
   position: relative;
   overflow: hidden;
-
-  border-radius: 12px;
-
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-
-  border: 1px solid rgba(255, 255, 255, 0.08);
-
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.03),
-    0 8px 32px rgba(0, 0, 0, 0.28);
-
+  border: 1px solid var(--timeline-item-border);
+  border-radius: var(--radius-2xl);
+  background:
+    linear-gradient(180deg, var(--timeline-item-highlight), transparent 48%),
+    linear-gradient(
+      135deg,
+      var(--timeline-item-gradient-start) 0%,
+      var(--timeline-item-gradient-mid) 52%,
+      var(--timeline-item-gradient-end) 100%
+    );
+  box-shadow: var(--shadow-xs);
+  color: var(--timeline-item-foreground);
+  isolation: isolate;
   transition:
-    transform 0.2s ease,
-    background 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    filter 0.2s ease;
+    background-color var(--duration-normal) var(--ease-standard),
+    border-color var(--duration-normal) var(--ease-standard),
+    box-shadow var(--duration-normal) var(--ease-standard),
+    filter var(--duration-normal) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
 }
-
-/* ========================= */
-/* Mesh overlay */
-/* ========================= */
 
 .glassGreen::before,
 .glassRed::before,
 .glassYellow::before,
 .glassAmber::before,
 .glassPurple::before,
-.glassCyan::before,
+.glassBrand::before,
 .glassDarkGreen::before {
   content: "";
-
   position: absolute;
-  inset: 0;
-
-  background:
-    radial-gradient(
-      circle at top left,
-      rgba(255, 255, 255, 0.12),
-      transparent 42%
-    ),
-    radial-gradient(
-      circle at bottom right,
-      rgba(255, 255, 255, 0.08),
-      transparent 45%
-    ),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.03), transparent 40%);
-
-  pointer-events: none;
-
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--timeline-item-accent);
   opacity: 0.9;
+  pointer-events: none;
+  z-index: 2;
 }
-
-/* ========================= */
-/* Shine layer */
-/* ========================= */
 
 .glassGreen::after,
 .glassRed::after,
 .glassYellow::after,
 .glassAmber::after,
 .glassPurple::after,
-.glassCyan::after,
+.glassBrand::after,
 .glassDarkGreen::after {
   content: "";
-
   position: absolute;
   inset: 1px;
-
-  border-radius: inherit;
-
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.16),
-    rgba(255, 255, 255, 0.02) 35%,
-    transparent
-  );
-
+  border-radius: calc(var(--radius-2xl) - 1px);
+  background: linear-gradient(90deg, var(--timeline-item-accent-soft), transparent 42%);
+  opacity: 0.58;
   pointer-events: none;
+  z-index: 0;
 }
 
-/* ========================= */
-/* GREEN */
-/* ========================= */
-
-.glassGreen {
-  background:
-    radial-gradient(
-      circle at top left,
-      rgba(74, 222, 128, 0.22),
-      transparent 38%
-    ),
-    radial-gradient(
-      circle at bottom right,
-      rgba(59, 130, 246, 0.18),
-      transparent 42%
-    ),
-    linear-gradient(145deg, rgba(21, 37, 25, 0.94), rgba(16, 27, 21, 0.96));
-
-  border-color: rgba(74, 222, 128, 0.18);
+.glassGreen:hover,
+.glassRed:hover,
+.glassYellow:hover,
+.glassAmber:hover,
+.glassPurple:hover,
+.glassBrand:hover,
+.glassDarkGreen:hover {
+  border-color: var(--timeline-item-border-hover);
+  box-shadow: var(--shadow-sm);
+  filter: saturate(1.04);
 }
 
-.glassGreen:hover {
-  transform: translateY(-1px);
-
-  border-color: rgba(74, 222, 128, 0.38);
-
+.selected {
+  border-color: var(--timeline-item-accent);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 12px 40px rgba(74, 222, 128, 0.14);
+    inset 0 0 0 1px var(--timeline-item-accent),
+    0 0 0 3px var(--timeline-item-accent-soft),
+    var(--shadow-sm);
 }
-
-.glassGreen.selected {
-  border-color: #4ade80;
-
-  box-shadow:
-    inset 0 0 0 1.5px #4ade80,
-    0 0 28px rgba(74, 222, 128, 0.28);
-}
-
-/* ========================= */
-/* RED */
-/* ========================= */
-
-.glassRed {
-  background:
-    radial-gradient(
-      circle at top left,
-      rgba(248, 113, 113, 0.22),
-      transparent 38%
-    ),
-    radial-gradient(
-      circle at bottom right,
-      rgba(239, 68, 68, 0.18),
-      transparent 42%
-    ),
-    linear-gradient(145deg, rgba(45, 18, 18, 0.95), rgba(26, 11, 11, 0.97));
-
-  border-color: rgba(248, 113, 113, 0.18);
-}
-
-.glassRed:hover {
-  transform: translateY(-1px);
-
-  border-color: rgba(248, 113, 113, 0.38);
-
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 12px 40px rgba(248, 113, 113, 0.16);
-}
-
-.glassRed.selected {
-  border-color: #ef4444;
-
-  box-shadow:
-    inset 0 0 0 1.5px #ef4444,
-    0 0 28px rgba(239, 68, 68, 0.28);
-}
-
-/* ========================= */
-/* YELLOW */
-/* ========================= */
-
-.glassYellow {
-  background:
-    radial-gradient(
-      circle at top left,
-      rgba(250, 204, 21, 0.24),
-      transparent 38%
-    ),
-    radial-gradient(
-      circle at bottom right,
-      rgba(234, 179, 8, 0.16),
-      transparent 42%
-    ),
-    linear-gradient(145deg, rgba(42, 37, 15, 0.95), rgba(24, 22, 9, 0.97));
-
-  border-color: rgba(250, 204, 21, 0.18);
-}
-
-.glassYellow:hover {
-  transform: translateY(-1px);
-
-  border-color: rgba(250, 204, 21, 0.38);
-
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 12px 40px rgba(250, 204, 21, 0.14);
-}
-
-.glassYellow.selected {
-  border-color: #facc15;
-
-  box-shadow:
-    inset 0 0 0 1.5px #facc15,
-    0 0 28px rgba(250, 204, 21, 0.24);
-}
-
-/* ========================= */
-/* AMBER */
-/* ========================= */
-
-.glassAmber {
-  background:
-    radial-gradient(
-      circle at top left,
-      rgba(251, 191, 36, 0.24),
-      transparent 38%
-    ),
-    radial-gradient(
-      circle at bottom right,
-      rgba(245, 158, 11, 0.18),
-      transparent 42%
-    ),
-    linear-gradient(145deg, rgba(48, 30, 8, 0.95), rgba(28, 17, 6, 0.97));
-
-  border-color: rgba(251, 191, 36, 0.18);
-}
-
-.glassAmber:hover {
-  transform: translateY(-1px);
-
-  border-color: rgba(251, 191, 36, 0.38);
-
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 12px 40px rgba(251, 191, 36, 0.14);
-}
-
-.glassAmber.selected {
-  border-color: #f59e0b;
-
-  box-shadow:
-    inset 0 0 0 1.5px #f59e0b,
-    0 0 28px rgba(245, 158, 11, 0.28);
-}
-
-/* ========================= */
-/* PURPLE */
-/* ========================= */
 
 .glassPurple {
-  background:
-    radial-gradient(
-      circle at top left,
-      var(--color-app-secondary-500),
-      transparent 38%
-    ),
-    radial-gradient(
-      circle at bottom right,
-      var(--color-app-secondary-500),
-      transparent 42%
-    ),
-    linear-gradient(
-      145deg,
-      var(--color-app-secondary-400),
-      var(--color-app-secondary-500)
-    );
-
-  border-color: var(--color-app-secondary-500);
+  --timeline-item-gradient-start: #c084fc;
+  --timeline-item-gradient-mid: #a855f7;
+  --timeline-item-gradient-end: #7c3aed;
+  --timeline-item-border: rgba(168, 85, 247, 0.42);
+  --timeline-item-border-hover: #c084fc;
+  --timeline-item-accent: #c084fc;
+  --timeline-item-accent-soft: rgba(192, 132, 252, 0.2);
 }
 
-.glassPurple:hover {
-  transform: translateY(-1px);
-
-  border-color: var(--color-app-secondary-400);
-
-  box-shadow: var(--shadow-soft-secondary);
+.glassBrand {
+  --timeline-item-gradient-start: var(--color-brand-300);
+  --timeline-item-gradient-mid: var(--color-brand-500);
+  --timeline-item-gradient-end: var(--color-brand-600);
+  --timeline-item-border: color-mix(in srgb, var(--color-brand-300) 52%, transparent);
+  --timeline-item-border-hover: var(--color-brand-300);
+  --timeline-item-accent: var(--color-brand-300);
+  --timeline-item-accent-soft: rgba(255, 236, 212, 0.24);
+  --timeline-item-foreground: var(--color-brand-50);
+  --timeline-waveform-stroke: rgba(255, 247, 238, 0.76);
 }
-
-.glassPurple.selected {
-  border-color: var(--color-app-secondary-500);
-
-  box-shadow:
-    inset 0 0 0 1.5px var(--color-app-secondary-500),
-    0 0 28px rgba(168, 85, 247, 0.28);
-}
-
-/* ========================= */
-/* CYAN */
-/* ========================= */
-
-.glassCyan {
-  background:
-    radial-gradient(
-      circle at top left,
-      rgba(34, 211, 238, 0.22),
-      transparent 38%
-    ),
-    radial-gradient(
-      circle at bottom right,
-      var(--color-app-500),
-      transparent 42%
-    ),
-    linear-gradient(145deg, var(--color-app-500), var(--color-app-600));
-
-  border-color: var(--color-app-600);
-}
-
-.glassCyan:hover {
-  transform: translateY(-1px);
-
-  border-color: rgba(34, 211, 238, 0.38);
-
-  box-shadow: var(--shadow-soft-primary);
-}
-
-.glassCyan.selected {
-  border-color: #22d3ee;
-
-  box-shadow:
-    inset 0 0 0 1.5px #22d3ee,
-    0 0 28px rgba(34, 211, 238, 0.28);
-}
-
-/* ========================= */
-/* DARK GREEN */
-/* ========================= */
 
 .glassDarkGreen {
-  background:
-    radial-gradient(
-      circle at top left,
-      rgba(34, 197, 94, 0.24),
-      transparent 38%
-    ),
-    radial-gradient(
-      circle at bottom right,
-      rgba(16, 185, 129, 0.16),
-      transparent 42%
-    ),
-    linear-gradient(145deg, rgba(10, 32, 20, 0.95), rgba(8, 22, 14, 0.97));
-
-  border-color: rgba(34, 197, 94, 0.18);
+  --timeline-item-gradient-start: #4ade80;
+  --timeline-item-gradient-mid: #22c55e;
+  --timeline-item-gradient-end: #16a34a;
+  --timeline-item-border: rgba(74, 222, 128, 0.4);
+  --timeline-item-border-hover: #86efac;
+  --timeline-item-accent: #86efac;
+  --timeline-item-accent-soft: rgba(187, 247, 208, 0.2);
+  --timeline-waveform-stroke: rgba(240, 253, 244, 0.74);
 }
 
-.glassDarkGreen:hover {
-  transform: translateY(-1px);
-
-  border-color: rgba(34, 197, 94, 0.38);
-
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 12px 40px rgba(34, 197, 94, 0.16);
+.glassRed {
+  --timeline-item-gradient-start: #fca5a5;
+  --timeline-item-gradient-mid: #ef4444;
+  --timeline-item-gradient-end: #dc2626;
+  --timeline-item-border: rgba(252, 165, 165, 0.42);
+  --timeline-item-border-hover: #fca5a5;
+  --timeline-item-accent: #fca5a5;
+  --timeline-item-accent-soft: rgba(254, 202, 202, 0.18);
 }
 
-.glassDarkGreen.selected {
-  border-color: #22c55e;
-
-  box-shadow:
-    inset 0 0 0 1.5px #22c55e,
-    0 0 28px rgba(34, 197, 94, 0.28);
+.glassAmber {
+  --timeline-item-gradient-start: #fbbf24;
+  --timeline-item-gradient-mid: #f59e0b;
+  --timeline-item-gradient-end: #d97706;
+  --timeline-item-border: rgba(251, 191, 36, 0.42);
+  --timeline-item-border-hover: #fde68a;
+  --timeline-item-accent: #fde68a;
+  --timeline-item-accent-soft: rgba(254, 243, 199, 0.18);
+  --timeline-item-foreground: var(--color-stone-950);
+  --timeline-item-text-shadow: none;
 }
 
-/* ========================= */
-/* Resize Handle */
-/* ========================= */
+.glassYellow {
+  --timeline-item-gradient-start: #fde047;
+  --timeline-item-gradient-mid: #eab308;
+  --timeline-item-gradient-end: #ca8a04;
+  --timeline-item-border: rgba(253, 224, 71, 0.42);
+  --timeline-item-border-hover: #fef08a;
+  --timeline-item-accent: #fef08a;
+  --timeline-item-accent-soft: rgba(254, 249, 195, 0.18);
+  --timeline-item-foreground: var(--color-stone-950);
+  --timeline-item-text-shadow: none;
+}
+
+.glassGreen {
+  --timeline-item-gradient-start: #5eead4;
+  --timeline-item-gradient-mid: #14b8a6;
+  --timeline-item-gradient-end: #0d9488;
+  --timeline-item-border: rgba(94, 234, 212, 0.42);
+  --timeline-item-border-hover: #99f6e4;
+  --timeline-item-accent: #99f6e4;
+  --timeline-item-accent-soft: rgba(204, 251, 241, 0.18);
+}
+
+.itemContent {
+  color: var(--timeline-item-foreground);
+  text-shadow: var(--timeline-item-text-shadow);
+}
+
+.waveformLayer {
+  position: absolute;
+  inset: 3px 8px 3px 10px;
+  z-index: 1;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  opacity: 0.88;
+  mask-image: linear-gradient(90deg, transparent, black 8px, black calc(100% - 8px), transparent);
+}
+
+.waveformLayer::before {
+  content: "";
+  position: absolute;
+  inset: 50% 0 auto;
+  height: 1px;
+  background: color-mix(in srgb, var(--timeline-item-foreground) 18%, transparent);
+}
+
+.waveformCanvas {
+  --timeline-waveform-stroke: color-mix(in srgb, var(--timeline-item-foreground) 76%, transparent);
+  opacity: 0.72;
+}
 
 .zoomEndCap {
   position: absolute;
-
   top: 50%;
-
-  height: 72%;
-  width: 5px;
-
-  transform: translateY(-50%);
-
-  border-radius: 999px;
-
-  background: rgba(255, 255, 255, 0.75);
-
-  backdrop-filter: blur(10px);
-
-  opacity: 0;
-
   z-index: 5;
-
+  width: 4px;
+  height: 64%;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--timeline-item-accent) 70%, var(--bg-surface));
+  opacity: 0;
+  transform: translateY(-50%);
   transition:
-    opacity 0.2s ease,
-    transform 0.2s ease,
-    background 0.2s ease;
+    opacity var(--duration-normal) var(--ease-standard),
+    transform var(--duration-normal) var(--ease-standard),
+    background-color var(--duration-normal) var(--ease-standard);
 }
 
 .zoomEndCap:hover {
-  background: rgba(255, 255, 255, 1);
-
+  background: var(--timeline-item-accent);
   transform: translateY(-50%) scaleY(1.08);
 }
 
@@ -404,9 +225,10 @@
 .glassYellow:hover .zoomEndCap,
 .glassAmber:hover .zoomEndCap,
 .glassPurple:hover .zoomEndCap,
-.glassCyan:hover .zoomEndCap,
-.glassDarkGreen:hover .zoomEndCap {
-  opacity: 1;
+.glassBrand:hover .zoomEndCap,
+.glassDarkGreen:hover .zoomEndCap,
+.selected .zoomEndCap {
+  opacity: 0.9;
 }
 
 .zoomEndCap.left {
@@ -419,59 +241,20 @@
   cursor: col-resize;
 }
 
-.zoomEndCap::before,
-.zoomEndCap::after {
-  content: none;
-}
-
-/* ========================= */
-/* Light Mode */
-/* ========================= */
-
-:global(:root:not(.dark)) .glassGreen,
-:global(:root:not(.dark)) .glassRed,
-:global(:root:not(.dark)) .glassYellow,
-:global(:root:not(.dark)) .glassAmber,
-:global(:root:not(.dark)) .glassPurple,
-:global(:root:not(.dark)) .glassCyan,
-:global(:root:not(.dark)) .glassDarkGreen {
-  border: 1px solid rgba(255, 255, 255, 0.55);
-
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.75),
-    0 10px 30px rgba(15, 23, 42, 0.08);
-
-  backdrop-filter: blur(18px);
-}
-
-/* Optional brighter light mode */
-
-:global(:root:not(.dark)) .glassGreen {
+:global(.dark) .glassGreen,
+:global(.dark) .glassRed,
+:global(.dark) .glassYellow,
+:global(.dark) .glassAmber,
+:global(.dark) .glassPurple,
+:global(.dark) .glassBrand,
+:global(.dark) .glassDarkGreen {
   background:
-    radial-gradient(
-      circle at top left,
-      rgba(74, 222, 128, 0.28),
-      transparent 38%
-    ),
-    linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(240, 255, 244, 0.82));
-}
-
-:global(:root:not(.dark)) .glassRed {
-  background:
-    radial-gradient(
-      circle at top left,
-      rgba(248, 113, 113, 0.24),
-      transparent 38%
-    ),
-    linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(255, 242, 242, 0.84));
-}
-
-:global(:root:not(.dark)) .glassPurple {
-  background:
-    radial-gradient(
-      circle at top left,
-      rgba(192, 132, 252, 0.26),
-      transparent 38%
-    ),
-    linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(250, 245, 255, 0.84));
+    linear-gradient(180deg, var(--timeline-item-highlight), transparent 48%),
+    linear-gradient(
+      135deg,
+      var(--timeline-item-gradient-start) 0%,
+      var(--timeline-item-gradient-mid) 52%,
+      var(--timeline-item-gradient-end) 100%
+    );
+  box-shadow: var(--shadow-sm);
 }

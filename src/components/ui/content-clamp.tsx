@@ -3,9 +3,9 @@
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
-import { Popover, PopoverArrow, PopoverContent, PopoverTrigger } from "./popover";
+import { Popover, PopoverContent, PopoverTrigger } from "./popover";
 
-interface ContentClampProps extends React.HTMLAttributes<HTMLDivElement> {
+interface ContentClampProps extends React.HTMLAttributes<HTMLElement> {
 	children: React.ReactNode;
 	truncateLength?: number;
 }
@@ -42,7 +42,7 @@ function ContentClamp({ children, className, truncateLength = 50, ...props }: Co
 		setOpen((currentOpen) => !currentOpen);
 	};
 
-	const handleKeyDown = (event: React.KeyboardEvent<HTMLSpanElement>) => {
+	const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
 		if (event.key !== "Enter" && event.key !== " ") {
 			return;
 		}
@@ -72,37 +72,29 @@ function ContentClamp({ children, className, truncateLength = 50, ...props }: Co
 
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
-			<PopoverTrigger asChild>
-				<span
-					className={cn("cursor-help", className)}
-					onMouseEnter={openPopover}
-					onMouseLeave={scheduleClose}
-					onFocus={openPopover}
-					onBlur={scheduleClose}
-					onClick={(event) => {
-						event.preventDefault();
-						togglePopover();
-					}}
-					onKeyDown={handleKeyDown}
-					role="button"
-					tabIndex={0}
-					aria-haspopup="dialog"
-					aria-expanded={open}
-					{...props}
-				>
-					{truncatedText}
-				</span>
+			<PopoverTrigger
+				className={cn("inline cursor-help bg-transparent p-0 text-left", className)}
+				onMouseEnter={openPopover}
+				onMouseLeave={scheduleClose}
+				onFocus={openPopover}
+				onBlur={scheduleClose}
+				onClick={(event) => {
+					event.preventDefault();
+					togglePopover();
+				}}
+				onKeyDown={handleKeyDown}
+				aria-haspopup="dialog"
+				aria-expanded={open}
+			>
+				{truncatedText}
 			</PopoverTrigger>
 			<PopoverContent
 				className="w-auto max-w-sm rounded-lg border border-white bg-popover p-3 text-sm text-popover-foreground"
 				sideOffset={8}
-				animated={false}
 				onMouseEnter={openPopover}
 				onMouseLeave={scheduleClose}
-				onPointerDownOutside={(e) => e.preventDefault()}
 				onClick={(e) => e.stopPropagation()}
 			>
-				<PopoverArrow className="fill-white" />
 				{children}
 			</PopoverContent>
 		</Popover>

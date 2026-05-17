@@ -22,7 +22,6 @@ import { SourcePopover } from "./popovers/SourcePopover";
 import { WebcamPopover } from "./popovers/WebcamPopover";
 import { HudInteractionContext } from "@/contexts/launch/HudInteractionContext";
 import { MarqueeText } from "@/components/launch/source-selector";
-import styles from "./LaunchWindow.module.css";
 
 import { Separator } from "@/components/ui/separator";
 import { Button } from "../ui/button";
@@ -236,7 +235,7 @@ function LaunchWindowContent() {
               <Button
                 variant="outline"
                 size="sm"
-                className={`${styles.electronNoDrag} group max-w-45 min-w-0 shrink-0 gap-2 rounded-[11px] border-border bg-background px-3 text-[12px] font-medium text-foreground transition-all hover:border-neutral-500 hover:bg-neutral-200/10 ${openId === "sources" ? "border-neutral-500 bg-neutral-200/10" : ""}`}
+                className={`no-drag group max-w-45 min-w-0 shrink-0 gap-2 rounded-[10px] border-white/10 bg-white/5 px-3 text-[12px] font-medium text-stone-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-[background-color,border-color,color] duration-150 hover:border-white/20 hover:bg-white/10 ${openId === "sources" ? "border-white/20 bg-white/10" : ""}`}
                 title={selectedSource}
               >
                 <MonitorDotIcon size={16} className="shrink-0" />
@@ -245,7 +244,7 @@ function LaunchWindowContent() {
                 </div>
                 <ArrowUp01Icon
                   size={10}
-                  className={`ml-0.5 shrink-0 text-neutral-500 transition-transform duration-200 ${
+                  className={`ml-0.5 shrink-0 text-stone-500 transition-transform duration-200 ${
                     openId === "sources" ? "" : "rotate-180"
                   }`}
                 />
@@ -280,7 +279,7 @@ function LaunchWindowContent() {
                 ? t("recording.disableMicrophone")
                 : t("recording.enableMicrophone")
             }
-            className={microphoneEnabled ? styles.ibActive : ""}
+            className={microphoneEnabled ? "text-primary" : ""}
           >
             {microphoneEnabled ? (
               <Mic01Icon size={18} />
@@ -324,7 +323,7 @@ function LaunchWindowContent() {
                 ? t("recording.disableWebcam")
                 : t("recording.enableWebcam")
             }
-            className={webcamEnabled ? styles.ibActive : ""}
+            className={webcamEnabled ? "text-primary" : ""}
           >
             {webcamEnabled ? (
               <Video01Icon size={18} />
@@ -343,7 +342,7 @@ function LaunchWindowContent() {
             variant="ghost"
             size="icon-lg"
             title={t("recording.countdownDelay")}
-            className={countdownDelay > 0 ? styles.ibActive : ""}
+            className={countdownDelay > 0 ? "text-primary" : ""}
           >
             <Clock01Icon size={18} />
           </Button>
@@ -353,9 +352,10 @@ function LaunchWindowContent() {
       <button
         type="button"
         className={cn(
-          "no-drag relative size-9 rounded-full bg-red-500 text-white cursor-pointer ",
-          "inline-flex items-center justify-center shrink-0 transition-all duration-200",
-          "hover:bg-red-600 disabled:bg-red-400 disabled:cursor-not-allowed hover:shadow-[0_0_8px_2px_rgba(244,63,94,0.2)] disabled:hover:shadow-none",
+          "no-drag relative size-9 rounded-full bg-[#b7332f] text-white cursor-pointer",
+          "inline-flex items-center justify-center shrink-0 transition-[background-color,box-shadow,transform] duration-150",
+          "shadow-[0_8px_18px_rgba(112,45,10,0.24),inset_0_1px_0_rgba(255,255,255,0.24)]",
+          "hover:bg-[#a52d2a] hover:shadow-[0_10px_24px_rgba(112,45,10,0.32),inset_0_1px_0_rgba(255,255,255,0.2)] active:scale-[0.98] disabled:bg-stone-400 disabled:cursor-not-allowed disabled:shadow-none",
           countdownActive ? "animate-pulse" : "",
         )}
         onClick={
@@ -439,9 +439,9 @@ function LaunchWindowContent() {
   );
 
   const finalizingControls = (
-    <div className={styles.finalizingState}>
-      <RotateClockwiseIcon size={15} className={styles.finalizingSpin} />
-      <div className={styles.finalizingCopy}>
+    <div className={"flex items-center gap-3"}>
+      <RotateClockwiseIcon size={15} className={"animate-spin"} />
+      <div className={"flex flex-col leading-tight"}>
         <span>{t("recording.preparing", "Preparing recording")}</span>
         <small>
           {t("recording.preparingSubtitle", "Opening the editor in a moment")}
@@ -482,7 +482,7 @@ function LaunchWindowContent() {
                 ref={hudBarRef}
                 layout={!showRecordingWebcamPreview && !isHudDragging}
                 transition={hudStateTransition}
-                className={`launch-theme mb-2 flex gap-2.5 items-center rounded-full max-w-7xl bg-background border border-border px-4 py-3 shadow-sm origin-[center_bottom] relative overflow-visible w-max`}
+                className={`mb-2 flex gap-2.5 items-center rounded-[24px] max-w-300 border border-white/10 bg-[#171411]/90 px-4 py-3 text-stone-50 shadow-[0_22px_70px_rgba(13,12,10,0.36),0_8px_22px_rgba(13,12,10,0.24),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl backdrop-saturate-125 origin-[center_bottom]! relative! overflow-visible w-max! dark:border-white/10 dark:bg-[#171411]/90`}
               >
                 <div
                   // On Linux (especially Wayland) the compositor owns window
@@ -493,7 +493,7 @@ function LaunchWindowContent() {
                   // mark the handle as a native drag region for the IPC path.
                   className={`flex cursor-grab items-center px-0.5 active:cursor-grabbing ${
                     platform === "linux" && !showRecordingWebcamPreview
-                      ? styles.electronDrag
+                      ? "drag!"
                       : ""
                   }`}
                   onPointerDown={handleHudBarPointerDown}
@@ -503,20 +503,22 @@ function LaunchWindowContent() {
                 >
                   <DragDropHorizontalIcon
                     size={16}
-                    className="text-[#6b6b78]"
+                    className="text-stone-500"
                   />
                 </div>
 
                 <div
                   className={
-                    "relative flex items-center grow-0 shrink flex-auto min-h-11.5 min-w-fit p-0.5"
+                    "relative flex items-center grow-0 shrink basis-auto min-h-11.5 min-w-fit pr-0.5"
                   }
                 >
                   <AnimatePresence initial={false} mode="wait">
                     <motion.div
                       key={hudMode}
                       layout={!showRecordingWebcamPreview && !isHudDragging}
-                      className={styles.barState}
+                      className={
+                        "flex items-center gap-2 grow-0 shrink-0 rounded-full p-2 transition-opacity duration-150"
+                      }
                       initial={{
                         opacity: 0,
                         y: 10,
@@ -550,7 +552,7 @@ function LaunchWindowContent() {
             {showRecordingWebcamPreview && (
               <div
                 ref={recordingWebcamPreviewContainerRef}
-                className={`no-drag fixed right-8 bottom-30 overflow-hidden bg-background border border-border cursor-grab touch-none select-none will-change-transform z-120 active:cursor-grabbing pointer-events-auto ${
+                className={`no-drag fixed right-8 bottom-30 overflow-hidden bg-[#171411] border border-white/10 shadow-[0_18px_54px_rgba(13,12,10,0.36),inset_0_1px_0_rgba(255,255,255,0.08)] cursor-grab touch-none select-none will-change-transform z-120 active:cursor-grabbing pointer-events-auto ${
                   WEBCAM_SHAPE_CLASSES[webcamPreviewShape].floating
                 }`}
                 title={t("recording.webcam")}

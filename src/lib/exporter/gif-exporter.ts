@@ -4,6 +4,7 @@ import type {
   AutoCaptionSettings,
   CaptionCue,
   CropRegion,
+  CursorClickEffectSettings,
   CursorStyle,
   CursorTelemetryPoint,
   Padding,
@@ -84,6 +85,7 @@ interface GifExporterConfig {
   cursorMotionBlur?: number;
   cursorClickBounce?: number;
   cursorClickBounceDuration?: number;
+  cursorClickEffect?: CursorClickEffectSettings;
   cursorSway?: number;
   frame?: string | null;
   previewWidth?: number;
@@ -221,6 +223,7 @@ export class GifExporter {
         cursorMotionBlur: this.config.cursorMotionBlur,
         cursorClickBounce: this.config.cursorClickBounce,
         cursorClickBounceDuration: this.config.cursorClickBounceDuration,
+        cursorClickEffect: this.config.cursorClickEffect,
         cursorSway: this.config.cursorSway,
         frame: this.config.frame,
       });

@@ -1,8 +1,8 @@
 import type { ReactElement } from "react";
 import { useLaunchPopoverCoordinator } from "./LaunchPopoverCoordinator";
 import { HudPopover } from "./PopoverScaffold";
-import ProjectBrowserDialog from "../../editor/ProjectBrowserDialog";
-import type { ProjectLibraryEntry } from "../../editor/ProjectBrowserDialog";
+import ProjectBrowserDialog from "../../editor/dialog/ProjectBrowserDialog";
+import type { ProjectLibraryEntry } from "../../editor/dialog/ProjectBrowserDialog";
 
 const POPOVER_ID = "projects";
 

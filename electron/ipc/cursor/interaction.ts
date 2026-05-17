@@ -4,6 +4,7 @@ import type {
   UiohookModuleNamespace,
   CursorInteractionType,
 } from "@/types";
+import { createRequire } from "node:module";
 import {
   isCursorCaptureActive,
   interactionCaptureCleanup,
@@ -21,6 +22,8 @@ import {
   isCursorCapturePaused,
   pushCursorSample,
 } from "@electron/ipc/cursor/telemetry";
+
+const nodeRequire = createRequire(import.meta.url);
 
 export function normalizeHookMouseButton(rawButton: unknown): 1 | 2 | 3 {
   if (typeof rawButton !== "number" || !Number.isFinite(rawButton)) {

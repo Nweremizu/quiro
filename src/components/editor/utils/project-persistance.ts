@@ -29,6 +29,8 @@ import {
 } from "./cursor-motion-presets";
 import {
   type AnnotationRegion,
+  type AnnotationKeyframe,
+  type AnnotationAnimationSettings,
   type AudioRegion,
   type AutoCaptionAnimation,
   type AutoCaptionSettings,
@@ -40,17 +42,22 @@ import {
   DEFAULT_ANNOTATION_POSITION,
   DEFAULT_ANNOTATION_SIZE,
   DEFAULT_ANNOTATION_STYLE,
+  DEFAULT_ANNOTATION_ANIMATION,
   DEFAULT_AUTO_CAPTION_SETTINGS,
   DEFAULT_CONNECTED_ZOOM_DURATION_MS,
   DEFAULT_CONNECTED_ZOOM_EASING,
   DEFAULT_CONNECTED_ZOOM_GAP_MS,
   DEFAULT_CROP_REGION,
+  DEFAULT_CURSOR_CLICK_EFFECT,
   DEFAULT_CURSOR_STYLE,
   DEFAULT_CURSOR_SWAY,
+  DEFAULT_OVERLAY_LAYER_ORDER,
   DEFAULT_FIGURE_DATA,
   DEFAULT_PADDING,
+  DEFAULT_WEBCAM_ASPECT_RATIO,
   DEFAULT_PLAYBACK_SPEED,
   DEFAULT_WEBCAM_CORNER_RADIUS,
+  DEFAULT_WEBCAM_LAYOUT_MODE,
   DEFAULT_WEBCAM_MARGIN,
   DEFAULT_WEBCAM_OVERLAY,
   DEFAULT_WEBCAM_POSITION_PRESET,
@@ -69,11 +76,15 @@ import {
   DEFAULT_ZOOM_SMOOTHNESS,
   getDefaultCaptionFontFamily,
   type Padding,
+  type OverlayLayerKind,
+  type OverlayLayerOrder,
   type SpeedRegion,
   type TrimRegion,
   type WebcamOverlaySettings,
   type ZoomMotionBlurTuning,
+  type CursorClickEffectSettings,
   type ZoomRegion,
+  type ZoomPresetId,
   type ZoomTransitionEasing,
 } from "@/types/editor";
 import { normalizeWebcamCropRegion } from "./webcam-overlay";
@@ -116,7 +127,9 @@ export interface ProjectEditorState {
   cursorMotionBlur: number;
   cursorClickBounce: number;
   cursorClickBounceDuration: number;
+  cursorClickEffect: CursorClickEffectSettings;
   cursorSway: number;
+  overlayLayerOrder: OverlayLayerOrder;
   borderRadius: number;
   padding: Padding;
   /** Selected frame ID (e.g. "quiro.frames/browser-dark"), or null for none */
@@ -145,11 +158,21 @@ export interface ProjectEditorState {
   gifSizePreset: GifSizePreset;
 }
 
+export interface ProjectSnapshot {
+  id: string;
+  name: string;
+  createdAt: string;
+  reason: "manual" | "auto";
+  editor: Partial<ProjectEditorState>;
+  thumbnailDataUrl?: string;
+}
+
 export interface EditorProjectData {
   version: number;
   projectId?: string;
   videoPath: string;
   editor: Partial<ProjectEditorState>;
+  snapshots?: ProjectSnapshot[];
 }
 
 function isFiniteNumber(value: unknown): value is number {
@@ -158,6 +181,198 @@ function isFiniteNumber(value: unknown): value is number {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function normalizeZoomPresetId(value: unknown): ZoomPresetId | undefined {
+  return value === "focus" ||
+    value === "follow-cursor" ||
+    value === "punch-in" ||
+    value === "pan-and-zoom"
+    ? value
+    : undefined;
+}
+
+function normalizeCursorClickEffect(
+  value: unknown,
+): CursorClickEffectSettings {
+  const raw = value && typeof value === "object" ? value : {};
+  const effect = raw as Partial<CursorClickEffectSettings>;
+  return {
+    id:
+      effect.id === "ring" ||
+      effect.id === "pulse" ||
+      effect.id === "ripple" ||
+      effect.id === "spotlight" ||
+      effect.id === "label" ||
+      effect.id === "none"
+        ? effect.id
+        : DEFAULT_CURSOR_CLICK_EFFECT.id,
+    color:
+      typeof effect.color === "string" && effect.color.trim()
+        ? effect.color
+        : DEFAULT_CURSOR_CLICK_EFFECT.color,
+    durationMs: isFiniteNumber(effect.durationMs)
+      ? clamp(effect.durationMs, 120, 2000)
+      : DEFAULT_CURSOR_CLICK_EFFECT.durationMs,
+    intensity: isFiniteNumber(effect.intensity)
+      ? clamp(effect.intensity, 0, 1.5)
+      : DEFAULT_CURSOR_CLICK_EFFECT.intensity,
+    labelMode:
+      effect.labelMode === "generic" || effect.labelMode === "interaction"
+        ? effect.labelMode
+        : DEFAULT_CURSOR_CLICK_EFFECT.labelMode,
+  };
+}
+
+function normalizeOverlayLayerOrder(value: unknown): OverlayLayerOrder {
+  const valid = new Set<OverlayLayerKind>([
+    "annotations",
+    "captions",
+    "cursor",
+    "webcam",
+  ]);
+  const overlays = Array.isArray((value as Partial<OverlayLayerOrder>)?.overlays)
+    ? ((value as Partial<OverlayLayerOrder>).overlays as unknown[])
+        .filter((item): item is OverlayLayerKind => valid.has(item as OverlayLayerKind))
+    : [];
+  const missing = DEFAULT_OVERLAY_LAYER_ORDER.overlays.filter(
+    (item) => !overlays.includes(item),
+  );
+  return { overlays: [...overlays, ...missing] };
+}
+
+function normalizeAnnotationKeyframes(
+  value: unknown,
+  startMs: number,
+  endMs: number,
+): AnnotationKeyframe[] {
+  return Array.isArray(value)
+    ? value
+        .filter(
+          (keyframe): keyframe is AnnotationKeyframe =>
+            Boolean(keyframe && typeof keyframe.id === "string"),
+        )
+        .map((keyframe) => ({
+          id: keyframe.id,
+          timeMs: isFiniteNumber(keyframe.timeMs)
+            ? clamp(Math.round(keyframe.timeMs), startMs, endMs)
+            : startMs,
+          easing:
+            keyframe.easing === "ease-in-out" || keyframe.easing === "linear"
+              ? keyframe.easing
+              : "ease-in-out",
+          position: keyframe.position
+            ? {
+                x: clamp(
+                  isFiniteNumber(keyframe.position.x)
+                    ? keyframe.position.x
+                    : DEFAULT_ANNOTATION_POSITION.x,
+                  0,
+                  100,
+                ),
+                y: clamp(
+                  isFiniteNumber(keyframe.position.y)
+                    ? keyframe.position.y
+                    : DEFAULT_ANNOTATION_POSITION.y,
+                  0,
+                  100,
+                ),
+              }
+            : undefined,
+          scale: isFiniteNumber(keyframe.scale)
+            ? clamp(keyframe.scale, 0.1, 4)
+            : undefined,
+          opacity: isFiniteNumber(keyframe.opacity)
+            ? clamp(keyframe.opacity, 0, 1)
+            : undefined,
+          blurIntensity: isFiniteNumber(keyframe.blurIntensity)
+            ? clamp(keyframe.blurIntensity, 1, 100)
+            : undefined,
+          arrowDirection:
+            keyframe.arrowDirection === "up" ||
+            keyframe.arrowDirection === "down" ||
+            keyframe.arrowDirection === "left" ||
+            keyframe.arrowDirection === "right" ||
+            keyframe.arrowDirection === "up-right" ||
+            keyframe.arrowDirection === "up-left" ||
+            keyframe.arrowDirection === "down-right" ||
+            keyframe.arrowDirection === "down-left"
+              ? keyframe.arrowDirection
+              : undefined,
+        }))
+        .sort((left, right) => left.timeMs - right.timeMs)
+    : [];
+}
+
+function normalizeAnnotationAnimation(
+  value: unknown,
+  startMs: number,
+  endMs: number,
+): AnnotationAnimationSettings {
+  const raw = value as Partial<AnnotationAnimationSettings> | null | undefined;
+  const annotationDurationMs = Math.max(1, endMs - startMs);
+  const minDurationMs = Math.min(120, annotationDurationMs);
+  const maxDurationMs = Math.min(1800, annotationDurationMs);
+  const durationMs = isFiniteNumber(raw?.durationMs)
+    ? clamp(Math.round(raw.durationMs), minDurationMs, Math.max(minDurationMs, maxDurationMs))
+    : Math.min(DEFAULT_ANNOTATION_ANIMATION.durationMs, annotationDurationMs);
+
+  return {
+    presetId:
+      raw?.presetId === "fade" ||
+      raw?.presetId === "rise" ||
+      raw?.presetId === "pop" ||
+      raw?.presetId === "slide-left" ||
+      raw?.presetId === "spotlight"
+        ? raw.presetId
+        : "none",
+    durationMs,
+    springStiffness: isFiniteNumber(raw?.springStiffness)
+      ? clamp(Math.round(raw.springStiffness), 80, 700)
+      : DEFAULT_ANNOTATION_ANIMATION.springStiffness,
+    springDamping: isFiniteNumber(raw?.springDamping)
+      ? clamp(Math.round(raw.springDamping), 8, 60)
+      : DEFAULT_ANNOTATION_ANIMATION.springDamping,
+  };
+}
+
+export function normalizeProjectSnapshots(
+  value: unknown,
+): ProjectSnapshot[] {
+  return Array.isArray(value)
+    ? value
+        .filter(
+          (snapshot): snapshot is ProjectSnapshot =>
+            Boolean(
+              snapshot &&
+                typeof snapshot.id === "string" &&
+                typeof snapshot.name === "string" &&
+                snapshot.editor &&
+                typeof snapshot.editor === "object",
+            ),
+        )
+        .map((snapshot) => ({
+          id: snapshot.id,
+          name: snapshot.name,
+          createdAt:
+            typeof snapshot.createdAt === "string"
+              ? snapshot.createdAt
+              : new Date().toISOString(),
+          reason: (snapshot.reason === "auto" ? "auto" : "manual") as
+            | "auto"
+            | "manual",
+          editor: snapshot.editor,
+          thumbnailDataUrl:
+            typeof snapshot.thumbnailDataUrl === "string"
+              ? snapshot.thumbnailDataUrl
+              : undefined,
+        }))
+        .sort(
+          (left, right) =>
+            Date.parse(right.createdAt) - Date.parse(left.createdAt),
+        )
+        .slice(0, 20)
+    : [];
 }
 
 export function normalizeExportEncodingMode(
@@ -488,6 +703,18 @@ export function normalizeProjectEditor(
             : rawStart + 1000;
           const startMs = Math.max(0, Math.min(rawStart, rawEnd));
           const endMs = Math.max(startMs + 1, rawEnd);
+          const focus = {
+            cx: clamp(
+              isFiniteNumber(region.focus?.cx) ? region.focus.cx : 0.5,
+              0,
+              1,
+            ),
+            cy: clamp(
+              isFiniteNumber(region.focus?.cy) ? region.focus.cy : 0.5,
+              0,
+              1,
+            ),
+          };
 
           return {
             id: region.id,
@@ -496,22 +723,32 @@ export function normalizeProjectEditor(
             depth: [1, 2, 3, 4, 5, 6].includes(region.depth)
               ? region.depth
               : DEFAULT_ZOOM_DEPTH,
-            focus: {
-              cx: clamp(
-                isFiniteNumber(region.focus?.cx) ? region.focus.cx : 0.5,
-                0,
-                1,
-              ),
-              cy: clamp(
-                isFiniteNumber(region.focus?.cy) ? region.focus.cy : 0.5,
-                0,
-                1,
-              ),
-            },
+            focus,
             mode:
               region.mode === "auto" || region.mode === "manual"
                 ? region.mode
                 : undefined,
+            enabled:
+              typeof region.enabled === "boolean" ? region.enabled : true,
+            presetId: normalizeZoomPresetId(region.presetId),
+            endFocus: region.endFocus
+              ? {
+                  cx: clamp(
+                    isFiniteNumber(region.endFocus.cx)
+                      ? region.endFocus.cx
+                      : focus.cx,
+                    0,
+                    1,
+                  ),
+                  cy: clamp(
+                    isFiniteNumber(region.endFocus.cy)
+                      ? region.endFocus.cy
+                      : focus.cy,
+                    0,
+                    1,
+                  ),
+                }
+              : undefined,
           };
         })
     : [];
@@ -538,25 +775,36 @@ export function normalizeProjectEditor(
         })
     : [];
 
+  type LegacyClipRegion = ClipRegion & {
+    sourceStartMs?: unknown;
+    sourceEndMs?: unknown;
+  };
+
   const normalizedClipRegions: ClipRegion[] = Array.isArray(editor.clipRegions)
     ? editor.clipRegions
-        .filter((region): region is ClipRegion =>
+        .filter((region): region is LegacyClipRegion =>
           Boolean(region && typeof region.id === "string"),
         )
         .map((region) => {
-          const rawStart = isFiniteNumber(region.startMs)
-            ? Math.round(region.startMs)
-            : 0;
-          const rawEnd = isFiniteNumber(region.endMs)
-            ? Math.round(region.endMs)
-            : rawStart + 1000;
+          const rawStart = isFiniteNumber(region.sourceStartMs)
+            ? Math.round(region.sourceStartMs)
+            : isFiniteNumber(region.startMs)
+              ? Math.round(region.startMs)
+              : 0;
+          const rawEnd = isFiniteNumber(region.sourceEndMs)
+            ? Math.round(region.sourceEndMs)
+            : isFiniteNumber(region.endMs)
+              ? Math.round(region.endMs)
+              : rawStart + 1000;
           const startMs = Math.max(0, Math.min(rawStart, rawEnd));
           const endMs = Math.max(startMs + 1, rawEnd);
           return {
             id: region.id,
             startMs,
             endMs,
-            speed: isFiniteNumber(region.speed) ? region.speed : 1,
+            speed: isFiniteNumber(region.speed) && region.speed > 0
+              ? region.speed
+              : 1,
             muted: typeof region.muted === "boolean" ? region.muted : false,
           };
         })
@@ -700,6 +948,24 @@ export function normalizeProjectEditor(
             trackIndex: isFiniteNumber(region.trackIndex)
               ? Math.max(0, Math.floor(region.trackIndex))
               : 0,
+            visible:
+              typeof region.visible === "boolean" ? region.visible : true,
+            opacity: isFiniteNumber(region.opacity)
+              ? clamp(region.opacity, 0, 1)
+              : 1,
+            scale: isFiniteNumber(region.scale)
+              ? clamp(region.scale, 0.1, 4)
+              : 1,
+            animation: normalizeAnnotationAnimation(
+              region.animation,
+              startMs,
+              endMs,
+            ),
+            keyframes: normalizeAnnotationKeyframes(
+              region.keyframes,
+              startMs,
+              endMs,
+            ),
           };
         })
     : [];
@@ -1006,6 +1272,7 @@ export function normalizeProjectEditor(
     cursorMotionBlur: normalizedMotionPreset.cursorMotionBlur,
     cursorClickBounce: normalizedMotionPreset.cursorClickBounce,
     cursorClickBounceDuration: normalizedMotionPreset.cursorClickBounceDuration,
+    cursorClickEffect: normalizeCursorClickEffect(editor.cursorClickEffect),
     cursorSway: isFiniteNumber(
       (editor as Partial<ProjectEditorState>).cursorSway,
     )
@@ -1015,6 +1282,7 @@ export function normalizeProjectEditor(
           2,
         )
       : DEFAULT_CURSOR_SWAY,
+    overlayLayerOrder: normalizeOverlayLayerOrder(editor.overlayLayerOrder),
     borderRadius:
       typeof editor.borderRadius === "number" ? editor.borderRadius : 12.5,
     padding: (() => {
@@ -1127,6 +1395,13 @@ export function normalizeProjectEditor(
       margin: isFiniteNumber(webcam.margin)
         ? clamp(webcam.margin, 0, 96)
         : DEFAULT_WEBCAM_MARGIN,
+      layoutMode:
+        webcam.layoutMode === "side-by-side" || webcam.layoutMode === "overlay"
+          ? webcam.layoutMode
+          : DEFAULT_WEBCAM_LAYOUT_MODE,
+      aspectRatio: isFiniteNumber(webcam.aspectRatio)
+        ? clamp(webcam.aspectRatio, 0.5, 4)
+        : DEFAULT_WEBCAM_ASPECT_RATIO,
     },
     aspectRatio:
       typeof editor.aspectRatio === "string" &&
@@ -1171,6 +1446,7 @@ export function createProjectData(
   videoPath: string,
   editor: Partial<ProjectEditorState>,
   projectId?: string | null,
+  snapshots?: ProjectSnapshot[],
 ): EditorProjectData {
   return {
     version: PROJECT_VERSION,
@@ -1179,5 +1455,8 @@ export function createProjectData(
       : {}),
     videoPath,
     editor,
+    ...(snapshots && snapshots.length > 0
+      ? { snapshots: normalizeProjectSnapshots(snapshots) }
+      : {}),
   };
 }

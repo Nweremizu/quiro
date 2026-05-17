@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -26,6 +27,14 @@ import { Plus } from "@hugeicons/core-free-icons";
 interface AddCustomFontDialogProps {
   onFontAdded?: (font: CustomFont) => void;
 }
+
+const ADD_FONT_DIALOG_CONTENT_CLASS =
+  "max-w-md bg-card shadow-lg border-(--border-default) text-foreground [&>button]:text-muted-foreground [&>button:hover]:text-foreground";
+const ADD_FONT_FIELD_CLASS = "space-y-2.5";
+const ADD_FONT_LABEL_CLASS = "text-[12px] font-medium text-foreground";
+const ADD_FONT_HELP_CLASS = "text-[12px] leading-relaxed text-muted-foreground";
+const ADD_FONT_INPUT_CLASS =
+  "h-9 rounded-md border-border bg-input/30 text-[13px] text-foreground placeholder:text-muted-foreground/70 focus-visible:border-primary/45 focus-visible:ring-primary/20";
 
 export function AddCustomFontDialog({ onFontAdded }: AddCustomFontDialogProps) {
   const t = useScopedT("dialogs");
@@ -135,29 +144,36 @@ export function AddCustomFontDialog({ onFontAdded }: AddCustomFontDialogProps) {
     }
   };
 
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void handleAdd();
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger>
         <Button
           variant="outline"
           size="sm"
-          className="w-full bg-foreground/5 border-foreground/10 text-foreground hover:bg-foreground/10 h-9 text-xs"
+          className="h-8 w-full rounded-md border-border bg-transparent text-xs text-foreground hover:bg-foreground/[0.04] hover:text-foreground"
         >
-          <HugeiconsIcon icon={Plus} className="w-3 h-3 mr-1" />
+          <HugeiconsIcon icon={Plus} className="h-3.5 w-3.5" />
           {t("addFont.title")}
         </Button>
       </DialogTrigger>
-      <DialogContent className="bg-editor-surface-alt border-foreground/10 text-foreground">
+      <DialogContent className={ADD_FONT_DIALOG_CONTENT_CLASS}>
         <DialogHeader>
-          <DialogTitle>{t("addFont.heading")}</DialogTitle>
-          <DialogDescription className="text-muted-foreground">
+          <DialogTitle className="text-[15px] font-semibold tracking-[-0.02em] text-foreground">
+            {t("addFont.heading")}
+          </DialogTitle>
+          <DialogDescription className="text-[13px] leading-relaxed text-muted-foreground">
             {t("addFont.description")}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 mt-4">
-          <div className="space-y-2">
-            <Label htmlFor="import-url" className="text-foreground">
+        <form className="mt-1 space-y-5" onSubmit={handleSubmit}>
+          <div className={ADD_FONT_FIELD_CLASS}>
+            <Label htmlFor="import-url" className={ADD_FONT_LABEL_CLASS}>
               {t("addFont.urlLabel")}
             </Label>
             <Input
@@ -165,15 +181,15 @@ export function AddCustomFontDialog({ onFontAdded }: AddCustomFontDialogProps) {
               placeholder={t("addFont.urlPlaceholder")}
               value={importUrl}
               onChange={(e) => handleImportUrlChange(e.target.value)}
-              className="bg-foreground/5 border-foreground/10 text-foreground"
+              className={ADD_FONT_INPUT_CLASS}
             />
-            <p className="text-xs text-muted-foreground">
+            <p className={ADD_FONT_HELP_CLASS}>
               {t("addFont.urlHelp")}
             </p>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="font-name" className="text-foreground">
+          <div className={ADD_FONT_FIELD_CLASS}>
+            <Label htmlFor="font-name" className={ADD_FONT_LABEL_CLASS}>
               {t("addFont.nameLabel")}
             </Label>
             <Input
@@ -181,30 +197,31 @@ export function AddCustomFontDialog({ onFontAdded }: AddCustomFontDialogProps) {
               placeholder={t("addFont.namePlaceholder")}
               value={fontName}
               onChange={(e) => setFontName(e.target.value)}
-              className="bg-foreground/5 border-foreground/10 text-foreground"
+              className={ADD_FONT_INPUT_CLASS}
             />
-            <p className="text-xs text-muted-foreground">
+            <p className={ADD_FONT_HELP_CLASS}>
               {t("addFont.nameHelp")}
             </p>
           </div>
 
-          <div className="flex justify-end gap-2 mt-6">
+          <DialogFooter className="pt-1">
             <Button
+              type="button"
               variant="outline"
               onClick={() => handleOpenChange(false)}
-              className="bg-foreground/5 border-foreground/10 text-foreground hover:bg-foreground/10"
+              className="border-border bg-transparent text-foreground hover:bg-foreground/[0.04] hover:text-foreground"
             >
               {t("addFont.cancel")}
             </Button>
             <Button
-              onClick={handleAdd}
+              type="submit"
               disabled={loading}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
               {loading ? t("addFont.adding") : t("addFont.addFont")}
             </Button>
-          </div>
-        </div>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

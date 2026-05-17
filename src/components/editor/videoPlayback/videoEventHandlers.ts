@@ -3,6 +3,10 @@ import { extensionHost } from "@/lib/extensions";
 import { enablePitchPreservingPlayback } from "@/lib/mediaTiming";
 import type { SpeedRegion, TrimRegion } from "@/types/editor";
 
+const TRIM_BOUNDARY_EPSILON_MS = 2;
+const PREEMPTIVE_TRIM_SKIP_MS = 45;
+const STALE_FRAME_SEEK_TOLERANCE_MS = 40;
+
 interface PresentedFrameMetadata {
   mediaTime?: number;
 }
@@ -45,6 +49,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
   } = params;
   const presentedFrameVideo = video as PresentedFrameVideoElement;
   let videoFrameRequestId: number | null = null;
+  let pendingProgrammaticSeekMs: number | null = null;
   enablePitchPreservingPlayback(video);
 
   const emitTime = (timeValue: number) => {
@@ -62,7 +67,19 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
     return (
       trimRegions.find(
         (region) =>
-          currentTimeMs >= region.startMs && currentTimeMs < region.endMs,
+          currentTimeMs >= region.startMs &&
+          currentTimeMs < region.endMs - TRIM_BOUNDARY_EPSILON_MS,
+      ) || null
+    );
+  };
+
+  const findUpcomingTrimRegion = (currentTimeMs: number): TrimRegion | null => {
+    const trimRegions = trimRegionsRef.current;
+    return (
+      trimRegions.find(
+        (region) =>
+          currentTimeMs < region.startMs &&
+          region.startMs - currentTimeMs <= PREEMPTIVE_TRIM_SKIP_MS,
       ) || null
     );
   };
@@ -78,8 +95,9 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
   };
 
   const skipPastTrimRegion = (trimRegion: TrimRegion) => {
-    const skipToTime = trimRegion.endMs / 1000;
+    const skipToTime = (trimRegion.endMs + TRIM_BOUNDARY_EPSILON_MS) / 1000;
     const clampedSkipToTime = Math.min(skipToTime, video.duration);
+    pendingProgrammaticSeekMs = clampedSkipToTime * 1000;
 
     video.currentTime = clampedSkipToTime;
     emitTime(clampedSkipToTime);
@@ -129,7 +147,24 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 
   function getPresentedTime(metadata?: PresentedFrameMetadata): number {
     const mediaTime = metadata?.mediaTime;
-    return Number.isFinite(mediaTime) ? (mediaTime ?? 0) : video.currentTime;
+    if (!Number.isFinite(mediaTime)) {
+      return video.currentTime;
+    }
+
+    if (pendingProgrammaticSeekMs !== null) {
+      const presentedTimeMs = (mediaTime ?? 0) * 1000;
+      const presentedFrameIsStale =
+        Math.abs(presentedTimeMs - pendingProgrammaticSeekMs) >
+        STALE_FRAME_SEEK_TOLERANCE_MS;
+
+      if (presentedFrameIsStale) {
+        return pendingProgrammaticSeekMs / 1000;
+      }
+
+      pendingProgrammaticSeekMs = null;
+    }
+
+    return mediaTime ?? 0;
   }
 
   function updateTime(metadata?: PresentedFrameMetadata) {
@@ -138,10 +173,15 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
     const presentedTime = getPresentedTime(metadata);
     const currentTimeMs = presentedTime * 1000;
     const activeTrimRegion = findActiveTrimRegion(currentTimeMs);
+    const upcomingTrimRegion =
+      activeTrimRegion || video.paused || video.ended
+        ? null
+        : findUpcomingTrimRegion(currentTimeMs);
+    const trimRegionToSkip = activeTrimRegion ?? upcomingTrimRegion;
 
-    // If we're in a trim region during playback, skip to the end of it
-    if (activeTrimRegion && !video.paused && !video.ended) {
-      skipPastTrimRegion(activeTrimRegion);
+    // Skip slightly before removed footage so cuts read as continuous playback.
+    if (trimRegionToSkip && !video.paused && !video.ended) {
+      skipPastTrimRegion(trimRegionToSkip);
     } else {
       // Apply playback speed from active speed region
       const activeSpeedRegion = findActiveSpeedRegion(currentTimeMs);
@@ -160,7 +200,9 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
     }
 
     isPlayingRef.current = true;
+
     onPlayStateChange(true);
+
     cancelScheduledUpdate();
     scheduleNextUpdate();
   };
@@ -174,6 +216,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 
   const handleSeeked = () => {
     isSeekingRef.current = false;
+    pendingProgrammaticSeekMs = null;
 
     const currentTimeMs = video.currentTime * 1000;
     const activeTrimRegion = findActiveTrimRegion(currentTimeMs);
@@ -181,13 +224,20 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
     // Never leave the preview parked on removed footage after a seek.
     if (activeTrimRegion) {
       skipPastTrimRegion(activeTrimRegion);
-    } else {
-      emitTime(video.currentTime);
+      return;
+    }
+
+    emitTime(video.currentTime);
+
+    if (isPlayingRef.current && !video.paused && !video.ended) {
+      cancelScheduledUpdate();
+      scheduleNextUpdate();
     }
   };
 
   const handleSeeking = () => {
     isSeekingRef.current = true;
+    cancelScheduledUpdate();
     emitTime(video.currentTime);
   };
 

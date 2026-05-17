@@ -5,6 +5,11 @@ import {
   normalizeProjectEditor,
   type ProjectEditorState,
 } from "./project-persistance";
+import {
+  DEFAULT_TIMELINE_DENSITY_MODE,
+  normalizeTimelineDensityMode,
+  type TimelineDensityMode,
+} from "../timeline/timelineLayout";
 
 type PersistedEditorControls = Pick<
   ProjectEditorState,
@@ -39,6 +44,7 @@ type PersistedEditorControls = Pick<
   | "cursorMotionBlur"
   | "cursorClickBounce"
   | "cursorClickBounceDuration"
+  | "cursorClickEffect"
   | "cursorSway"
   | "borderRadius"
   | "padding"
@@ -78,6 +84,7 @@ export interface EditorPreferences extends PersistedEditorControls {
   customAspectWidth: string;
   customAspectHeight: string;
   customWallpapers: string[];
+  timelineDensityMode: TimelineDensityMode;
   autoApplyFreshRecordingAutoZooms: boolean;
   whisperExecutablePath: string | null;
   whisperModelPath: string | null;
@@ -127,6 +134,7 @@ export const DEFAULT_EDITOR_PREFERENCES: EditorPreferences = {
   cursorMotionBlur: DEFAULT_EDITOR_CONTROLS.cursorMotionBlur,
   cursorClickBounce: DEFAULT_EDITOR_CONTROLS.cursorClickBounce,
   cursorClickBounceDuration: DEFAULT_EDITOR_CONTROLS.cursorClickBounceDuration,
+  cursorClickEffect: DEFAULT_EDITOR_CONTROLS.cursorClickEffect,
   cursorSway: DEFAULT_EDITOR_CONTROLS.cursorSway,
   borderRadius: DEFAULT_EDITOR_CONTROLS.borderRadius,
   padding: DEFAULT_EDITOR_CONTROLS.padding,
@@ -145,6 +153,7 @@ export const DEFAULT_EDITOR_PREFERENCES: EditorPreferences = {
   customAspectWidth: "16",
   customAspectHeight: "9",
   customWallpapers: [],
+  timelineDensityMode: DEFAULT_TIMELINE_DENSITY_MODE,
   autoApplyFreshRecordingAutoZooms: true,
   whisperExecutablePath: null,
   whisperModelPath: null,
@@ -345,6 +354,7 @@ function normalizeEditorControls(
     cursorClickBounce: raw.cursorClickBounce ?? fallback.cursorClickBounce,
     cursorClickBounceDuration:
       raw.cursorClickBounceDuration ?? fallback.cursorClickBounceDuration,
+    cursorClickEffect: raw.cursorClickEffect ?? fallback.cursorClickEffect,
     cursorSway: raw.cursorSway ?? fallback.cursorSway,
     borderRadius: raw.borderRadius ?? fallback.borderRadius,
     padding: raw.padding ?? fallback.padding,
@@ -405,6 +415,7 @@ function normalizeEditorControls(
     cursorMotionBlur: normalized.cursorMotionBlur,
     cursorClickBounce: normalized.cursorClickBounce,
     cursorClickBounceDuration: normalized.cursorClickBounceDuration,
+    cursorClickEffect: normalized.cursorClickEffect,
     cursorSway: normalized.cursorSway,
     borderRadius: normalized.borderRadius,
     padding: normalized.padding,
@@ -445,6 +456,10 @@ export function normalizeEditorPreferences(
     customWallpapers: normalizeCustomWallpapers(
       raw.customWallpapers,
       fallback.customWallpapers,
+    ),
+    timelineDensityMode: normalizeTimelineDensityMode(
+      raw.timelineDensityMode,
+      fallback.timelineDensityMode,
     ),
     autoApplyFreshRecordingAutoZooms: normalizeBoolean(
       raw.autoApplyFreshRecordingAutoZooms,

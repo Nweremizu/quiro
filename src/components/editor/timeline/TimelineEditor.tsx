@@ -49,17 +49,19 @@ import type {
   ZoomMode,
   ZoomRegion,
 } from "@/types/editor";
-import AudioWaveform from "./AudioWaveform";
 import Item from "./Item";
 import glassStyles from "./ItemGlass.module.css";
 import KeyframeMarkers from "./KeyframeMarkers";
 import Row from "./Row";
 import TimelineWrapper from "./TimelineWrapper";
 import {
+  DEFAULT_TIMELINE_DENSITY_MODE,
+  getTimelineAxisHeightPx,
   getTimelineContentMinHeightPx,
+  getTimelineDensityConfig,
   getTimelineRowsMinHeightPx,
   getTimelineViewportStretchFactor,
-  TIMELINE_AXIS_HEIGHT_PX,
+  type TimelineDensityMode,
 } from "./timelineLayout";
 import { type AudioPeaksData, useAudioPeaks } from "./useAudioPeaks";
 import { buildInteractionZoomSuggestions } from "./zoomSuggestionUtils";
@@ -178,6 +180,7 @@ interface TimelineEditorProps {
   isCropped?: boolean;
   videoPath?: string | null;
   hideToolbar?: boolean;
+  densityMode?: TimelineDensityMode;
 }
 
 export interface TimelineEditorHandle {
@@ -415,7 +418,7 @@ function PlaybackCursor({
       }}
     >
       <div
-        className="absolute top-0 bottom-0 w-[2px] bg-[#2563EB] shadow-[0_0_10px_rgba(37,99,235,0.5)] cursor-ew-resize pointer-events-auto hover:shadow-[0_0_15px_rgba(37,99,235,0.7)] transition-shadow"
+        className="absolute top-0 bottom-0 w-[2px] bg-primary shadow-[0_0_10px_rgba(240,128,48,0.32)] cursor-ew-resize pointer-events-auto hover:shadow-[0_0_15px_rgba(240,128,48,0.42)] transition-shadow"
         style={{
           [sideProperty]: `${offset}px`,
         }}
@@ -428,7 +431,7 @@ function PlaybackCursor({
           className="absolute -top-1 left-1/2 -translate-x-1/2 hover:scale-125 transition-transform"
           style={{ width: "16px", height: "16px" }}
         >
-          <div className="w-3 h-3 mx-auto mt-[2px] bg-[#2563EB] rotate-45 rounded-sm shadow-lg border border-foreground/20" />
+          <div className="w-3 h-3 mx-auto mt-[2px] bg-primary rotate-45 rounded-sm shadow-lg border border-foreground/20" />
         </div>
         <div
           className={cn(
@@ -446,15 +449,18 @@ function PlaybackCursor({
 function TimelineAxis({
   videoDurationMs,
   currentTimeMs,
+  densityMode,
 }: {
   videoDurationMs: number;
   currentTimeMs: number;
+  densityMode: TimelineDensityMode;
 }) {
   const { sidebarWidth, direction, range, valueToPixels } =
     useTimelineContext();
   const sideProperty = direction === "rtl" ? "right" : "left";
   const axisRef = useRef<HTMLDivElement | null>(null);
   const [axisWidth, setAxisWidth] = useState(0);
+  const axisHeightPx = getTimelineAxisHeightPx(densityMode);
 
   const { intervalMs } = useMemo(
     () => calculateAxisScale(range.end - range.start),
@@ -526,8 +532,9 @@ function TimelineAxis({
 
   return (
     <div
-      className="h-8 bg- background border-b border-foreground/10 relative overflow-hidden select-none"
+      className="bg-background border-b border-border relative overflow-hidden select-none"
       style={{
+        height: `${axisHeightPx}px`,
         [sideProperty === "right" ? "marginRight" : "marginLeft"]:
           `${sidebarWidth}px`,
         paddingLeft: 32,
@@ -578,7 +585,7 @@ function TimelineAxis({
                 className={cn(
                   "text-[10px] font-medium tabular-nums tracking-tight",
                   marker.time === currentTimeMs
-                    ? "text-[#2563EB]"
+                    ? "text-primary"
                     : "text-foreground/40",
                 )}
               >
@@ -630,7 +637,7 @@ function ClipMarkerOverlay({ videoDurationMs }: { videoDurationMs: number }) {
             bottom: "7.5%",
             [sideProperty]: `${offset}px`,
             background:
-              "linear-gradient(to bottom, transparent 0%, rgba(255,255,255,0.32) 35%, rgba(255,255,255,0.32) 65%, transparent 100%)",
+              "linear-gradient(to bottom, transparent 0%, var(--border-strong) 35%, var(--border-strong) 65%, transparent 100%)",
           }}
         />
       ))}
@@ -642,6 +649,7 @@ function Timeline({
   items,
   videoDurationMs,
   currentTimeMs,
+  densityMode,
   onSeek,
   onAddZoomAtMs,
   canPlaceZoomAtMs,
@@ -665,6 +673,7 @@ function Timeline({
   items: TimelineRenderItem[];
   videoDurationMs: number;
   currentTimeMs: number;
+  densityMode: TimelineDensityMode;
   onSeek?: (time: number) => void;
   canPlaceZoomAtMs?: (startMs: number) => boolean;
   onSelectZoom?: (id: string | null) => void;
@@ -699,6 +708,7 @@ function Timeline({
   const [timelineHoverMs, setTimelineHoverMs] = useState<number | null>(null);
   const [isZoomRowHovered, setIsZoomRowHovered] = useState(false);
   const [zoomRowHoverMs, setZoomRowHoverMs] = useState<number | null>(null);
+  const density = getTimelineDensityConfig(densityMode);
 
   const setRefs = useCallback(
     (node: HTMLDivElement | null) => {
@@ -786,11 +796,15 @@ function Timeline({
     [annotationItems],
   );
   const timelineRowCount = 2 + annotationRowIds.length + audioRowIds.length;
-  const timelineRowsMinHeightPx = getTimelineRowsMinHeightPx(timelineRowCount);
+  const timelineRowsMinHeightPx = getTimelineRowsMinHeightPx(
+    timelineRowCount,
+    densityMode,
+  );
   const timelineContentMinHeightPx =
-    getTimelineContentMinHeightPx(timelineRowCount);
+    getTimelineContentMinHeightPx(timelineRowCount, densityMode);
   const timelineViewportStretchFactor =
-    getTimelineViewportStretchFactor(timelineRowCount);
+    getTimelineViewportStretchFactor(timelineRowCount, densityMode);
+  const timelineAxisHeightPx = getTimelineAxisHeightPx(densityMode);
   const sideProperty = direction === "rtl" ? "right" : "left";
   const visibleDurationMs = Math.max(1, range.end - range.start);
   const ghostStartMs =
@@ -939,9 +953,9 @@ function Timeline({
       ref={setRefs}
       style={{
         ...style,
-        height: `max(100%, ${timelineContentMinHeightPx}px, calc(${TIMELINE_AXIS_HEIGHT_PX}px + (100% - ${TIMELINE_AXIS_HEIGHT_PX}px) * ${timelineViewportStretchFactor}))`,
+        height: `max(100%, ${timelineContentMinHeightPx}px, calc(${timelineAxisHeightPx}px + (100% - ${timelineAxisHeightPx}px) * ${timelineViewportStretchFactor}))`,
       }}
-      className="select-none bg- background relative cursor-pointer group flex flex-col"
+      className="select-none bg-background relative cursor-pointer group flex flex-col"
       onClick={handleTimelineClick}
       onMouseEnter={handleTimelineMouseEnter}
       onMouseMove={handleTimelineMouseMove}
@@ -950,6 +964,7 @@ function Timeline({
       <TimelineAxis
         videoDurationMs={videoDurationMs}
         currentTimeMs={currentTimeMs}
+        densityMode={densityMode}
       />
       <PlaybackCursor
         currentTimeMs={currentTimeMs}
@@ -981,8 +996,8 @@ function Timeline({
           id={CLIP_ROW_ID}
           isEmpty={clipItems.length === 0}
           hint="Press C to split clip"
+          densityMode={densityMode}
         >
-          {audioPeaks && <AudioWaveform peaks={audioPeaks} />}
           <ClipMarkerOverlay videoDurationMs={videoDurationMs} />
           {clipItems.map((item) => (
             <Item
@@ -993,6 +1008,8 @@ function Timeline({
               isSelected={selectAllBlocksActive || item.id === selectedClipId}
               onSelect={() => onSelectClip?.(item.id)}
               variant="clip"
+              waveformPeaks={audioPeaks}
+              densityMode={densityMode}
             >
               {item.label}
             </Item>
@@ -1006,20 +1023,25 @@ function Timeline({
           onMouseMove={handleZoomRowMouseMove}
           onMouseLeave={handleZoomRowMouseLeave}
           onClick={handleZoomRowClick}
+          densityMode={densityMode}
         >
           {canShowGhostZoom && ghostStartMs !== null && (
             <div className="absolute inset-0 z-[3] pointer-events-none">
               <div
-                className="absolute top-1/2 -translate-y-1/2 h-[85%] min-h-[22px]"
+                className="absolute top-1/2 -translate-y-1/2"
                 style={
                   direction === "rtl"
                     ? {
                         right: `${ghostStartOffsetPx}px`,
                         width: `${ghostWidthPx}px`,
+                        height: `${density.itemHeightPercent}%`,
+                        minHeight: density.itemMinHeightPx,
                       }
                     : {
                         left: `${ghostStartOffsetPx}px`,
                         width: `${ghostWidthPx}px`,
+                        height: `${density.itemHeightPercent}%`,
+                        minHeight: density.itemMinHeightPx,
                       }
                 }
               >
@@ -1053,6 +1075,7 @@ function Timeline({
               zoomDepth={item.zoomDepth}
               zoomMode={item.zoomMode}
               variant="zoom"
+              densityMode={densityMode}
             >
               {item.label}
             </Item>
@@ -1072,6 +1095,7 @@ function Timeline({
               id={rowId}
               isEmpty={rowItems.length === 0}
               hint={index === 0 ? "Press A to add annotation" : undefined}
+              densityMode={densityMode}
             >
               {rowItems.map((item) => (
                 <Item
@@ -1084,6 +1108,7 @@ function Timeline({
                   }
                   onSelect={() => onSelectAnnotation?.(item.id)}
                   variant="annotation"
+                  densityMode={densityMode}
                 >
                   {item.label}
                 </Item>
@@ -1104,6 +1129,7 @@ function Timeline({
               id={rowId}
               isEmpty={rowItems.length === 0}
               hint={index === 0 ? "Click music icon to add audio" : undefined}
+              densityMode={densityMode}
             >
               {rowItems.map((item) => (
                 <Item
@@ -1116,6 +1142,7 @@ function Timeline({
                   }
                   onSelect={() => onSelectAudio?.(item.id)}
                   variant="audio"
+                  densityMode={densityMode}
                 >
                   {item.label}
                 </Item>
@@ -1182,6 +1209,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
       isCropped = false,
       videoPath,
       hideToolbar = false,
+      densityMode = DEFAULT_TIMELINE_DENSITY_MODE,
     },
     ref,
   ) {
@@ -1231,6 +1259,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
     const timelineContainerRef = useRef<HTMLDivElement>(null);
     const { shortcuts: keyShortcuts, isMac } = useShortcuts();
     const audioPeaks = useAudioPeaks(videoPath);
+    const density = getTimelineDensityConfig(densityMode);
 
     useEffect(() => {
       setRange(createInitialRange(totalMs));
@@ -2349,7 +2378,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 
     if (!videoDuration || videoDuration === 0) {
       return (
-        <div className="flex-1 flex flex-col items-center justify-center rounded-lg bg-editor-surface gap-3">
+        <div className="flex-1 flex flex-col items-center justify-center rounded-lg bg-card gap-3">
           <div className="w-12 h-12 rounded-full bg-foreground/5 flex items-center justify-center">
             <HugeiconsIcon
               icon={Plus}
@@ -2369,15 +2398,15 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
     }
 
     return (
-      <div className="flex-1 min-h-0 flex flex-col bg- background overflow-hidden">
+      <div className="flex-1 min-h-0 flex flex-col bg-background overflow-hidden">
         {hideToolbar ? null : (
-          <div className="flex items-center gap-2 px-4 py-2 border-b border-foreground/10 bg-editor-panel">
+          <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-card">
             <div className="flex items-center gap-1">
               <Button
                 onClick={handleAddZoom}
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 text-muted-foreground hover:text-[#2563EB] hover:bg-[#2563EB]/10 transition-all"
+                className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-accent transition-all"
                 title="Add Zoom (Z)"
               >
                 <HugeiconsIcon icon={ZoomIn} className="w-4 h-4" />
@@ -2386,7 +2415,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
                 onClick={handleSuggestZooms}
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 text-muted-foreground hover:text-[#2563EB] hover:bg-[#2563EB]/10 transition-all"
+                className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-accent transition-all"
                 title="Suggest Zooms from Cursor"
               >
                 <HugeiconsIcon icon={WandSparkles} className="w-4 h-4" />
@@ -2395,7 +2424,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
                 onClick={() => handleAddAnnotation()}
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 text-muted-foreground hover:text-[#B4A046] hover:bg-[#B4A046]/10 transition-all"
+                className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-accent transition-all"
                 title="Add Annotation (A)"
               >
                 <HugeiconsIcon icon={MessageSquare} className="w-4 h-4" />
@@ -2406,7 +2435,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
                 }}
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 text-muted-foreground hover:text-[#a855f7] hover:bg-[#a855f7]/10 transition-all"
+                className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-accent transition-all"
                 title="Add Audio"
               >
                 <HugeiconsIcon icon={Music} className="w-4 h-4" />
@@ -2437,7 +2466,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                   align="end"
-                  className="bg-editor-surface-alt border-foreground/10"
+                  className="bg-popover border-border"
                 >
                   {ASPECT_RATIOS.map((ratio) => (
                     <DropdownMenuItem
@@ -2447,7 +2476,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
                     >
                       <span>{getAspectRatioLabel(ratio)}</span>
                       {aspectRatio === ratio && (
-                        <Tick02Icon className="w-3 h-3 text-[#2563EB]" />
+                        <Tick02Icon className="w-3 h-3 text-primary" />
                       )}
                     </DropdownMenuItem>
                   ))}
@@ -2464,7 +2493,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
                         )
                       }
                       onKeyDown={handleCustomAspectRatioKeyDown}
-                      className="w-12 h-7 rounded border border-foreground/10 bg-foreground/5 px-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                      className="w-12 h-7 rounded border border-foreground/10 bg-foreground/5 px-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                       aria-label="Custom aspect width"
                     />
                     <span className="text-muted-foreground/70">:</span>
@@ -2478,7 +2507,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
                         )
                       }
                       onKeyDown={handleCustomAspectRatioKeyDown}
-                      className="w-12 h-7 rounded border border-foreground/10 bg-foreground/5 px-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                      className="w-12 h-7 rounded border border-foreground/10 bg-foreground/5 px-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                       aria-label="Custom aspect height"
                     />
                     <Button
@@ -2490,7 +2519,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
                       Set
                     </Button>
                     {isCustomAspectRatio(aspectRatio) && (
-                      <Tick02Icon className="w-3 h-3 text-[#2563EB] ml-auto" />
+                      <Tick02Icon className="w-3 h-3 text-primary ml-auto" />
                     )}
                   </div>
                 </DropdownMenuContent>
@@ -2507,26 +2536,26 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
                   {t("sections.crop", "Crop")}
                 </span>
                 {isCropped ? (
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#2563EB]" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-primary" />
                 ) : null}
               </Button>
             </div>
             <div className="flex-1" />
             <div className="flex items-center gap-4 text-[10px] text-muted-foreground/70 font-medium">
               <span className="flex items-center gap-1.5">
-                <kbd className="px-1.5 py-0.5 bg-foreground/5 border border-foreground/10 rounded text-[#2563EB] font-sans">
+                <kbd className="px-1.5 py-0.5 bg-foreground/5 border border-foreground/10 rounded text-primary font-sans">
                   Side Scroll
                 </kbd>
                 <span>Pan</span>
               </span>
               <span className="flex items-center gap-1.5">
-                <kbd className="px-1.5 py-0.5 bg-foreground/5 border border-foreground/10 rounded text-[#2563EB] font-sans">
+                <kbd className="px-1.5 py-0.5 bg-foreground/5 border border-foreground/10 rounded text-primary font-sans">
                   {scrollLabels.pan}
                 </kbd>
                 <span>Pan</span>
               </span>
               <span className="flex items-center gap-1.5">
-                <kbd className="px-1.5 py-0.5 bg-foreground/5 border border-foreground/10 rounded text-[#2563EB] font-sans">
+                <kbd className="px-1.5 py-0.5 bg-foreground/5 border border-foreground/10 rounded text-primary font-sans">
                   {scrollLabels.zoom}
                 </kbd>
                 <span>Zoom</span>
@@ -2536,7 +2565,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
         )}
         <div
           ref={timelineContainerRef}
-          className="flex-1 min-h-0 overflow-auto bg- background relative"
+          className="scroll flex-1 min-h-0 overflow-auto bg-background relative"
           tabIndex={0}
           onFocus={() => {
             isTimelineFocusedRef.current = true;
@@ -2572,11 +2601,13 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
               onKeyframeMove={handleKeyframeMove}
               videoDurationMs={totalMs}
               timelineRef={timelineContainerRef}
+              topPx={density.keyframeTopPx}
             />
             <Timeline
               items={timelineItems}
               videoDurationMs={totalMs}
               currentTimeMs={currentTimeMs}
+              densityMode={densityMode}
               onSeek={onSeek}
               onAddZoomAtMs={addZoomAtMs}
               canPlaceZoomAtMs={canPlaceZoomAtMs}

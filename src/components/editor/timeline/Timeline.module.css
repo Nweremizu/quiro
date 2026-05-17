@@ -1,11 +1,11 @@
 .scrollArea {
 	scrollbar-width: thin;
-	scrollbar-color: hsl(var(--foreground) / 0.25) transparent;
+	scrollbar-color: rgba(107, 107, 120, 0.2) transparent;
 }
 
 .scrollArea::-webkit-scrollbar {
-	width: 8px;
-	height: 8px;
+	width: 6px;
+	height: 6px;
 	background-color: transparent;
 }
 
@@ -14,15 +14,15 @@
 }
 
 .scrollArea::-webkit-scrollbar-thumb {
-	background-color: hsl(var(--foreground) / 0.25);
-	border-radius: 10px;
-	border: 2px solid hsl(var(--editor-surface));
+	background: rgba(83, 83, 94, 0.2);
+	border-radius: 50px;
+	transition: var(--color-background) 0.2s ease;
 }
 
 .scrollArea::-webkit-scrollbar-thumb:hover {
-	background-color: hsl(var(--foreground) / 0.35);
+	background: rgba(107, 107, 120, 0.4);
 }
 
 .scrollArea::-webkit-scrollbar-thumb:active {
-	background-color: hsl(var(--foreground) / 0.45);
+	background: rgba(107, 107, 120, 0.4);
 }

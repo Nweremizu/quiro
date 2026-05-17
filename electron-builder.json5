@@ -1,43 +1,77 @@
 // @see - https://www.electron.build/configuration/configuration
 {
-  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
-  "appId": "YourAppID",
-  "asar": true,
-  "productName": "YourAppName",
-  "directories": {
-    "output": "release/${version}"
-  },
-  "files": [
-    "dist",
-    "dist-electron"
+  $schema: "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  appId: "dev.quiro.app",
+  asar: true,
+  asarUnpack: [
+    "node_modules/ffmpeg-static/**",
+    "node_modules/ffprobe-static/**",
+    "node_modules/uiohook-napi/**",
+    "electron/native/**",
   ],
-  "mac": {
-    "target": [
-      "dmg"
-    ],
-    "artifactName": "${productName}-Mac-${version}-Installer.${ext}"
+  productName: "Quiro",
+  npmRebuild: true,
+  buildDependenciesFromSource: true,
+  compression: "normal",
+  directories: {
+    output: "release/${version}",
   },
-  "win": {
-    "target": [
+  files: [
+    "dist",
+    "dist-electron",
+    "electron/native",
+    "!node_modules/ffprobe-static/bin/darwin/**",
+    "!node_modules/ffprobe-static/bin/linux/**",
+    "!node_modules/ffprobe-static/bin/win32/ia32/**",
+    "!electron/native/**/build/**",
+    "!*.png",
+    "!preview*.png",
+    "!*.md",
+    "!README.md",
+    "!CONTRIBUTING.md",
+    "!LICENSE",
+  ],
+  extraResources: [
+    {
+      from: "public/wallpapers",
+      to: "assets/wallpapers",
+    },
+  ],
+
+  mac: {
+    hardenedRuntime: true,
+    entitlements: "build/entitlements.mac.plist",
+    entitlementsInherit: "build/entitlements.mac.inherit.plist",
+    target: [
       {
-        "target": "nsis",
-        "arch": [
-          "x64"
-        ]
-      }
+        target: "dmg",
+        arch: ["x64", "arm64"],
+      },
+      {
+        target: "zip",
+        arch: ["x64", "arm64"],
+      },
     ],
-    "artifactName": "${productName}-Windows-${version}-Setup.${ext}"
+    icon: "icons/icons/mac/icon.icns",
+    artifactName: "${productName}-${arch}.${ext}",
+    extendInfo: {
+      NSAudioCaptureUsageDescription: "Quiro needs audio capture permission to record system audio.",
+      NSCameraUsageDescription: "Quiro needs camera access to record webcam video.",
+      NSMicrophoneUsageDescription: "Quiro needs microphone access to record voice audio.",
+      NSCameraUseContinuityCameraDeviceType: true,
+      "com.apple.security.device.audio-input": true,
+    },
   },
-  "nsis": {
-    "oneClick": false,
-    "perMachine": false,
-    "allowToChangeInstallationDirectory": true,
-    "deleteAppDataOnUninstall": false
+  win: {
+    target: ["nsis"],
+    icon: "icons/icons/win/icon.ico",
+    executableName: "Quiro",
+    artifactName: "${productName}-windows-${arch}.${ext}",
   },
-  "linux": {
-    "target": [
-      "AppImage"
-    ],
-    "artifactName": "${productName}-Linux-${version}.${ext}"
-  }
+  linux: {
+    target: ["AppImage"],
+    icon: "icons/icons/png",
+    artifactName: "${productName}-linux-x64.${ext}",
+    category: "AudioVideo",
+  },
 }

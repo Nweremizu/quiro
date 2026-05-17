@@ -1,5 +1,10 @@
 import type { RowDefinition } from "dnd-timeline";
 import { useRow } from "dnd-timeline";
+import {
+  DEFAULT_TIMELINE_DENSITY_MODE,
+  getTimelineRowMinHeightPx,
+  type TimelineDensityMode,
+} from "./timelineLayout";
 
 interface RowProps extends RowDefinition {
   children: React.ReactNode;
@@ -11,6 +16,7 @@ interface RowProps extends RowDefinition {
   onMouseMove?: React.MouseEventHandler<HTMLDivElement>;
   onMouseLeave?: React.MouseEventHandler<HTMLDivElement>;
   onClick?: React.MouseEventHandler<HTMLDivElement>;
+  densityMode?: TimelineDensityMode;
 }
 
 export default function Row({
@@ -24,13 +30,15 @@ export default function Row({
   onMouseMove,
   onMouseLeave,
   onClick,
+  densityMode = DEFAULT_TIMELINE_DENSITY_MODE,
 }: RowProps) {
   const { setNodeRef, rowWrapperStyle, rowStyle } = useRow({ id });
+  const minHeight = getTimelineRowMinHeightPx(densityMode);
 
   return (
     <div
-      className="bg-transparent relative flex-1 min-h-6.5"
-      style={{ ...rowWrapperStyle, marginBottom: 2 }}
+      className="relative flex-1 min-h-6.5 border-b border-border/60 bg-background"
+      style={{ ...rowWrapperStyle, marginBottom: 0, minHeight }}
     >
       {label && (
         <div
@@ -42,7 +50,7 @@ export default function Row({
       )}
       {isEmpty && hint && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-10">
-          <span className="text-[11px] text-foreground/15 font-medium">
+          <span className="rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] font-medium text-muted-foreground/55">
             {hint}
           </span>
         </div>
@@ -50,7 +58,7 @@ export default function Row({
       <div
         ref={setNodeRef}
         className="relative h-full min-h-[26px] overflow-hidden"
-        style={rowStyle}
+        style={{ ...rowStyle, minHeight }}
         onMouseEnter={onMouseEnter}
         onMouseMove={onMouseMove}
         onMouseLeave={onMouseLeave}

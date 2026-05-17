@@ -7,6 +7,11 @@ export interface ZoomFocus {
 }
 
 export type ZoomMode = "auto" | "manual";
+export type ZoomPresetId =
+  | "focus"
+  | "follow-cursor"
+  | "punch-in"
+  | "pan-and-zoom";
 
 export interface ZoomRegion {
   id: string;
@@ -15,6 +20,9 @@ export interface ZoomRegion {
   depth: ZoomDepth;
   focus: ZoomFocus;
   mode?: ZoomMode;
+  enabled?: boolean;
+  presetId?: ZoomPresetId;
+  endFocus?: ZoomFocus;
 }
 
 export interface CursorTelemetryPoint {
@@ -57,11 +65,48 @@ export type CursorStyle =
   | "tahoe-inverted"
   | "dot"
   | "figma"
-  | (string & {}); // extension-contributed cursor styles
+  | (string & Record<string, never>); // extension-contributed cursor styles
 export const DEFAULT_CURSOR_STYLE: CursorStyle = "tahoe";
+
+export type CursorClickEffectId =
+  | "none"
+  | "ring"
+  | "pulse"
+  | "ripple"
+  | "spotlight"
+  | "label";
+
+export type CursorClickLabelMode = "interaction" | "generic";
+
+export interface CursorClickEffectSettings {
+  id: CursorClickEffectId;
+  color: string;
+  durationMs: number;
+  intensity: number;
+  labelMode: CursorClickLabelMode;
+}
+
+export const DEFAULT_CURSOR_CLICK_EFFECT: CursorClickEffectSettings = {
+  id: "none",
+  color: "#f08030",
+  durationMs: 650,
+  intensity: 0.75,
+  labelMode: "interaction",
+};
+
+export type OverlayLayerKind = "annotations" | "captions" | "cursor" | "webcam";
+
+export interface OverlayLayerOrder {
+  overlays: OverlayLayerKind[];
+}
+
+export const DEFAULT_OVERLAY_LAYER_ORDER: OverlayLayerOrder = {
+  overlays: ["annotations", "captions", "cursor", "webcam"],
+};
 
 export type EditorEffectSection =
   | "scene"
+  | "layers"
   | "cursor"
   | "captions"
   | "webcam"
@@ -94,6 +139,8 @@ export type WebcamPositionPreset =
   | "bottom-center"
   | "custom";
 
+export type WebcamLayoutMode = "overlay" | "side-by-side";
+
 export interface WebcamOverlaySettings {
   enabled: boolean;
   sourcePath: string | null;
@@ -109,6 +156,8 @@ export interface WebcamOverlaySettings {
   cornerRadius: number;
   shadow: number;
   margin: number;
+  layoutMode?: WebcamLayoutMode;
+  aspectRatio?: number;
 }
 
 export const DEFAULT_CURSOR_SIZE = 3.0;
@@ -156,6 +205,8 @@ export const DEFAULT_WEBCAM_POSITION_PRESET: WebcamPositionPreset =
 export const DEFAULT_WEBCAM_POSITION_X = 1;
 export const DEFAULT_WEBCAM_POSITION_Y = 1;
 export const DEFAULT_WEBCAM_TIME_OFFSET_MS = 0;
+export const DEFAULT_WEBCAM_LAYOUT_MODE: WebcamLayoutMode = "overlay";
+export const DEFAULT_WEBCAM_ASPECT_RATIO = 1;
 
 export const DEFAULT_WEBCAM_OVERLAY: WebcamOverlaySettings = {
   enabled: false,
@@ -172,6 +223,8 @@ export const DEFAULT_WEBCAM_OVERLAY: WebcamOverlaySettings = {
   cornerRadius: DEFAULT_WEBCAM_CORNER_RADIUS,
   shadow: DEFAULT_WEBCAM_SHADOW,
   margin: DEFAULT_WEBCAM_MARGIN,
+  layoutMode: DEFAULT_WEBCAM_LAYOUT_MODE,
+  aspectRatio: DEFAULT_WEBCAM_ASPECT_RATIO,
 };
 
 export interface TrimRegion {
@@ -424,6 +477,34 @@ export interface AnnotationTextStyle {
   borderRadius: number;
 }
 
+export type AnnotationKeyframeEasing = "linear" | "ease-in-out";
+
+export type AnnotationAnimationPresetId =
+  | "none"
+  | "fade"
+  | "rise"
+  | "pop"
+  | "slide-left"
+  | "spotlight";
+
+export interface AnnotationAnimationSettings {
+  presetId: AnnotationAnimationPresetId;
+  durationMs: number;
+  springStiffness: number;
+  springDamping: number;
+}
+
+export interface AnnotationKeyframe {
+  id: string;
+  timeMs: number;
+  easing?: AnnotationKeyframeEasing;
+  position?: AnnotationPosition;
+  scale?: number;
+  opacity?: number;
+  blurIntensity?: number;
+  arrowDirection?: ArrowDirection;
+}
+
 function getDefaultAnnotationFontFamily() {
   return '"SF Pro Display", "SF Pro Text", Helvetica, sans-serif';
 }
@@ -448,7 +529,19 @@ export interface AnnotationRegion {
   figureData?: FigureData;
   blurIntensity?: number;
   blurColor?: string;
+  visible?: boolean;
+  opacity?: number;
+  scale?: number;
+  animation?: AnnotationAnimationSettings;
+  keyframes?: AnnotationKeyframe[];
 }
+
+export const DEFAULT_ANNOTATION_ANIMATION: AnnotationAnimationSettings = {
+  presetId: "none",
+  durationMs: 320,
+  springStiffness: 320,
+  springDamping: 26,
+};
 
 export const DEFAULT_ANNOTATION_POSITION: AnnotationPosition = {
   x: 50,
@@ -474,7 +567,7 @@ export const DEFAULT_ANNOTATION_STYLE: AnnotationTextStyle = {
 
 export const DEFAULT_FIGURE_DATA: FigureData = {
   arrowDirection: "right",
-  color: "#2563EB",
+  color: "#f08030",
   strokeWidth: 4,
 };
 
