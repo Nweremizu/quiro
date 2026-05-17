@@ -22,8 +22,7 @@ import {
   isWindowSource,
   type DesktopSource,
 } from "./popovers/launchPopoverTypes";
-import "./launchTheme.css";
-import "./SourceSelector.css";
+
 import { useHudInteraction } from "@/contexts/launch/HudInteractionContext";
 import {
   ArrowUp01Icon,
@@ -218,8 +217,9 @@ export const SourceSelectorContent = ({
         key={`${source.id}-${index}`}
         type="button"
         className={cn(
-          "group flex min-h-11.5 w-full font-sans! hover:bg-app-400/40 items-center justify-start gap-3 rounded-[11px] px-3 py-2.5 text-left font-medium",
-          isSelected && "bg-app-400",
+          "group flex min-h-11.5 w-full font-sans! items-center justify-start gap-3 rounded-lg px-3 py-2.5 text-left font-medium text-stone-100",
+          "transition-[background-color,color] duration-150 hover:bg-white/10",
+          isSelected && "bg-primary/20 text-primary",
         )}
         onClick={() => onSourceSelect(source)}
         variants={itemVariants}
@@ -230,27 +230,27 @@ export const SourceSelectorContent = ({
             <img
               src={source.thumbnail}
               alt=""
-              className="h-8 w-12 rounded-[8px] bg-black/50 object-cover"
+              className="h-8 w-12 rounded-lg bg-black/50 object-cover"
               onError={(e) => {
                 (e.target as HTMLImageElement).style.display = "none";
               }}
             />
           ) : (
-            <div className="bg-background flex h-8 w-12 items-center justify-center rounded-[8px]">
+            <div className="flex h-8 w-12 items-center justify-center rounded-lg bg-black/40 ring-1 ring-white/10">
               {source.sourceType === "window" ? (
-                <WindowsOldIcon className="text-muted h-5 w-5" />
+                <WindowsOldIcon className="h-5 w-5 text-stone-500" />
               ) : (
-                <MonitorDotIcon className="text-muted h-5 w-5" />
+                <MonitorDotIcon className="h-5 w-5 text-stone-500" />
               )}
             </div>
           )}
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col items-start text-left">
-          <div className="text-foreground w-full text-sm font-medium">
+          <div className="w-full text-sm font-medium text-stone-100">
             <MarqueeText text={source.windowTitle || source.name} />
           </div>
-          <div className="text-neutral-300 w-full truncate text-left text-xs">
+          <div className="w-full truncate text-left text-xs text-stone-500">
             {source.sourceType === "screen"
               ? t("recording.screen")
               : t("recording.window")}
@@ -265,7 +265,7 @@ export const SourceSelectorContent = ({
   if (loading && !hasAnySources) {
     return (
       <div className="flex items-center justify-center py-8">
-        <div className="border border-border h-5 w-5 animate-spin rounded-full border-b-2" />
+        <div className="h-5 w-5 animate-spin rounded-full border border-white/10 border-b-primary" />
       </div>
     );
   }
@@ -281,11 +281,11 @@ export const SourceSelectorContent = ({
           >
             {screenSources.length > 0 ? (
               <div className="space-y-1">
-                <div className="text-foreground flex items-center gap-2 px-3 py-2 text-[10px] font-semibold tracking-[0.08em] uppercase">
+                <div className="flex items-center gap-2 px-3 py-2 text-[10px] font-semibold tracking-[0.08em] text-stone-400 uppercase">
                   {t("recording.screens")}
                   <span
                     className={cn(
-                      "text-muted text-[10px] tracking-normal normal-case transition-opacity duration-150",
+                      "text-stone-500 text-[10px] tracking-normal normal-case transition-opacity duration-150",
                       loading ? "opacity-100" : "opacity-0",
                     )}
                   >
@@ -301,7 +301,7 @@ export const SourceSelectorContent = ({
             ) : null}
             {windowSources.length > 0 ? (
               <div className="space-y-1">
-                <div className="text-foreground flex items-center gap-2 px-3 py-2 text-[10px] font-semibold tracking-[0.08em] uppercase">
+                <div className="flex items-center gap-2 px-3 py-2 text-[10px] font-semibold tracking-[0.08em] text-stone-400 uppercase">
                   {t("recording.windows")}
                 </div>
                 <div className="space-y-0.5">
@@ -313,7 +313,7 @@ export const SourceSelectorContent = ({
             ) : null}
           </motion.div>
         ) : (
-          <div className="text-muted py-8 text-center text-sm">
+          <div className="py-8 text-center text-sm text-stone-400">
             {t("recording.noSourcesFound")}
           </div>
         )}
@@ -470,9 +470,9 @@ export const SourceSelector = React.memo(function SourceSelector({
       onPointerEnter={prefetchSources}
       onFocusCapture={prefetchSources}
       className={cn(
-        "group no-drag max-w-45 min-w-0 shrink-0 gap-2 rounded-[11px] px-3 text-[12px] font-medium",
-        "border-[#2a2a34] bg-[#1a1a22] text-[#eeeef2] transition-all hover:border-[#3e3e4c] hover:bg-[#20202a]",
-        "data-[state=open]:border-[#3e3e4c] data-[state=open]:bg-[#20202a]",
+        "group no-drag max-w-45 min-w-0 shrink-0 gap-2 rounded-[10px] px-3 text-[12px] font-medium",
+        "border-white/10 bg-[#171411]/90 text-stone-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-[background-color,border-color,color] hover:border-white/20 hover:bg-[#201c18]/95",
+        "data-[state=open]:border-white/20 data-[state=open]:bg-[#201c18]/95",
       )}
       title={selectedSource}
     >
@@ -483,7 +483,7 @@ export const SourceSelector = React.memo(function SourceSelector({
       <ArrowUp01Icon
         size={10}
         className={cn(
-          "ml-0.5 shrink-0 text-[#6b6b78] transition-transform duration-200",
+          "ml-0.5 shrink-0 text-stone-500 transition-transform duration-200",
           open ? "" : "rotate-180",
         )}
       />
@@ -496,7 +496,7 @@ export const SourceSelector = React.memo(function SourceSelector({
     <Popover open={open} onOpenChange={onOpenChange} modal={false}>
       <PopoverTrigger>{trigger}</PopoverTrigger>
       <PopoverContent
-        className="  w-80 p-0"
+        className="w-80 rounded-xl border border-white/10 bg-[#171411]/95 p-0 text-stone-100 shadow-[0_24px_70px_rgba(13,12,10,0.42),0_8px_24px_rgba(13,12,10,0.3),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl backdrop-saturate-125"
         align="start"
         sideOffset={8}
         side="top"

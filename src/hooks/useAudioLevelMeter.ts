@@ -78,8 +78,8 @@ export function useAudioLevelMeter(options: AudioLevelMeterOptions) {
 
           let sum = 0;
           for (let index = 0; index < dataArray.length; index++) {
-            // @ts-expect-error - This is the correct type for dataArray elements
-            sum += dataArray[index] * dataArray[index];
+            const sample = dataArray[index] ?? 0;
+            sum += sample * sample;
           }
 
           const rms = Math.sqrt(sum / dataArray.length);

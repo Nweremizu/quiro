@@ -37,6 +37,42 @@ function broadcastSelectedSourceChange() {
   }
 }
 
+function sortDisplaysForSourcePicker<
+  T extends { id: number; bounds: { x: number; y: number } },
+>(displays: T[], primaryDisplayId: string): T[] {
+  return [...displays].sort((left, right) => {
+    const leftIsPrimary = String(left.id) === primaryDisplayId;
+    const rightIsPrimary = String(right.id) === primaryDisplayId;
+    if (leftIsPrimary !== rightIsPrimary) {
+      return leftIsPrimary ? -1 : 1;
+    }
+
+    return (
+      left.bounds.x - right.bounds.x ||
+      left.bounds.y - right.bounds.y ||
+      left.id - right.id
+    );
+  });
+}
+
+function isElectronScreenSource(
+  source: Electron.DesktopCapturerSource,
+): boolean {
+  return source.id.startsWith("screen:");
+}
+
+function getScreenSourceByDisplayIndex(
+  electronScreenSources: Electron.DesktopCapturerSource[],
+  displaysLength: number,
+  index: number,
+) {
+  if (electronScreenSources.length !== displaysLength) {
+    return undefined;
+  }
+
+  return electronScreenSources[index];
+}
+
 export function registerSourceHandlers({
   createEditorWindow,
   createSourceSelectorWindow,
@@ -100,35 +136,38 @@ export function registerSourceHandlers({
     );
     const ownAppName = normalizeDesktopSourceName(app.getName());
 
-    const displays = includeScreens
-      ? [...getScreen().getAllDisplays()].sort(
-          (left, right) =>
-            left.bounds.x - right.bounds.x ||
-            left.bounds.y - right.bounds.y ||
-            left.id - right.id,
-        )
-      : [];
     const primaryDisplayId = includeScreens
       ? String(getScreen().getPrimaryDisplay().id)
       : "";
+    const displays = includeScreens
+      ? sortDisplaysForSourcePicker(
+          getScreen().getAllDisplays(),
+          primaryDisplayId,
+        )
+      : [];
     const electronScreenSourcesByDisplayId = new Map(
       electronSources
-        .filter((source) => source.id.startsWith("screen:"))
+        .filter(isElectronScreenSource)
+        .filter((source) => String(source.display_id ?? "").length > 0)
         .map((source) => [String(source.display_id ?? ""), source] as const),
     );
     // On Linux, desktopCapturer display_id values may not match screen.getAllDisplays() IDs.
     // Keep an ordered list so we can fall back to position-based matching.
-    const electronScreenSourcesByIndex = electronSources.filter((source) =>
-      source.id.startsWith("screen:"),
-    );
+    const electronScreenSourcesByIndex =
+      electronSources.filter(isElectronScreenSource);
 
     const screenSources = displays.map((display, index) => {
       const displayId = String(display.id);
+      const sourceByDisplayId = electronScreenSourcesByDisplayId.get(displayId);
+      const sourceByIndex = getScreenSourceByDisplayIndex(
+        electronScreenSourcesByIndex,
+        displays.length,
+        index,
+      );
       const matchedSource =
-        electronScreenSourcesByDisplayId.get(displayId) ??
-        (electronScreenSourcesByIndex.length === displays.length
-          ? electronScreenSourcesByIndex[index]
-          : undefined);
+        sourceByDisplayId ??
+        (process.platform === "linux" ? sourceByIndex : undefined);
+      const thumbnailSource = sourceByDisplayId ?? sourceByIndex;
       const displayName =
         displayId === primaryDisplayId
           ? `Screen ${index + 1} (Primary)`
@@ -139,8 +178,8 @@ export function registerSourceHandlers({
         name: displayName,
         originalName: matchedSource?.name ?? displayName,
         display_id: displayId,
-        thumbnail: matchedSource?.thumbnail
-          ? matchedSource.thumbnail.toDataURL()
+        thumbnail: thumbnailSource?.thumbnail
+          ? thumbnailSource.thumbnail.toDataURL()
           : null,
         appIcon: null,
         sourceType: "screen" as const,
@@ -428,12 +467,11 @@ export function registerSourceHandlers({
       const resolvedBounds = bounds!;
 
       // ── 3. Show traveling wave highlight ──
-      // On macOS, screen highlights use workArea and no outward padding —
-      // macOS clamps window positions below the menu bar so outward
-      // padding only works on the left/top while right/bottom run off-screen.
+      // Screen highlights stay inside display bounds so adjacent monitors do
+      // not show a slice of the selection animation.
       const isScreen = source.id?.startsWith("screen:");
       const isMacScreen = isScreen && process.platform === "darwin";
-      const pad = isMacScreen ? 0 : 6;
+      const pad = isScreen ? 0 : 6;
       const highlightWin = new BrowserWindow({
         x: resolvedBounds.x - pad,
         y: resolvedBounds.y - pad,

@@ -100,7 +100,25 @@ function getLinearFocus(
   };
 }
 
-function getResolvedFocus(region: ZoomRegion, zoomScale: number): ZoomFocus {
+function getResolvedFocus(
+  region: ZoomRegion,
+  zoomScale: number,
+  timeMs?: number,
+): ZoomFocus {
+  if (
+    region.presetId === "pan-and-zoom" &&
+    region.endFocus &&
+    Number.isFinite(timeMs)
+  ) {
+    const progress = clamp01(
+      ((timeMs as number) - region.startMs) /
+        Math.max(1, region.endMs - region.startMs),
+    );
+    return clampFocusToScale(
+      getLinearFocus(region.focus, region.endFocus, progress),
+      zoomScale,
+    );
+  }
   return clampFocusToScale(region.focus, zoomScale);
 }
 
@@ -187,7 +205,7 @@ function getActiveRegion(
   return {
     region: {
       ...activeRegion,
-      focus: getResolvedFocus(activeRegion, activeScale),
+      focus: getResolvedFocus(activeRegion, activeScale, timeMs),
     },
     strength: activeRegions[0].strength,
     blendedScale: null,

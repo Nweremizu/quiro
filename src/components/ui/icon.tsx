@@ -1,4 +1,3 @@
-import React from 'react';
 import type { HugeiconsProps, IconSvgElement } from '@hugeicons/react';
 import { HugeiconsIcon } from '@hugeicons/react';
 

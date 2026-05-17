@@ -1,9 +1,13 @@
 import { useTimelineContext } from "dnd-timeline";
+import type { Span } from "dnd-timeline";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
 import type { AudioPeaksData } from "./useAudioPeaks";
 
 interface AudioWaveformProps {
 	peaks: AudioPeaksData;
+	span?: Span;
+	className?: string;
 }
 
 /**
@@ -11,7 +15,7 @@ interface AudioWaveformProps {
  * Automatically syncs with the timeline's visible range so the waveform
  * scrolls and zooms together with the clip items above it.
  */
-export default function AudioWaveform({ peaks }: AudioWaveformProps) {
+export default function AudioWaveform({ peaks, span, className }: AudioWaveformProps) {
 	const canvasRef = useRef<HTMLCanvasElement>(null);
 	const { range } = useTimelineContext();
 	const [resizeKey, setResizeKey] = useState(0);
@@ -53,8 +57,8 @@ export default function AudioWaveform({ peaks }: AudioWaveformProps) {
 		const { peaks: peakData, durationMs } = peaks;
 		if (durationMs <= 0 || peakData.length === 0) return;
 
-		const visibleStartMs = range.start;
-		const visibleEndMs = range.end;
+		const visibleStartMs = span?.start ?? range.start;
+		const visibleEndMs = span?.end ?? range.end;
 		const visibleDurationMs = visibleEndMs - visibleStartMs;
 		if (visibleDurationMs <= 0) return;
 
@@ -74,15 +78,18 @@ export default function AudioWaveform({ peaks }: AudioWaveformProps) {
 			ctx.lineTo(px, midY + barHeight);
 		}
 
-		ctx.strokeStyle = "rgba(255, 255, 255, 0.55)";
+		const computedStyle = getComputedStyle(canvas);
+		ctx.strokeStyle =
+			computedStyle.getPropertyValue("--timeline-waveform-stroke").trim() ||
+			"rgba(240, 128, 48, 0.72)";
 		ctx.lineWidth = dpr;
 		ctx.stroke();
-	}, [peaks, range.start, range.end, resizeKey]);
+	}, [peaks, range.start, range.end, resizeKey, span?.start, span?.end]);
 
 	return (
 		<canvas
 			ref={setCanvasRef}
-			className="absolute inset-0 w-full h-full pointer-events-none"
+			className={cn("absolute inset-0 w-full h-full pointer-events-none", className)}
 			style={{ display: "block" }}
 		/>
 	);

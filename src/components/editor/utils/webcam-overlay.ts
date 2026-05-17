@@ -1,6 +1,7 @@
 import type {
   CropRegion,
   WebcamCorner,
+  WebcamLayoutMode,
   WebcamPositionPreset,
 } from "@/types/editor";
 
@@ -94,10 +95,67 @@ export function getWebcamOverlaySizePx({
   return Math.min(maxSize, Math.max(MIN_WEBCAM_OVERLAY_SIZE_PX, scaledSize));
 }
 
+export function getWebcamOverlaySizeRect({
+  containerWidth,
+  containerHeight,
+  sizePercent,
+  margin,
+  zoomScale,
+  reactToZoom,
+  aspectRatio = 1,
+  layoutMode = "overlay",
+}: {
+  containerWidth: number;
+  containerHeight: number;
+  sizePercent: number;
+  margin: number;
+  zoomScale: number;
+  reactToZoom: boolean;
+  aspectRatio?: number;
+  layoutMode?: WebcamLayoutMode;
+}): { width: number; height: number } {
+  const safeAspectRatio =
+    Number.isFinite(aspectRatio) && aspectRatio > 0 ? aspectRatio : 1;
+
+  if (layoutMode === "side-by-side") {
+    const safeMargin = Math.max(0, margin);
+    const width = Math.max(
+      MIN_WEBCAM_OVERLAY_SIZE_PX,
+      containerWidth * 0.36 - safeMargin,
+    );
+    const height = Math.max(
+      MIN_WEBCAM_OVERLAY_SIZE_PX,
+      Math.min(containerHeight - safeMargin * 2, width / safeAspectRatio),
+    );
+    return { width, height };
+  }
+
+  const baseHeight = getWebcamOverlaySizePx({
+    containerWidth,
+    containerHeight,
+    sizePercent,
+    margin,
+    zoomScale,
+    reactToZoom,
+  });
+  const width = baseHeight * safeAspectRatio;
+  const maxWidth = Math.max(
+    MIN_WEBCAM_OVERLAY_SIZE_PX,
+    containerWidth - Math.max(0, margin) * 2,
+  );
+
+  return {
+    width: Math.min(maxWidth, Math.max(MIN_WEBCAM_OVERLAY_SIZE_PX, width)),
+    height: baseHeight,
+  };
+}
+
 export function getWebcamOverlayPosition({
   containerWidth,
   containerHeight,
   size,
+  width,
+  height,
   margin,
   positionPreset,
   positionX,
@@ -107,6 +165,8 @@ export function getWebcamOverlayPosition({
   containerWidth: number;
   containerHeight: number;
   size: number;
+  width?: number;
+  height?: number;
   margin: number;
   positionPreset: WebcamPositionPreset;
   positionX: number;
@@ -114,8 +174,16 @@ export function getWebcamOverlayPosition({
   legacyCorner: WebcamCorner;
 }): { x: number; y: number } {
   const safeMargin = Math.max(0, margin);
-  const availableWidth = Math.max(0, containerWidth - size - safeMargin * 2);
-  const availableHeight = Math.max(0, containerHeight - size - safeMargin * 2);
+  const itemWidth = Number.isFinite(width) ? (width as number) : size;
+  const itemHeight = Number.isFinite(height) ? (height as number) : size;
+  const availableWidth = Math.max(
+    0,
+    containerWidth - itemWidth - safeMargin * 2,
+  );
+  const availableHeight = Math.max(
+    0,
+    containerHeight - itemHeight - safeMargin * 2,
+  );
   const presetPosition =
     positionPreset === "custom"
       ? { x: clamp(positionX, 0, 1), y: clamp(positionY, 0, 1) }

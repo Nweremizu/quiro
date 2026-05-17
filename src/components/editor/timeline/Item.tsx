@@ -14,6 +14,13 @@ import {
   ZoomIn,
 } from "@hugeicons/core-free-icons";
 import { IconGauge } from "@tabler/icons-react";
+import AudioWaveform from "./AudioWaveform";
+import type { AudioPeaksData } from "./useAudioPeaks";
+import {
+  DEFAULT_TIMELINE_DENSITY_MODE,
+  getTimelineDensityConfig,
+  type TimelineDensityMode,
+} from "./timelineLayout";
 
 interface ItemProps {
   id: string;
@@ -26,6 +33,8 @@ interface ItemProps {
   zoomMode?: "auto" | "manual";
   speedValue?: number;
   variant?: "zoom" | "trim" | "clip" | "annotation" | "speed" | "audio";
+  waveformPeaks?: AudioPeaksData | null;
+  densityMode?: TimelineDensityMode;
 }
 
 // Map zoom depth to multiplier labels
@@ -58,12 +67,15 @@ export default function Item({
   zoomMode = "auto",
   speedValue,
   variant = "zoom",
+  waveformPeaks,
+  densityMode = DEFAULT_TIMELINE_DENSITY_MODE,
   children,
 }: ItemProps) {
   const shouldReduceMotion = useReducedMotion();
   const [isHovered, setIsHovered] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
+  const density = getTimelineDensityConfig(densityMode);
 
   const { setNodeRef, attributes, listeners, itemStyle, itemContentStyle } =
     useItem({
@@ -83,7 +95,7 @@ export default function Item({
     : isTrim
       ? glassStyles.glassRed
       : isClip
-        ? glassStyles.glassCyan
+        ? glassStyles.glassBrand
         : isSpeed
           ? glassStyles.glassAmber
           : isAudio
@@ -103,26 +115,9 @@ export default function Item({
     overflow: "hidden",
   };
 
-  // Spring config: snappy, responsive
-  const springConfig = {
-    type: "spring",
-    stiffness: 280,
-    damping: 22,
-    mass: 1.1,
-  } as const;
-
-  // Scale multiplier based on state — reduced to prevent overflow
-  const getScale = () => {
-    if (isDragging) return 0.99;
-    if (isSelected) return 1.008;
-    if (isHovered) return 1.004;
-    return 1;
-  };
-
-  // Entrance animation (staggered per item index)
   const initialState = shouldReduceMotion
-    ? { opacity: 1, scale: 1, y: 0 }
-    : { opacity: 0, scale: 0.94, y: 4 };
+    ? { opacity: 1, y: 0 }
+    : { opacity: 0, y: 4 };
 
   return (
     <motion.div
@@ -131,7 +126,7 @@ export default function Item({
       {...listeners}
       {...attributes}
       initial={initialState}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
+      animate={{ opacity: 1, y: 0 }}
       transition={
         shouldReduceMotion
           ? { duration: 0 }
@@ -168,15 +163,10 @@ export default function Item({
             isSelected && glassStyles.selected,
           )}
           style={{
-            height: "85%",
-            minHeight: 22,
+            height: `${density.itemHeightPercent}%`,
+            minHeight: density.itemMinHeightPx,
             minWidth: MIN_ITEM_PX,
-            transformOrigin: "center",
           }}
-          animate={{
-            scale: getScale(),
-          }}
-          transition={shouldReduceMotion ? { duration: 0 } : springConfig}
           onClick={(event) => {
             event.stopPropagation();
             onSelect?.();
@@ -187,6 +177,15 @@ export default function Item({
             onSelect?.();
           }}
         >
+          {isClip && waveformPeaks ? (
+            <div className={glassStyles.waveformLayer}>
+              <AudioWaveform
+                peaks={waveformPeaks}
+                span={span}
+                className={glassStyles.waveformCanvas}
+              />
+            </div>
+          ) : null}
           <motion.div
             className={cn(glassStyles.zoomEndCap, glassStyles.left)}
             style={{ cursor: "col-resize", pointerEvents: "auto" }}
@@ -211,7 +210,10 @@ export default function Item({
           />
           <motion.div
             ref={contentRef}
-            className="relative z-10 flex flex-col items-center justify-center text-black/70 dark:text-white/90 opacity-80 group-hover:opacity-100 select-none overflow-hidden"
+            className={cn(
+              glassStyles.itemContent,
+              "relative z-10 flex flex-col items-center justify-center opacity-80 group-hover:opacity-100 select-none overflow-hidden",
+            )}
             animate={{
               opacity: isDragging ? 0.6 : isHovered || isSelected ? 1 : 0.8,
             }}
@@ -233,9 +235,14 @@ export default function Item({
                 <>
                   <HugeiconsIcon
                     icon={ZoomIn}
-                    className="w-3.5 h-3.5 shrink-0"
+                    className={cn(density.iconClassName, "shrink-0")}
                   />
-                  <span className="text-[11px] font-semibold tracking-tight whitespace-nowrap">
+                  <span
+                    className={cn(
+                      density.primaryLabelClassName,
+                      "font-semibold tracking-tight whitespace-nowrap",
+                    )}
+                  >
                     {ZOOM_LABELS[zoomDepth] || `${zoomDepth}×`}
                   </span>
                 </>
@@ -243,23 +250,41 @@ export default function Item({
                 <>
                   <HugeiconsIcon
                     icon={Scissors}
-                    className="w-3.5 h-3.5 shrink-0"
+                    className={cn(density.iconClassName, "shrink-0")}
                   />
-                  <span className="text-[11px] font-semibold tracking-tight whitespace-nowrap">
+                  <span
+                    className={cn(
+                      density.primaryLabelClassName,
+                      "font-semibold tracking-tight whitespace-nowrap",
+                    )}
+                  >
                     Trim
                   </span>
                 </>
               ) : isClip ? (
                 <>
-                  <HugeiconsIcon icon={Film} className="w-3.5 h-3.5 shrink-0" />
-                  <span className="text-[11px] font-semibold tracking-tight whitespace-nowrap">
+                  <HugeiconsIcon
+                    icon={Film}
+                    className={cn(density.iconClassName, "shrink-0")}
+                  />
+                  <span
+                    className={cn(
+                      density.primaryLabelClassName,
+                      "font-semibold tracking-tight whitespace-nowrap",
+                    )}
+                  >
                     Clip
                   </span>
                 </>
               ) : isSpeed ? (
                 <>
-                  <IconGauge className="w-3.5 h-3.5 shrink-0" />
-                  <span className="text-[11px] font-semibold tracking-tight whitespace-nowrap">
+                  <IconGauge className={cn(density.iconClassName, "shrink-0")} />
+                  <span
+                    className={cn(
+                      density.primaryLabelClassName,
+                      "font-semibold tracking-tight whitespace-nowrap",
+                    )}
+                  >
                     {speedValue !== undefined ? `${speedValue}×` : "Speed"}
                   </span>
                 </>
@@ -267,9 +292,14 @@ export default function Item({
                 <>
                   <HugeiconsIcon
                     icon={Music}
-                    className="w-3.5 h-3.5 shrink-0"
+                    className={cn(density.iconClassName, "shrink-0")}
                   />
-                  <span className="text-[11px] font-semibold tracking-tight truncate max-w-full">
+                  <span
+                    className={cn(
+                      density.primaryLabelClassName,
+                      "font-semibold tracking-tight truncate max-w-full",
+                    )}
+                  >
                     {children}
                   </span>
                 </>
@@ -277,15 +307,20 @@ export default function Item({
                 <>
                   <HugeiconsIcon
                     icon={MessageSquare}
-                    className="w-3.5 h-3.5 shrink-0"
+                    className={cn(density.iconClassName, "shrink-0")}
                   />
-                  <span className="text-[11px] font-semibold tracking-tight whitespace-nowrap">
+                  <span
+                    className={cn(
+                      density.primaryLabelClassName,
+                      "font-semibold tracking-tight whitespace-nowrap",
+                    )}
+                  >
                     {children}
                   </span>
                 </>
               )}
             </motion.div>
-            {isZoom ? (
+            {density.showSecondaryItemLabel && isZoom ? (
               <motion.div
                 className="flex items-center gap-0.5"
                 animate={{
@@ -303,9 +338,12 @@ export default function Item({
                   {zoomMode === "manual" ? "Manual" : "Auto"}
                 </span>
               </motion.div>
-            ) : (
+            ) : density.showSecondaryItemLabel ? (
               <motion.span
-                className="text-[9px] tabular-nums tracking-tight whitespace-nowrap"
+                className={cn(
+                  density.secondaryLabelClassName,
+                  "tabular-nums tracking-tight whitespace-nowrap",
+                )}
                 animate={{
                   opacity: isSelected ? 0.6 : isHovered ? 0.5 : 0,
                 }}
@@ -315,7 +353,7 @@ export default function Item({
               >
                 {timeLabel}
               </motion.span>
-            )}
+            ) : null}
           </motion.div>
         </motion.div>
       </div>

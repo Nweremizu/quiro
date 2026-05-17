@@ -4,6 +4,7 @@ import type {
   AutoCaptionSettings,
   CaptionCue,
   CropRegion,
+  CursorClickEffectSettings,
   CursorStyle,
   CursorTelemetryPoint,
   Padding,
@@ -92,6 +93,7 @@ interface VideoExporterConfig extends ExportConfig {
   cursorMotionBlur?: number;
   cursorClickBounce?: number;
   cursorClickBounceDuration?: number;
+  cursorClickEffect?: CursorClickEffectSettings;
   cursorSway?: number;
   zoomSmoothness?: number;
   frame?: string | null;
@@ -273,6 +275,7 @@ export class VideoExporter {
         cursorMotionBlur: this.config.cursorMotionBlur,
         cursorClickBounce: this.config.cursorClickBounce,
         cursorClickBounceDuration: this.config.cursorClickBounceDuration,
+        cursorClickEffect: this.config.cursorClickEffect,
         cursorSway: this.config.cursorSway,
         zoomSmoothness: this.config.zoomSmoothness,
         frame: this.config.frame,

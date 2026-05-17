@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/popover";
 import { useAudioLevelMeter } from "@/hooks/useAudioLevelMeter";
 import { AudioLevelMeter } from "@/components/ui/audio-level-meter";
-import styles from "../LaunchWindow.module.css";
 import type { DeviceOption } from "./launchPopoverTypes";
 import { useHudInteraction } from "@/contexts/launch/HudInteractionContext";
 import { cn } from "@/lib/utils";
@@ -32,9 +31,9 @@ export function DropdownItem({
     <button
       type="button"
       className={cn(
-        "flex w-full items-center gap-2.5 rounded-2xl px-2 py-2.5 text-left text-foreground",
-        "cursor-pointer transition-colors duration-150 ease-out hover:bg-accent/60",
-        selected ? "bg-accent/70" : "",
+        "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-left text-stone-100",
+        "cursor-pointer transition-[background-color,color] duration-150 ease-out hover:bg-white/10",
+        selected ? "bg-primary/20 text-primary" : "",
       )}
       onClick={onClick}
     >
@@ -62,7 +61,11 @@ export function MicDeviceRow({
   return (
     <button
       type="button"
-      className={`${styles.ddItem} ${selected ? styles.ddItemSelected : ""}`}
+      className={cn(
+        "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-left text-stone-100",
+        "cursor-pointer transition-[background-color,color] duration-150 ease-out hover:bg-white/10",
+        selected ? "bg-primary/20 text-primary" : "",
+      )}
       onClick={onSelect}
     >
       <span className="shrink-0">
@@ -97,11 +100,11 @@ export function HudPopover({
       <PopoverTrigger>{trigger}</PopoverTrigger>
       <PopoverContent
         className={cn(
-          "source-selector-scroll w-75 max-h-100 overflow-y-auto rounded-2xl border border-border",
-          "bg-popover p-2 text-popover-foreground shadow-2xl",
-          "backdrop-blur-md backdrop-saturate-150",
+          "source-selector-scroll w-75 max-h-100 overflow-y-auto rounded-xl border border-white/10",
+          "bg-[#171411]/95 p-2 text-stone-100 shadow-[0_24px_70px_rgba(13,12,10,0.42),0_8px_24px_rgba(13,12,10,0.3),inset_0_1px_0_rgba(255,255,255,0.08)]",
+          "backdrop-blur-xl backdrop-saturate-125",
           "mt-auto mb-2 pointer-events-auto",
-          styles.electronNoDrag,
+          "no-drag",
         )}
         side="top"
         align={align}

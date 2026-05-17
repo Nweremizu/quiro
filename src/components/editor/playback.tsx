@@ -49,6 +49,7 @@ import {
   type AnnotationRegion,
   type AutoCaptionSettings,
   type CaptionCue,
+  type CursorClickEffectSettings,
   type CursorStyle,
   type Padding,
   type SpeedRegion,
@@ -104,13 +105,14 @@ import {
   type AspectRatio,
   formatAspectRatioForCSS,
 } from "@electron/utils/aspectRatioUtils";
-// import { AnnotationOverlay } from "./AnnotationOverlay";
+import { AnnotationOverlay } from "./AnnotationOverlay";
 import {
   DEFAULT_CONNECTED_ZOOM_DURATION_MS,
   DEFAULT_CONNECTED_ZOOM_EASING,
   DEFAULT_CONNECTED_ZOOM_GAP_MS,
   DEFAULT_CURSOR_CLICK_BOUNCE,
   DEFAULT_CURSOR_CLICK_BOUNCE_DURATION,
+  DEFAULT_CURSOR_CLICK_EFFECT,
   DEFAULT_CURSOR_MOTION_BLUR,
   DEFAULT_CURSOR_SIZE,
   DEFAULT_CURSOR_SMOOTHING,
@@ -152,8 +154,9 @@ import {
 import {
   getWebcamCropSourceRect,
   getWebcamOverlayPosition,
-  getWebcamOverlaySizePx,
+  getWebcamOverlaySizeRect,
 } from "@/components/editor/utils/webcam-overlay";
+import { resolveAnnotationAtTime } from "@/components/editor/utils/annotation-keyframes";
 
 type PlaybackAnimationState = {
   scale: number;
@@ -304,6 +307,7 @@ interface VideoPlaybackProps {
   onPreviewReadyChange?: (ready: boolean) => void;
   onTimeUpdate: (time: number) => void;
   currentTime: number;
+
   onPlayStateChange: (playing: boolean) => void;
   onError: (error: string) => void;
   wallpaper?: string;
@@ -364,6 +368,7 @@ interface VideoPlaybackProps {
   cursorMotionBlur?: number;
   cursorClickBounce?: number;
   cursorClickBounceDuration?: number;
+  cursorClickEffect?: CursorClickEffectSettings;
   cursorSway?: number;
   volume?: number;
   suspendRendering?: boolean;
@@ -394,8 +399,8 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
       zoomRegions,
       selectedZoomId,
       onSelectZoom,
-      onZoomFocusChange,
       isPlaying,
+      onZoomFocusChange,
       showShadow,
       shadowIntensity = 0,
       backgroundBlur = 0,
@@ -442,6 +447,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
       cursorMotionBlur = DEFAULT_CURSOR_MOTION_BLUR,
       cursorClickBounce = DEFAULT_CURSOR_CLICK_BOUNCE,
       cursorClickBounceDuration = DEFAULT_CURSOR_CLICK_BOUNCE_DURATION,
+      cursorClickEffect = DEFAULT_CURSOR_CLICK_EFFECT,
       cursorSway = DEFAULT_CURSOR_SWAY,
       volume = 1,
       suspendRendering = false,
@@ -552,6 +558,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
     const cursorMotionBlurRef = useRef(cursorMotionBlur);
     const cursorClickBounceRef = useRef(cursorClickBounce);
     const cursorClickBounceDurationRef = useRef(cursorClickBounceDuration);
+    const cursorClickEffectRef = useRef(cursorClickEffect);
     const cursorSwayRef = useRef(cursorSway);
     const zoomMotionBlurRef = useRef(zoomMotionBlur);
     const zoomMotionBlurTuningRef = useRef(zoomMotionBlurTuning);
@@ -743,6 +750,8 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
     const webcamTimeOffsetMs = webcam?.timeOffsetMs;
     const webcamCropRegion = webcam?.cropRegion;
     const webcamMirror = webcam?.mirror ?? false;
+    const webcamAspectRatio = webcam?.aspectRatio ?? 1;
+    const webcamLayoutMode = webcam?.layoutMode ?? "overlay";
     const webcamCropPreviewContentStyle = useMemo<React.CSSProperties>(() => {
       if (!webcamVideoDimensions) {
         return { opacity: 0 };
@@ -787,18 +796,22 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
           return;
         }
 
-        const scaledSize = getWebcamOverlaySizePx({
+        const scaledSize = getWebcamOverlaySizeRect({
           containerWidth: overlay.clientWidth,
           containerHeight: overlay.clientHeight,
           sizePercent: webcamSize,
           margin: webcamMargin,
           zoomScale,
           reactToZoom: webcamReactToZoom,
+          aspectRatio: webcamAspectRatio,
+          layoutMode: webcamLayoutMode,
         });
         const { x, y } = getWebcamOverlayPosition({
           containerWidth: overlay.clientWidth,
           containerHeight: overlay.clientHeight,
-          size: scaledSize,
+          size: scaledSize.height,
+          width: scaledSize.width,
+          height: scaledSize.height,
           margin: webcamMargin,
           positionPreset: webcamPositionPreset,
           positionX: webcamPositionX,
@@ -809,18 +822,18 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
         bubble.style.display = "block";
         bubble.style.left = `${x}px`;
         bubble.style.top = `${y}px`;
-        bubble.style.width = `${scaledSize}px`;
-        bubble.style.height = `${scaledSize}px`;
-        bubble.style.aspectRatio = "1 / 1";
+        bubble.style.width = `${scaledSize.width}px`;
+        bubble.style.height = `${scaledSize.height}px`;
+        bubble.style.aspectRatio = `${scaledSize.width} / ${scaledSize.height}`;
         const squirclePath = getSquircleSvgPath({
           x: 0,
           y: 0,
-          width: scaledSize,
-          height: scaledSize,
+          width: scaledSize.width,
+          height: scaledSize.height,
           radius: webcamCornerRadius,
         });
-        bubble.style.filter = `drop-shadow(0 ${Math.round(scaledSize * 0.06)}px ${Math.round(
-          scaledSize * 0.22,
+        bubble.style.filter = `drop-shadow(0 ${Math.round(scaledSize.height * 0.06)}px ${Math.round(
+          scaledSize.height * 0.22,
         )}px rgba(0, 0, 0, ${webcamShadow}))`;
         bubble.style.borderRadius = "0px";
         bubble.style.boxShadow = "none";
@@ -838,6 +851,8 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
         webcamCorner,
         webcamCornerRadius,
         webcamEnabled,
+        webcamAspectRatio,
+        webcamLayoutMode,
         webcamMargin,
         webcamPositionPreset,
         webcamPositionX,
@@ -1627,6 +1642,10 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
     }, [cursorClickBounceDuration]);
 
     useEffect(() => {
+      cursorClickEffectRef.current = cursorClickEffect;
+    }, [cursorClickEffect]);
+
+    useEffect(() => {
       cursorSwayRef.current = cursorSway;
     }, [cursorSway]);
 
@@ -1935,6 +1954,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
             motionBlur: cursorMotionBlurRef.current,
             clickBounce: cursorClickBounceRef.current,
             clickBounceDuration: cursorClickBounceDurationRef.current,
+            clickEffect: cursorClickEffectRef.current,
             sway: cursorSwayRef.current,
           });
           cursorOverlayRef.current = cursorOverlay;
@@ -2539,6 +2559,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
       overlay.setMotionBlur(cursorMotionBlur);
       overlay.setClickBounce(cursorClickBounce);
       overlay.setClickBounceDuration(cursorClickBounceDuration);
+      overlay.setClickEffect(cursorClickEffect);
       overlay.setSway(cursorSway);
 
       void (async () => {
@@ -2570,6 +2591,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
       cursorMotionBlur,
       cursorClickBounce,
       cursorClickBounceDuration,
+      cursorClickEffect,
       cursorSway,
     ]);
 
@@ -2861,7 +2883,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
           >
             <div
               ref={focusIndicatorRef}
-              className="absolute rounded-md border border-[#2563EB]/80 bg-[#2563EB]/20 shadow-[0_0_0_1px_rgba(37,99,235,0.35)]"
+              className="absolute rounded-md border border-primary/80 bg-primary/20 shadow-[0_0_0_1px_rgba(240,128,48,0.35)]"
               style={{ display: "none", pointerEvents: "none" }}
             />
             {webcam && webcamVideoPath ? (
@@ -2999,58 +3021,67 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
                 </div>
               </div>
             ) : null}
-            {/* {(() => {
-							const filtered = (annotationRegions || []).filter((annotation) => {
-								if (
-									typeof annotation.startMs !== "number" ||
-									typeof annotation.endMs !== "number"
-								)
-									return false;
+            {(() => {
+              const timeMs = Math.round(currentTime * 1000);
+              const filtered = (annotationRegions || [])
+                .filter((annotation) => {
+                  if (
+                    typeof annotation.startMs !== "number" ||
+                    typeof annotation.endMs !== "number"
+                  )
+                    return false;
+                  if (annotation.visible === false) return false;
 
-								if (annotation.id === selectedAnnotationId) return true;
+                  if (annotation.id === selectedAnnotationId) return true;
 
-								const timeMs = Math.round(currentTime * 1000);
-								return timeMs >= annotation.startMs && timeMs <= annotation.endMs;
-							});
+                  return (
+                    timeMs >= annotation.startMs && timeMs <= annotation.endMs
+                  );
+                })
+                .map((annotation) =>
+                  resolveAnnotationAtTime(annotation, timeMs),
+                );
 
-							// Sort by z-index (lowest to highest) so higher z-index renders on top
-							const sorted = [...filtered].sort((a, b) => a.zIndex - b.zIndex);
+              // Sort by z-index (lowest to highest) so higher z-index renders on top
+              const sorted = [...filtered].sort((a, b) => a.zIndex - b.zIndex);
 
-							// Handle click-through cycling: when clicking same annotation, cycle to next
-							const handleAnnotationClick = (clickedId: string) => {
-								if (!onSelectAnnotation) return;
+              // Handle click-through cycling: when clicking same annotation, cycle to next
+              const handleAnnotationClick = (clickedId: string) => {
+                if (!onSelectAnnotation) return;
 
-								// If clicking on already selected annotation and there are multiple overlapping
-								if (clickedId === selectedAnnotationId && sorted.length > 1) {
-									// Find current index and cycle to next
-									const currentIndex = sorted.findIndex(
-										(a) => a.id === clickedId,
-									);
-									const nextIndex = (currentIndex + 1) % sorted.length;
-									onSelectAnnotation(sorted[nextIndex].id);
-								} else {
-									// First click or clicking different annotation
-									onSelectAnnotation(clickedId);
-								}
-							};
+                // If clicking on already selected annotation and there are multiple overlapping
+                if (clickedId === selectedAnnotationId && sorted.length > 1) {
+                  // Find current index and cycle to next
+                  const currentIndex = sorted.findIndex(
+                    (a) => a.id === clickedId,
+                  );
+                  const nextIndex = (currentIndex + 1) % sorted.length;
+                  onSelectAnnotation(sorted[nextIndex].id);
+                } else {
+                  // First click or clicking different annotation
+                  onSelectAnnotation(clickedId);
+                }
+              };
 
-							return sorted.map((annotation) => (
-								<AnnotationOverlay
-									key={annotation.id}
-									annotation={annotation}
-									isSelected={annotation.id === selectedAnnotationId}
-									containerWidth={overlayRef.current?.clientWidth || 800}
-									containerHeight={overlayRef.current?.clientHeight || 600}
-									onPositionChange={(id, position) =>
-										onAnnotationPositionChange?.(id, position)
-									}
-									onSizeChange={(id, size) => onAnnotationSizeChange?.(id, size)}
-									onClick={handleAnnotationClick}
-									zIndex={annotation.zIndex}
-									isSelectedBoost={annotation.id === selectedAnnotationId}
-								/>
-							));
-						})()} */}
+              return sorted.map((annotation) => (
+                <AnnotationOverlay
+                  key={annotation.id}
+                  annotation={annotation}
+                  isSelected={annotation.id === selectedAnnotationId}
+                  containerWidth={overlayRef.current?.clientWidth || 800}
+                  containerHeight={overlayRef.current?.clientHeight || 600}
+                  onPositionChange={(id, position) =>
+                    onAnnotationPositionChange?.(id, position)
+                  }
+                  onSizeChange={(id, size) =>
+                    onAnnotationSizeChange?.(id, size)
+                  }
+                  onClick={handleAnnotationClick}
+                  zIndex={annotation.zIndex}
+                  isSelectedBoost={annotation.id === selectedAnnotationId}
+                />
+              ));
+            })()}
           </div>
         )}
         {/* Keep the source video off-screen instead of display:none so the

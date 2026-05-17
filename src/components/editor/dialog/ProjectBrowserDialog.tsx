@@ -192,14 +192,14 @@ export default function ProjectBrowserDialog({
         ref={panelRef}
         role="dialog"
         aria-label="Projects"
-        className="pointer-events-auto mb-1.5 w-[300px] max-h-[400px] overflow-hidden rounded-[14px] border border-foreground/[0.07] bg-editor-panel/[0.96] text-foreground shadow-[0_12px_32px_rgba(0,0,0,0.22),0_2px_10px_rgba(0,0,0,0.1)] animate-in fade-in-0 duration-150"
+        className="pointer-events-auto mb-1.5 w-75 max-h-100 overflow-hidden rounded-[14px] border border-foreground/[0.07] bg-card/96 text-foreground shadow-xl animate-in fade-in-0 duration-150"
       >
         <div className="border-b border-foreground/10 px-3 py-2.5">
           <div className="text-sm font-medium tracking-tight text-foreground">
             Projects
           </div>
         </div>
-        <div className="max-h-[360px] overflow-y-auto px-2.5 py-2.5">
+        <div className="max-h-90 overflow-y-auto px-2.5 py-2.5">
           {visibleEntries.length > 0 ? (
             <div className="grid grid-cols-2 gap-2">
               {visibleEntries.map((entry) => {
@@ -210,10 +210,15 @@ export default function ProjectBrowserDialog({
                   <button
                     key={entry.path}
                     type="button"
+                    title={
+                      entry.isCurrent
+                        ? "Repair & reload current project"
+                        : "Open project"
+                    }
                     onClick={() => onOpenProject(entry.path)}
                     className="group flex flex-col gap-1 rounded-lg bg-transparent p-0.5 text-left outline-none transition focus:outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
                   >
-                    <div className="relative aspect-[16/10] w-full overflow-hidden rounded-[5px] bg-editor-dialog-alt shadow-[0_10px_18px_rgba(0,0,0,0.28)] transition duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_16px_30px_rgba(0,0,0,0.38)]">
+                    <div className="relative aspect-16/10 w-full overflow-hidden rounded-[5px] bg-editor-dialog-alt shadow-[0_10px_18px_rgba(0,0,0,0.28)] transition duration-200 group-hover:scale-[1.01] group-hover:shadow-[0_16px_30px_rgba(0,0,0,0.38)]">
                       {thumbnailSrc ? (
                         <img
                           src={thumbnailSrc}
@@ -222,14 +227,14 @@ export default function ProjectBrowserDialog({
                           draggable={false}
                         />
                       ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-[linear-gradient(180deg,_rgba(37,99,235,0.22),_rgba(13,17,23,0.92))] text-[10px] font-medium text-white/60">
+                        <div className="flex h-full w-full items-center justify-center bg-[linear-gradient(180deg,rgba(240,128,48,0.14),rgba(13,17,23,0.92))] text-[10px] font-medium text-white/60">
                           No preview yet
                         </div>
                       )}
                       {entry.isCurrent ? (
                         <div className="absolute right-1.5 top-1.5">
-                          <span className="rounded-[5px] bg-[#2563EB] px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.14em] text-white shadow-[0_8px_20px_rgba(37,99,235,0.28)]">
-                            Current
+                          <span className="rounded-[5px] bg-primary px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.14em] text-white shadow-[0_8px_20px_rgba(240,128,48,0.14)]">
+                            Repair
                           </span>
                         </div>
                       ) : null}
@@ -244,7 +249,7 @@ export default function ProjectBrowserDialog({
               })}
             </div>
           ) : (
-            <div className="flex min-h-[140px] flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-foreground/10 bg- background px-4 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+            <div className="flex min-h-35 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-foreground/10 bg-background px-4 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
               <div className="text-sm font-semibold text-foreground">
                 No saved projects yet
               </div>
@@ -256,13 +261,13 @@ export default function ProjectBrowserDialog({
   }
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[90]">
+    <div className="pointer-events-none fixed inset-0 z-90">
       <div
         ref={panelRef}
         role="dialog"
         aria-label="Projects"
         style={{ top: `${position.top}px`, left: `${position.left}px` }}
-        className="pointer-events-auto fixed w-[min(280px,calc(100vw-24px))] overflow-hidden rounded-2xl border border-foreground/10 bg-editor-surface text-foreground shadow-2xl animate-in fade-in-0 duration-150"
+        className="pointer-events-auto fixed w-[min(280px,calc(100vw-24px))] overflow-hidden rounded-2xl border border-foreground/10 bg-card text-foreground shadow-2xl animate-in fade-in-0 duration-150"
       >
         <div className="border-b border-foreground/10 px-3 py-2.5">
           <div className="text-sm font-medium tracking-tight text-foreground">
@@ -283,10 +288,15 @@ export default function ProjectBrowserDialog({
                   <button
                     key={entry.path}
                     type="button"
+                    title={
+                      entry.isCurrent
+                        ? "Repair & reload current project"
+                        : "Open project"
+                    }
                     onClick={() => onOpenProject(entry.path)}
                     className="group flex flex-col gap-1 rounded-lg bg-transparent p-0.5 text-left outline-none transition focus:outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
                   >
-                    <div className="relative aspect-[16/10] w-full overflow-hidden rounded-[5px] bg-editor-dialog-alt shadow-[0_10px_18px_rgba(0,0,0,0.28)] transition duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_16px_30px_rgba(0,0,0,0.38)]">
+                    <div className="relative aspect-16/10 w-full overflow-hidden rounded-[5px] bg-popover transition duration-200 group-hover:scale-[1.01] group-hover:shadow-sm">
                       {thumbnailSrc ? (
                         <img
                           src={thumbnailSrc}
@@ -295,14 +305,14 @@ export default function ProjectBrowserDialog({
                           draggable={false}
                         />
                       ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-[linear-gradient(180deg,_rgba(37,99,235,0.22),_rgba(13,17,23,0.92))] text-[10px] font-medium text-white/60">
+                        <div className="flex h-full w-full items-center justify-center bg-[linear-gradient(180deg,rgba(240,128,48,0.14),rgba(13,17,23,0.92))] text-[10px] font-medium text-white/60">
                           No preview yet
                         </div>
                       )}
                       {entry.isCurrent ? (
                         <div className="absolute right-1.5 top-1.5">
-                          <span className="rounded-[5px] bg-[#2563EB] px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.14em] text-white shadow-[0_8px_20px_rgba(37,99,235,0.28)]">
-                            Current
+                          <span className="rounded-[5px] bg-primary px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.14em] text-white shadow-[0_8px_20px_rgba(240,128,48,0.14)]">
+                            Repair
                           </span>
                         </div>
                       ) : null}
@@ -317,7 +327,7 @@ export default function ProjectBrowserDialog({
               })}
             </div>
           ) : (
-            <div className="flex min-h-[140px] flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-foreground/10 bg- background px-4 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+            <div className="flex min-h-35 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-foreground/10 bg-background px-4 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
               <div className="text-sm font-semibold text-foreground">
                 No saved projects yet
               </div>

@@ -1,0 +1,10 @@
+export { SettingsSection } from "./SettingsSection";
+export { CursorSection } from "./CursorSection";
+export { ZoomSection } from "./ZoomSection";
+export { ClipSection } from "./ClipSection";
+export { CaptionsSection } from "./CaptionsSection";
+export { SceneSection } from "./SceneSection";
+export { BackgroundSection } from "./BackgroundSection";
+export { FrameSection } from "./FrameSection";
+export { CropSection } from "./CropSection";
+export { WebcamSection } from "./WebcamSection";

@@ -32,6 +32,10 @@ extension-sources/
 *.tsbuildinfo
 vite.config.js
 vite.config.d.ts
+coverage/
+playwright-report/
+test-results/
+tests/fixtures/generated/
 
 # Native capture build artifacts
 electron/native/wgc-capture/build/

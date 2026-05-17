@@ -1,4 +1,4 @@
-import type { CursorTelemetryPoint, ZoomFocus } from "../types";
+import type { CursorTelemetryPoint, ZoomFocus } from "@/types/editor";
 
 export const MIN_DWELL_DURATION_MS = 450;
 export const MAX_DWELL_DURATION_MS = 2600;

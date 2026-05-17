@@ -129,7 +129,7 @@ const Scrubber = ({
   ticks = 9,
   className,
 
-  size = "md",
+  size = "sm",
 
   showLabel = true,
   showValue = true,
@@ -301,7 +301,7 @@ const Scrubber = ({
       >
         {/* Fill */}
         <div
-          className="pointer-events-none absolute inset-y-0 left-0 bg-foreground/20"
+          className="pointer-events-none absolute inset-y-0 left-0 bg-foreground/6"
           style={{
             width: `${percentage}%`,
             borderRadius: styles.radius,

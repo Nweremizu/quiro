@@ -8,28 +8,27 @@ import {
   Sun03Icon,
   Moon02Icon,
   ComputerIcon,
-} from '@/components/icons/generated';
-import type { ReactElement } from 'react';
-import { useI18n } from '@/contexts/I18nContext';
-import { useScopedT } from '@/contexts/I18nContext';
-import { useTheme } from '@/contexts/theme-provider';
-import type { AppLocale } from '@/i18n/config';
-import { SUPPORTED_LOCALES } from '@/i18n/config';
-import styles from '../LaunchWindow.module.css';
-import { useLaunchPopoverCoordinator } from './LaunchPopoverCoordinator';
-import { DropdownItem, HudPopover } from './PopoverScaffold';
+} from "@/components/icons/generated";
+import type { ReactElement } from "react";
+import { useI18n } from "@/contexts/I18nContext";
+import { useScopedT } from "@/contexts/I18nContext";
+import { useTheme } from "@/contexts/theme-provider";
+import type { AppLocale } from "@/i18n/config";
+import { SUPPORTED_LOCALES } from "@/i18n/config";
+import { useLaunchPopoverCoordinator } from "./LaunchPopoverCoordinator";
+import { DropdownItem, HudPopover } from "./PopoverScaffold";
 
-const POPOVER_ID = 'more';
+const POPOVER_ID = "more";
 
 const LOCALE_LABELS: Record<string, string> = {
-  en: 'English',
-  es: 'Español',
-  fr: 'Français',
-  nl: 'Nederlands',
-  ko: '한국어',
-  'pt-BR': 'Português',
-  'zh-CN': '簡體中文',
-  'zh-TW': '繁體中文',
+  en: "English",
+  es: "Español",
+  fr: "Français",
+  nl: "Nederlands",
+  ko: "한국어",
+  "pt-BR": "Português",
+  "zh-CN": "簡體中文",
+  "zh-TW": "繁體中文",
 };
 
 export function MorePopover({
@@ -55,7 +54,7 @@ export function MorePopover({
   onPreviewUpdateUi: () => void;
   appVersion: string | null;
 }) {
-  const t = useScopedT('launch');
+  const t = useScopedT("launch");
   const { locale, setLocale } = useI18n();
   const { preference, setPreference } = useTheme();
   const { isOpen, requestOpen, requestClose } = useLaunchPopoverCoordinator();
@@ -87,8 +86,8 @@ export function MorePopover({
           onClick={onToggleHudCaptureProtection}
         >
           {hideHudFromCapture
-            ? t('recording.hideHudFromVideo')
-            : t('recording.showHudInVideo')}
+            ? t("recording.hideHudFromVideo")
+            : t("recording.showHudInVideo")}
         </DropdownItem>
       )}
       <DropdownItem
@@ -98,7 +97,7 @@ export function MorePopover({
           onChooseRecordingsDirectory();
         }}
       >
-        {t('recording.recordingsFolder')}
+        {t("recording.recordingsFolder")}
       </DropdownItem>
       <DropdownItem
         icon={<VideoReplayIcon size={16} />}
@@ -107,7 +106,7 @@ export function MorePopover({
           onOpenVideoFile();
         }}
       >
-        {t('recording.openVideoFile')}
+        {t("recording.openVideoFile")}
       </DropdownItem>
       <DropdownItem
         icon={<FolderOpenIcon size={16} />}
@@ -116,7 +115,7 @@ export function MorePopover({
           onOpenProjectBrowser();
         }}
       >
-        {t('recording.openProject')}
+        {t("recording.openProject")}
       </DropdownItem>
       {showDevUpdatePreview ? (
         <DropdownItem
@@ -126,44 +125,50 @@ export function MorePopover({
             onPreviewUpdateUi();
           }}
         >
-          {t('recording.previewUpdateUi', 'Preview Update UI')}
+          {t("recording.previewUpdateUi", "Preview Update UI")}
         </DropdownItem>
       ) : null}
-      <div className={styles.ddLabel} style={{ marginTop: 4 }}>
-        {t('recording.appearance', 'Appearance')}
+      <div
+        className="px-2.5 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-stone-400"
+        style={{ marginTop: 4 }}
+      >
+        {t("recording.appearance", "Appearance")}
       </div>
       <DropdownItem
         icon={<Sun03Icon size={16} />}
-        selected={preference === 'light'}
+        selected={preference === "light"}
         onClick={() => {
-          setPreference('light');
+          setPreference("light");
           requestClose(POPOVER_ID);
         }}
       >
-        {t('common.light', 'Light')}
+        {t("common.light", "Light")}
       </DropdownItem>
       <DropdownItem
         icon={<Moon02Icon size={16} />}
-        selected={preference === 'dark'}
+        selected={preference === "dark"}
         onClick={() => {
-          setPreference('dark');
+          setPreference("dark");
           requestClose(POPOVER_ID);
         }}
       >
-        {t('common.dark', 'Dark')}
+        {t("common.dark", "Dark")}
       </DropdownItem>
       <DropdownItem
         icon={<ComputerIcon size={16} />}
-        selected={preference === 'system'}
+        selected={preference === "system"}
         onClick={() => {
-          setPreference('system');
+          setPreference("system");
           requestClose(POPOVER_ID);
         }}
       >
-        {t('common.system', 'System')}
+        {t("common.system", "System")}
       </DropdownItem>
-      <div className={styles.ddLabel} style={{ marginTop: 4 }}>
-        {t('recording.language')}
+      <div
+        className="px-2.5 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-stone-400"
+        style={{ marginTop: 4 }}
+      >
+        {t("recording.language")}
       </div>
       {SUPPORTED_LOCALES.map((code) => (
         <DropdownItem
@@ -182,11 +187,11 @@ export function MorePopover({
         <div
           style={{
             marginTop: 8,
-            padding: '4px 12px',
+            padding: "4px 12px",
             fontSize: 11,
-            color: 'var(--launch-text-muted)',
-            textAlign: 'center',
-            userSelect: 'text',
+            color: "var(--text-tertiary)",
+            textAlign: "center",
+            userSelect: "text",
           }}
         >
           v{appVersion}

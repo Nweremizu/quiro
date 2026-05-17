@@ -12,6 +12,7 @@ import { loadAllCustomFonts } from "./lib/customFonts";
 import "./App.css";
 import { ShortcutsProvider } from "@/contexts/shortcut-context";
 import EditorWindow from "@/components/editor/window";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 export default function App() {
   const [windowType, setWindowType] = useState("");
@@ -77,7 +78,9 @@ export default function App() {
     case "editor":
       return (
         <ShortcutsProvider>
-          <EditorWindow />
+          <TooltipProvider>
+            <EditorWindow />
+          </TooltipProvider>
           {/* <ShortcutsConfigDialog /> */}
         </ShortcutsProvider>
       );

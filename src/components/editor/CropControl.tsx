@@ -229,7 +229,7 @@ export function CropControl({
 
         <div
           className={cn(
-            "absolute h-0.75 cursor-ns-resize z-20 pointer-events-auto bg-[#2563EB]",
+            "absolute h-0.75 cursor-ns-resize z-20 pointer-events-auto bg-primary",
           )}
           style={{
             left: `${cropPixelX}%`,
@@ -244,7 +244,7 @@ export function CropControl({
 
         <div
           className={cn(
-            "absolute h-0.75 cursor-ns-resize z-20 pointer-events-auto bg-[#2563EB]",
+            "absolute h-0.75 cursor-ns-resize z-20 pointer-events-auto bg-primary",
           )}
           style={{
             left: `${cropPixelX}%`,
@@ -259,7 +259,7 @@ export function CropControl({
 
         <div
           className={cn(
-            "absolute w-0.75 cursor-ew-resize z-20 pointer-events-auto bg-[#2563EB]",
+            "absolute w-0.75 cursor-ew-resize z-20 pointer-events-auto bg-primary",
           )}
           style={{
             left: `${cropPixelX}%`,
@@ -274,7 +274,7 @@ export function CropControl({
 
         <div
           className={cn(
-            "absolute w-0.75 cursor-ew-resize z-20 pointer-events-auto bg-[#2563EB]",
+            "absolute w-0.75 cursor-ew-resize z-20 pointer-events-auto bg-primary",
           )}
           style={{
             left: `${cropPixelX + cropPixelWidth}%`,

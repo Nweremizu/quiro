@@ -56,7 +56,7 @@ export function MicPopover({
     >
       <div
         className={
-          "text-[10px] font-semibold text-foreground uppercase p-1 pt-2.5"
+          "px-2.5 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-stone-400"
         }
       >
         {t("recording.microphone")}
@@ -88,7 +88,7 @@ export function MicPopover({
         </DropdownItem>
       )}
       {!microphoneEnabled && (
-        <div className="px-3 py-2 text-xs text-foreground font-medium">
+        <div className="px-3 py-2 text-xs font-medium text-stone-400">
           {t("recording.selectMicToEnable")}
         </div>
       )}
@@ -105,7 +105,7 @@ export function MicPopover({
         />
       ))}
       {devices.length === 0 && (
-        <div className="py-4 text-center text-xs text-white/70">
+        <div className="py-4 text-center text-xs text-stone-400">
           {t("recording.noMicrophonesFound")}
         </div>
       )}

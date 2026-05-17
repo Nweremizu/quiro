@@ -11,11 +11,17 @@ import { getRenderableAssetUrl } from "@/lib/assetPath";
 import { extensionHost } from "@/lib/extensions";
 import minimalCursorUrl from "@/assets/cursors/custom/minimal-cursor.svg";
 import {
+  type CursorClickEffectSettings,
   type CursorStyle,
   type CursorTelemetryPoint,
+  DEFAULT_CURSOR_CLICK_EFFECT,
   DEFAULT_CURSOR_CLICK_BOUNCE_DURATION,
   DEFAULT_CURSOR_STYLE,
 } from "@/types/editor";
+import {
+  findRecentClickPoint,
+  renderCursorClickEffect,
+} from "@/components/editor/utils/cursor-click-effects";
 import { computeCursorSwayRotation } from "./cursorSway";
 import {
   type CursorViewportRect,
@@ -108,6 +114,8 @@ export interface CursorRenderConfig {
   sway: number;
   /** Cursor visual style. */
   style: CursorStyle;
+  /** Click effect rendered from cursor interaction telemetry. */
+  clickEffect: CursorClickEffectSettings;
 }
 
 export const DEFAULT_CURSOR_CONFIG: CursorRenderConfig = {
@@ -126,6 +134,7 @@ export const DEFAULT_CURSOR_CONFIG: CursorRenderConfig = {
   clickBounceDuration: DEFAULT_CURSOR_CLICK_BOUNCE_DURATION,
   sway: 0,
   style: DEFAULT_CURSOR_STYLE,
+  clickEffect: DEFAULT_CURSOR_CLICK_EFFECT,
 };
 
 const REFERENCE_WIDTH = 1920;
@@ -148,6 +157,12 @@ const NATIVE_CURSOR_ATLAS_PADDING = 2;
 let cursorAssetsPromise: Promise<void> | null = null;
 let cursorPackAssetsPromise: Promise<void> | null = null;
 let loadedCursorPackSourcesSignature = "";
+
+function parseHexColor(value: string, fallback: number) {
+  const normalized = value.trim().replace(/^#/, "");
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return fallback;
+  return Number.parseInt(normalized, 16);
+}
 let loadedCursorAssets: Partial<Record<CursorAssetKey, LoadedCursorAsset>> = {};
 let loadedCursorSetAssets: Partial<
   Record<
@@ -1107,6 +1122,10 @@ export class PixiCursorOverlay {
     this.config.clickBounceDuration = clamp(clickBounceDuration, 60, 500);
   }
 
+  setClickEffect(clickEffect: CursorClickEffectSettings) {
+    this.config.clickEffect = clickEffect;
+  }
+
   setSway(sway: number) {
     this.config.sway = clamp(sway, 0, 2);
   }
@@ -1237,6 +1256,57 @@ export class PixiCursorOverlay {
     );
 
     this.clickRingGraphics.clear();
+    const clickEffect = this.config.clickEffect ?? DEFAULT_CURSOR_CLICK_EFFECT;
+    const clickPoint = findRecentClickPoint(
+      samples,
+      timeMs,
+      Math.max(120, clickEffect.durationMs),
+    );
+    if (clickPoint && clickEffect.id !== "none" && clickEffect.id !== "label") {
+      const projectedClick = projectCursorPositionToViewport(
+        clickPoint,
+        viewport.sourceCrop,
+      );
+      if (projectedClick.visible) {
+        const elapsedMs = Math.max(0, timeMs - clickPoint.timeMs);
+        const progress = Math.min(1, elapsedMs / Math.max(120, clickEffect.durationMs));
+        const inverse = 1 - progress;
+        const color = parseHexColor(clickEffect.color, 0xf08030);
+        const clickX = viewport.x + projectedClick.cx * viewport.width;
+        const clickY = viewport.y + projectedClick.cy * viewport.height;
+        const effectScale = getCursorViewportScale(viewport) * (0.6 + clickEffect.intensity);
+
+        if (clickEffect.id === "spotlight") {
+          this.clickRingGraphics
+            .circle(clickX, clickY, (80 + progress * 24) * effectScale)
+            .fill({ color, alpha: 0.14 * inverse });
+        } else if (clickEffect.id === "pulse") {
+          this.clickRingGraphics
+            .circle(clickX, clickY, (24 + progress * 34) * effectScale)
+            .fill({ color, alpha: 0.18 * inverse });
+          this.clickRingGraphics
+            .circle(clickX, clickY, (30 + progress * 44) * effectScale)
+            .stroke({ color, alpha: 0.52 * inverse, width: 3 * effectScale });
+        } else {
+          const rings = clickEffect.id === "ripple" ? 3 : 1;
+          for (let index = 0; index < rings; index += 1) {
+            const offset = index * 0.18;
+            const localProgress = Math.max(
+              0,
+              Math.min(1, (progress - offset) / Math.max(0.01, 1 - offset)),
+            );
+            if (localProgress <= 0) continue;
+            this.clickRingGraphics
+              .circle(clickX, clickY, (22 + localProgress * 48) * effectScale)
+              .stroke({
+                color,
+                alpha: (1 - localProgress) * 0.64,
+                width: 3 * effectScale,
+              });
+          }
+        }
+      }
+    }
 
     const spriteKey = (
       cursorType in this.cursorSprites ? cursorType : "arrow"
@@ -1477,6 +1547,28 @@ export function drawCursorOnCanvas(
     0.72,
     1 - Math.sin(clickBounceProgress * Math.PI) * (0.08 * config.clickBounce),
   );
+  const clickEffect = config.clickEffect ?? DEFAULT_CURSOR_CLICK_EFFECT;
+  const clickPoint = findRecentClickPoint(
+    samples,
+    timeMs,
+    Math.max(120, clickEffect.durationMs),
+  );
+  if (clickPoint && clickEffect.id !== "none") {
+    const projectedClick = projectCursorPositionToViewport(
+      clickPoint,
+      viewport.sourceCrop,
+    );
+    if (projectedClick.visible) {
+      renderCursorClickEffect(ctx, {
+        x: viewport.x + projectedClick.cx * viewport.width,
+        y: viewport.y + projectedClick.cy * viewport.height,
+        elapsedMs: Math.max(0, timeMs - clickPoint.timeMs),
+        settings: clickEffect,
+        interactionType: clickPoint.interactionType,
+        scale: getCursorViewportScale(viewport),
+      });
+    }
+  }
 
   ctx.save();
   if (config.style !== "figma") {
