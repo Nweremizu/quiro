@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmake --version)",
+      "Bash(cl)",
+      "PowerShell(cmake --version 2>&1)",
+      "PowerShell(node --version)",
+      "PowerShell(python --version 2>&1)",
+      "Bash(git push *)",
+      "Bash(gh pr *)"
+    ]
+  }
+}
