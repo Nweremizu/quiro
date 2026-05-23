@@ -18,6 +18,7 @@ import {
 import { CountdownPopover } from "./popovers/CountdownPopover";
 import { MicPopover } from "./popovers/MicPopover";
 import { MorePopover } from "./popovers/MorePopover";
+import { ProjectPopover } from "./popovers/ProjectPopover";
 import { SourcePopover } from "./popovers/SourcePopover";
 import { WebcamPopover } from "./popovers/WebcamPopover";
 import { HudInteractionContext } from "@/contexts/launch/HudInteractionContext";
@@ -94,6 +95,8 @@ function LaunchWindowContent() {
     openVideoFile,
     syncSelectedSource,
     refreshProjectLibrary,
+    projectLibraryEntries,
+    openProjectFromLibrary,
   } = useLaunchWindowActions();
 
   const showWebcamControls = webcamEnabled && !recording;
@@ -376,7 +379,7 @@ function LaunchWindowContent() {
 
       <Separator orientation="vertical" className="mx-1.25 h-9 my-auto" />
 
-      {/* <div className="relative h-0 w-0">
+      <div className="relative h-0 w-0">
         <ProjectPopover
           entries={projectLibraryEntries}
           onOpenProject={openProjectFromLibrary}
@@ -384,7 +387,7 @@ function LaunchWindowContent() {
             <div className="pointer-events-none absolute inset-0 opacity-0" />
           }
         />
-      </div> */}
+      </div>
 
       <MorePopover
         supportsHudCaptureProtection={supportsHudCaptureProtection}
