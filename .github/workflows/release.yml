@@ -127,6 +127,7 @@ jobs:
       #   macOS   : CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID,
       #             APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
       - name: Package & publish
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
@@ -134,9 +135,14 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: >
-          npx electron-builder ${{ matrix.eb_flag }}
-          --publish ${{ github.event.inputs.dry_run == 'true' && 'never' || 'always' }}
+        run: |
+          if [[ "${{ github.event.inputs.dry_run }}" == "true" ]]; then
+            unset CSC_LINK CSC_KEY_PASSWORD WIN_CSC_LINK WIN_CSC_KEY_PASSWORD
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+          fi
+
+          npx electron-builder ${{ matrix.eb_flag }} \
+            --publish ${{ github.event.inputs.dry_run == 'true' && 'never' || 'always' }}
 
       # Upload installers as Actions artifacts so they're downloadable directly
       # from the workflow run page — useful for manual QA before publishing the
