@@ -21,7 +21,6 @@
       provider: "github",
       owner: "Nweremizu",
       repo: "quiro",
-      vPrefixedTagName: true,
     },
   ],
   files: [
