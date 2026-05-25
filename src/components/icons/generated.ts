@@ -2241,7 +2241,7 @@ import {
   FuelIcon as _FuelIcon,
   FuelStationIcon as _FuelStationIcon,
   FullSignalIcon as _FullSignalIcon,
-  FullscreenIcon as _FullscreenIcon,
+  FullScreenIcon as _FullscreenIcon,
   FunctionCircleIcon as _FunctionCircleIcon,
   FunctionIcon as _FunctionIcon,
   FunctionOfXIcon as _FunctionOfXIcon,
