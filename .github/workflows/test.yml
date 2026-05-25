@@ -33,7 +33,7 @@ jobs:
       - name: Setup Node 20
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       # Caching the Electron binary avoids re-downloading ~100 MB on every run.
