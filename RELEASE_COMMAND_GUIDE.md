@@ -1,24 +1,24 @@
 # Release Command Guide
 
-This project releases from Git tags. The helper commands below bump the app version, create a release commit, create a `vX.Y.Z` tag, and push the tag to GitHub.
+Quiro currently publishes Windows releases only.
 
-Pushing the tag starts `.github/workflows/release.yml`, which builds the installer and uploads it to GitHub Releases when the workflow is not a dry run.
+The release helper bumps the app version, creates a Git commit, creates a `vX.Y.Z` tag, pushes both to GitHub, and publishes a GitHub Release. Publishing that GitHub Release starts `.github/workflows/release.yml`, which builds the Windows installer and uploads the assets back to the release.
 
-## Before Releasing
+## Requirements
 
-Make sure your working tree is clean:
+Install and authenticate the GitHub CLI:
+
+```bash
+gh auth login
+```
+
+Make sure your working tree is clean before releasing:
 
 ```bash
 git status
 ```
 
-Commit or stash any changes before running a release command. The release script will stop if there are uncommitted files.
-
-Also make sure you are on the branch you want to release from, usually `main`:
-
-```bash
-git branch --show-current
-```
+The script will stop if there are uncommitted files.
 
 ## Release Types
 
@@ -57,8 +57,14 @@ Each release command:
 5. Creates a Git tag like `v1.0.1`.
 6. Pushes the current branch.
 7. Pushes the version tag.
+8. Creates and publishes a GitHub Release with generated release notes.
 
-After the tag is pushed, GitHub Actions runs the release workflow and publishes the installer to GitHub Releases.
+After the GitHub Release is published, the Windows release workflow builds the installer and uploads:
+
+- the `.exe` installer
+- `.blockmap` update files
+- `latest*.yml` update metadata
+- `SHA256SUMS-windows-x64.txt`
 
 ## Useful Options
 
@@ -68,11 +74,31 @@ Create the version commit and tag locally without pushing:
 npm run release:patch -- --no-push
 ```
 
-When ready, push manually:
+Push the branch and tag manually later:
 
 ```bash
 git push origin HEAD
 git push origin v1.0.1
+```
+
+Push the tag but do not create a GitHub Release:
+
+```bash
+npm run release:patch -- --no-github-release
+```
+
+Create the GitHub Release as a draft:
+
+```bash
+npm run release:patch -- --draft
+```
+
+Draft releases do not start the workflow until you publish them in GitHub.
+
+Mark the GitHub Release as a prerelease:
+
+```bash
+npm run release:patch -- --prerelease
 ```
 
 Skip the local test step:
@@ -83,28 +109,21 @@ npm run release:patch -- --skip-tests
 
 Use this only when tests have already passed elsewhere.
 
-## Manual GitHub Release Dry Run
+## Rebuild An Existing Release
 
-The release workflow can also be run manually from GitHub Actions.
+Use the manual dispatch for `.github/workflows/release.yml` and provide the existing tag name, for example:
 
-For a test build, keep `dry_run` set to `true`. This builds installers and uploads them as workflow artifacts, but does not publish to GitHub Releases.
-
-For a real manual publish, set `dry_run` to `false`.
-
-## Troubleshooting
-
-If the script says the working tree is dirty, run:
-
-```bash
-git status
+```text
+v1.0.1
 ```
 
-Then commit or stash the listed files.
+The workflow validates that the tag version matches `package.json`, rebuilds Windows, and replaces release assets with the new ones.
 
-If the GitHub workflow does not start, confirm the tag was pushed:
+## Signing
 
-```bash
-git ls-remote --tags origin
-```
+Windows signing is optional. If these repository secrets are missing, the workflow builds an unsigned installer:
 
-The workflow only runs for tags that look like `v1.2.3` or `v1.2.3-beta.1`.
+- `WINDOWS_SIGNING_CERTIFICATE_P12_BASE64`
+- `WINDOWS_SIGNING_CERTIFICATE_PASSWORD`
+
+Unsigned installers still publish, but Windows SmartScreen may warn users.
