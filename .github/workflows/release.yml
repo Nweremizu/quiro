@@ -64,7 +64,7 @@ jobs:
     needs: preflight
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false   # finish all platforms even if one fails
+      fail-fast: false # finish all platforms even if one fails
       matrix:
         include:
           - os: windows-latest
@@ -73,9 +73,9 @@ jobs:
           - os: macos-latest
             name: macOS
             eb_flag: --mac
-          - os: ubuntu-latest
-            name: Linux
-            eb_flag: --linux
+          # - os: ubuntu-latest
+          #   name: Linux
+          #   eb_flag: --linux
 
     steps:
       - name: Checkout
