@@ -70,9 +70,9 @@ jobs:
           - os: windows-latest
             name: Windows
             eb_flag: --win
-          - os: macos-latest
-            name: macOS
-            eb_flag: --mac
+          # - os: macos-latest
+          #   name: macOS
+          #   eb_flag: --mac
           # - os: ubuntu-latest
           #   name: Linux
           #   eb_flag: --linux
