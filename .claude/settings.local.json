@@ -21,7 +21,9 @@
       "Bash(node scripts/copy-wasm-assets.mjs)",
       "Bash(npm run *)",
       "Bash(git remote *)",
-      "Bash(Remove-Item \"C:\\\\Development\\\\Desktop Apps\\\\quiro\\\\src\\\\index.css.old\" -Force)"
+      "Bash(Remove-Item \"C:\\\\Development\\\\Desktop Apps\\\\quiro\\\\src\\\\index.css.old\" -Force)",
+      "Bash(npm -v)",
+      "Bash(npm install *)"
     ]
   }
 }
