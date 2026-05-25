@@ -26,7 +26,6 @@ concurrency:
 jobs:
   # ── 1. Preflight ─────────────────────────────────────────────────────────────
   # Fast gate: typecheck + unit tests before spending time on platform builds.
-  # Runs only on Linux to keep it cheap; feature tests run per-platform in CI.
   preflight:
     name: Preflight
     runs-on: ubuntu-latest
@@ -34,11 +33,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node 20
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+
+      # uiohook-napi requires X11 headers to compile on Linux.
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends \
+            libx11-dev libxtst-dev libxinerama-dev libxrandr-dev
 
       - name: Install dependencies
         run: npm ci
@@ -97,9 +103,13 @@ jobs:
           restore-keys: |
             electron-${{ runner.os }}-
 
-      - name: Install Linux display server
+      # uiohook-napi requires X11 headers to compile on Linux.
+      - name: Install Linux build dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get install -y xvfb
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends \
+            libx11-dev libxtst-dev libxinerama-dev libxrandr-dev
 
       - name: Install dependencies
         run: npm ci
