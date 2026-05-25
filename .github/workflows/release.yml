@@ -139,7 +139,7 @@ jobs:
       - name: Generate Windows checksums
         shell: pwsh
         run: |
-          $files = Get-ChildItem -Path release -Recurse -File -Include *.exe,*.blockmap,latest*.yml
+          $files = Get-ChildItem -Path release -File -Include *.exe,*.blockmap,latest*.yml
           if ($files.Count -eq 0) {
             throw "No Windows release files found."
           }
@@ -157,9 +157,9 @@ jobs:
         with:
           name: windows-x64-release
           path: |
-            release/**/*.exe
-            release/**/*.blockmap
-            release/**/latest*.yml
+            release/*.exe
+            release/*.blockmap
+            release/latest*.yml
             release/SHA256SUMS-windows-x64.txt
           if-no-files-found: error
 
@@ -184,9 +184,9 @@ jobs:
 
           mkdir -p release-assets/upload
           assets=(
-            release-assets/windows-x64/**/*.exe
-            release-assets/windows-x64/**/*.blockmap
-            release-assets/windows-x64/**/latest*.yml
+            release-assets/windows-x64/*.exe
+            release-assets/windows-x64/*.blockmap
+            release-assets/windows-x64/latest*.yml
             release-assets/windows-x64/SHA256SUMS-windows-x64.txt
           )
 
