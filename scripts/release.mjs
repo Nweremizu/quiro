@@ -6,16 +6,30 @@ const releaseType = args.find((arg) => !arg.startsWith("--"));
 const shouldPush = !args.includes("--no-push");
 const shouldRunTests = !args.includes("--skip-tests");
 
-function commandFor(command) {
-	if (process.platform !== "win32") {
-		return command;
-	}
+const npmExecPath = process.env.npm_execpath;
+const npmInvoker =
+	typeof npmExecPath === "string" && npmExecPath.length > 0
+		? {
+				command: process.execPath,
+				argsPrefix: [npmExecPath],
+				shell: false,
+			}
+		: {
+				command: process.platform === "win32" ? "npm.cmd" : "npm",
+				argsPrefix: [],
+				shell: process.platform === "win32",
+			};
 
+function resolveCommand(command, args) {
 	if (command === "npm") {
-		return "npm.cmd";
+		return {
+			command: npmInvoker.command,
+			args: [...npmInvoker.argsPrefix, ...args],
+			shell: npmInvoker.shell,
+		};
 	}
 
-	return command;
+	return { command, args, shell: false };
 }
 
 function printUsage() {
@@ -32,9 +46,10 @@ Options:
 }
 
 function run(command, args, options = {}) {
-	const result = spawnSync(commandFor(command), args, {
+	const resolved = resolveCommand(command, args);
+	const result = spawnSync(resolved.command, resolved.args, {
 		stdio: "inherit",
-		shell: false,
+		shell: resolved.shell,
 		...options,
 	});
 
@@ -48,9 +63,10 @@ function run(command, args, options = {}) {
 }
 
 function read(command, args) {
-	const result = spawnSync(commandFor(command), args, {
+	const resolved = resolveCommand(command, args);
+	const result = spawnSync(resolved.command, resolved.args, {
 		encoding: "utf8",
-		shell: false,
+		shell: resolved.shell,
 	});
 
 	if (result.error) {
