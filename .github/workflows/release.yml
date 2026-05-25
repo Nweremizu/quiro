@@ -1,175 +1,231 @@
-name: Release
+name: Publish Windows Release
 
-# Triggered by a semver tag push (v1.0.0, v1.2.3-beta.1, etc.)
-# or manually via the Actions UI for testing the build without publishing.
 on:
-  push:
-    tags:
-      - "v[0-9]+.[0-9]+.[0-9]+"
-      - "v[0-9]+.[0-9]+.[0-9]+-*"
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
-      dry_run:
-        description: "Build installers without uploading to GitHub Releases"
-        type: boolean
-        default: true
+      tag_name:
+        description: Existing release tag to rebuild and publish
+        required: true
+        type: string
 
-# Needs write access to create/update GitHub Releases.
 permissions:
   contents: write
+  actions: write
+  id-token: write
+  attestations: write
 
-# Prevent two releases from running simultaneously on the same ref.
 concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: true
+  group: release-${{ github.event.release.tag_name || github.event.inputs.tag_name || github.run_id }}
+  cancel-in-progress: false
 
 jobs:
-  # ── 1. Preflight ─────────────────────────────────────────────────────────────
-  # Fast gate: typecheck + unit tests before spending time on platform builds.
-  preflight:
-    name: Preflight
+  prepare-release:
+    name: Prepare release
     runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.prepare.outputs.tag_name }}
+      package_version: ${{ steps.prepare.outputs.package_version }}
+      source_sha: ${{ steps.prepare.outputs.source_sha }}
+      prerelease: ${{ steps.prepare.outputs.prerelease }}
     steps:
-      - name: Checkout
+      - name: Checkout release source
         uses: actions/checkout@v4
-
-      - name: Setup Node 22
-        uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.event.inputs.tag_name }}
+          fetch-depth: 0
 
-      # uiohook-napi requires X11 headers to compile on Linux.
-      - name: Install Linux build dependencies
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends \
-            libx11-dev libxt-dev libxtst-dev libxinerama-dev libxrandr-dev
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Unit tests
-        run: npm run test:unit
-
-  # ── 2. Platform builds ───────────────────────────────────────────────────────
-  # Runs on all three platforms in parallel after preflight passes.
-  # Each job builds the app and either publishes a GitHub Release draft or
-  # skips upload for dry runs.
-  build:
-    name: Build — ${{ matrix.name }}
-    needs: preflight
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false # finish all platforms even if one fails
-      matrix:
-        include:
-          - os: windows-latest
-            name: Windows
-            eb_flag: --win
-          # - os: macos-latest
-          #   name: macOS
-          #   eb_flag: --mac
-          # - os: ubuntu-latest
-          #   name: Linux
-          #   eb_flag: --linux
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      # Caching the Electron binary (~100 MB) and electron-builder cache
-      # (~200 MB of Wine, tools, etc.) cuts install time significantly.
-      - name: Cache Electron binaries
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/electron
-            ~/.cache/electron-builder
-            ~/AppData/Local/electron/Cache
-            ~/AppData/Local/electron-builder/Cache
-            ~/Library/Caches/electron
-            ~/Library/Caches/electron-builder
-          key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            electron-${{ runner.os }}-
-
-      # uiohook-napi requires X11 headers to compile on Linux.
-      - name: Install Linux build dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends \
-            libx11-dev libxt-dev libxtst-dev libxinerama-dev libxrandr-dev
-
-      - name: Install dependencies
-        run: npm ci
-
-      # Compiles the renderer (Vite) and the Electron main/preload processes.
-      # electron-builder then packages the output into a platform installer.
-      - name: Build app
-        run: npm run build:app
-
-      # Signing secrets are optional — builds succeed without them but produce
-      # unsigned installers (SmartScreen warning on Windows, Gatekeeper on Mac).
-      #
-      # To enable signing, add these repository secrets:
-      #   Windows : CSC_LINK, CSC_KEY_PASSWORD
-      #   macOS   : CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID,
-      #             APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
-      - name: Package & publish
+      - name: Validate release tag
+        id: prepare
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [[ -z "${CSC_LINK:-}" ]]; then
-            unset CSC_LINK CSC_KEY_PASSWORD WIN_CSC_LINK WIN_CSC_KEY_PASSWORD
-            export CSC_IDENTITY_AUTO_DISCOVERY=false
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG_NAME="${{ github.event.release.tag_name }}"
+            IS_PRERELEASE="${{ github.event.release.prerelease }}"
+          else
+            TAG_NAME="${{ github.event.inputs.tag_name }}"
+            IS_PRERELEASE="$(gh release view "$TAG_NAME" --repo "${{ github.repository }}" --json isPrerelease --jq '.isPrerelease' 2>/dev/null || echo false)"
           fi
 
-          npx electron-builder ${{ matrix.eb_flag }} \
-            --publish ${{ github.event.inputs.dry_run == 'true' && 'never' || 'always' }}
+          if [ -z "$TAG_NAME" ]; then
+            echo "Release tag is required."
+            exit 1
+          fi
 
-      # Upload installers as Actions artifacts so they're downloadable directly
-      # from the workflow run page — useful for manual QA before publishing the
-      # draft release, and for dry-run builds that skip GitHub Releases upload.
-      - name: Upload installer artifacts
-        if: always()
+          TAG_VERSION="${TAG_NAME#v}"
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+
+          if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
+            echo "Release tag version ($TAG_VERSION) does not match package.json version ($PACKAGE_VERSION)."
+            exit 1
+          fi
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            gh release view "$TAG_NAME" --repo "${{ github.repository }}" >/dev/null 2>&1 || \
+              gh release create "$TAG_NAME" --repo "${{ github.repository }}" --verify-tag --title "$TAG_NAME"
+          fi
+
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "package_version=$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$IS_PRERELEASE" >> "$GITHUB_OUTPUT"
+
+  build-windows-x64:
+    name: Build Windows x64
+    needs: prepare-release
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-release.outputs.source_sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Configure Windows signing
+        shell: pwsh
+        env:
+          WINDOWS_SIGNING_CERTIFICATE_P12_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_P12_BASE64 }}
+          WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE_P12_BASE64) -or [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD)) {
+            Write-Warning "Windows signing secrets are missing. Building an unsigned installer."
+            Add-Content -Path $env:GITHUB_ENV -Value "CSC_IDENTITY_AUTO_DISCOVERY=false"
+            exit 0
+          }
+
+          $certPath = Join-Path $env:RUNNER_TEMP "windows-signing-cert.p12"
+          [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_SIGNING_CERTIFICATE_P12_BASE64))
+          Add-Content -Path $env:GITHUB_ENV -Value "WIN_CSC_LINK=$certPath"
+          Add-Content -Path $env:GITHUB_ENV -Value "WIN_CSC_KEY_PASSWORD=$env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD"
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Copy WASM assets
+        run: npm run copy:wasm
+
+      - name: Remove stale uiohook build output
+        shell: pwsh
+        run: |
+          if (Test-Path node_modules/uiohook-napi/build) {
+            Remove-Item node_modules/uiohook-napi/build -Recurse -Force
+          }
+
+      - name: Install app dependencies
+        run: npx electron-builder install-app-deps
+
+      - name: Build Windows x64
+        shell: pwsh
+        run: |
+          npm run build:platform-native-helpers
+          npm run build:app
+          npx electron-builder --win dir nsis --x64 --publish never
+
+      - name: Generate Windows checksums
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Path release -Recurse -File -Include *.exe,*.blockmap,latest*.yml
+          if ($files.Count -eq 0) {
+            throw "No Windows release files found."
+          }
+
+          $lines = foreach ($file in $files) {
+            $hash = Get-FileHash -Algorithm SHA256 -Path $file.FullName
+            "$($hash.Hash.ToLowerInvariant())  $($file.Name)"
+          }
+
+          $checksumPath = Join-Path "release" "SHA256SUMS-windows-x64.txt"
+          $lines | Sort-Object | Set-Content -Path $checksumPath -Encoding ascii
+
+      - name: Attest Windows artifacts
+        uses: actions/attest@v4
+        with:
+          subject-checksums: release/SHA256SUMS-windows-x64.txt
+
+      - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: installer-${{ matrix.name }}
+          name: windows-x64-release
           path: |
             release/**/*.exe
-            release/**/*.dmg
-            release/**/*.zip
-            release/**/*.AppImage
-            release/**/*.yml
-          if-no-files-found: warn
-          retention-days: 14
+            release/**/*.blockmap
+            release/**/latest*.yml
+            release/SHA256SUMS-windows-x64.txt
+          if-no-files-found: error
 
-      - name: Write job summary
-        if: always()
+  publish-release-assets:
+    name: Publish release assets
+    needs:
+      - prepare-release
+      - build-windows-x64
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-x64-release
+          path: release-assets/windows-x64
+
+      - name: Stage release assets
         shell: bash
         run: |
-          echo "### ${{ matrix.name }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| | |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| **Version** | \`${{ github.ref_name }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| **Publish** | ${{ github.event.inputs.dry_run == 'true' && 'Dry run — not uploaded' || 'GitHub Releases draft' }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| **Triggered by** | @${{ github.actor }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| **Commit** | \`${{ github.sha }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          set -euo pipefail
+          shopt -s globstar nullglob
+
+          mkdir -p release-assets/upload
+          assets=(
+            release-assets/windows-x64/**/*.exe
+            release-assets/windows-x64/**/*.blockmap
+            release-assets/windows-x64/**/latest*.yml
+            release-assets/windows-x64/SHA256SUMS-windows-x64.txt
+          )
+
+          if [ ${#assets[@]} -eq 0 ]; then
+            echo "No release assets found to upload."
+            exit 1
+          fi
+
+          for file in "${assets[@]}"; do
+            target="release-assets/upload/$(basename "$file")"
+            if [ -e "$target" ]; then
+              echo "Duplicate release asset name: $(basename "$file")"
+              exit 1
+            fi
+            cp "$file" "$target"
+          done
+
+      - name: Upload release assets to GitHub
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          assets=(release-assets/upload/*)
+          if [ ${#assets[@]} -eq 0 ]; then
+            echo "No release assets found to upload."
+            exit 1
+          fi
+
+          gh release upload "${{ needs.prepare-release.outputs.tag_name }}" \
+            "${assets[@]}" \
+            --repo "${{ github.repository }}" \
+            --clobber

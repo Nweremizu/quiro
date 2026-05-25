@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 import { spawnSync } from "node:child_process";
 
 const validReleaseTypes = new Set(["patch", "minor", "major"]);
@@ -5,128 +6,192 @@ const args = process.argv.slice(2);
 const releaseType = args.find((arg) => !arg.startsWith("--"));
 const shouldPush = !args.includes("--no-push");
 const shouldRunTests = !args.includes("--skip-tests");
+const shouldCreateGitHubRelease = !args.includes("--no-github-release");
+const isDraft = args.includes("--draft");
+const explicitPrerelease = args.includes("--prerelease");
 
 const npmExecPath = process.env.npm_execpath;
 const npmInvoker =
-	typeof npmExecPath === "string" && npmExecPath.length > 0
-		? {
-				command: process.execPath,
-				argsPrefix: [npmExecPath],
-				shell: false,
-			}
-		: {
-				command: process.platform === "win32" ? "npm.cmd" : "npm",
-				argsPrefix: [],
-				shell: process.platform === "win32",
-			};
-
-function resolveCommand(command, args) {
-	if (command === "npm") {
-		return {
-			command: npmInvoker.command,
-			args: [...npmInvoker.argsPrefix, ...args],
-			shell: npmInvoker.shell,
-		};
-	}
-
-	return { command, args, shell: false };
-}
+  typeof npmExecPath === "string" && npmExecPath.length > 0
+    ? {
+        command: process.execPath,
+        argsPrefix: [npmExecPath],
+        shell: false,
+      }
+    : {
+        command: process.platform === "win32" ? "npm.cmd" : "npm",
+        argsPrefix: [],
+        shell: process.platform === "win32",
+      };
 
 function printUsage() {
-	console.log(`
+  console.log(`
 Usage:
   npm run release:patch
   npm run release:minor
   npm run release:major
 
 Options:
-  -- --no-push      Create the version commit and tag locally, but do not push.
-  -- --skip-tests   Skip npm run test:ci before tagging.
+  -- --draft                Create the GitHub release as a draft.
+  -- --prerelease           Mark the GitHub release as a prerelease.
+  -- --no-push              Create the version commit and tag locally only.
+  -- --no-github-release    Push the tag, but do not create a GitHub release.
+  -- --skip-tests           Skip npm run test:ci before tagging.
 `);
 }
 
-function run(command, args, options = {}) {
-	const resolved = resolveCommand(command, args);
-	const result = spawnSync(resolved.command, resolved.args, {
-		stdio: "inherit",
-		shell: resolved.shell,
-		...options,
-	});
+function resolveCommand(command, commandArgs) {
+  if (command === "npm") {
+    return {
+      command: npmInvoker.command,
+      args: [...npmInvoker.argsPrefix, ...commandArgs],
+      shell: npmInvoker.shell,
+    };
+  }
 
-	if (result.error) {
-		throw new Error(`Failed to start ${command}: ${result.error.message}`);
-	}
-
-	if (result.status !== 0) {
-		throw new Error(`${command} ${args.join(" ")} exited with code ${result.status}`);
-	}
+  return { command, args: commandArgs, shell: false };
 }
 
-function read(command, args) {
-	const resolved = resolveCommand(command, args);
-	const result = spawnSync(resolved.command, resolved.args, {
-		encoding: "utf8",
-		shell: resolved.shell,
-	});
+function run(command, commandArgs, options = {}) {
+  const resolved = resolveCommand(command, commandArgs);
+  const result = spawnSync(resolved.command, resolved.args, {
+    stdio: "inherit",
+    shell: resolved.shell,
+    ...options,
+  });
 
-	if (result.error) {
-		throw new Error(`Failed to start ${command}: ${result.error.message}`);
-	}
+  if (result.error) {
+    throw new Error(`Failed to start ${command}: ${result.error.message}`);
+  }
 
-	if (result.status !== 0) {
-		throw new Error(`${command} ${args.join(" ")} exited with code ${result.status}`);
-	}
+  if (result.status !== 0) {
+    throw new Error(
+      `${command} ${commandArgs.join(" ")} exited with code ${result.status}`,
+    );
+  }
+}
 
-	return result.stdout.trim();
+function read(command, commandArgs) {
+  const resolved = resolveCommand(command, commandArgs);
+  const result = spawnSync(resolved.command, resolved.args, {
+    encoding: "utf8",
+    shell: resolved.shell,
+  });
+
+  if (result.error) {
+    throw new Error(`Failed to start ${command}: ${result.error.message}`);
+  }
+
+  if (result.status !== 0) {
+    throw new Error(
+      `${command} ${commandArgs.join(" ")} exited with code ${result.status}`,
+    );
+  }
+
+  return result.stdout.trim();
+}
+
+function commandExists(command, commandArgs = ["--version"]) {
+  const resolved = resolveCommand(command, commandArgs);
+  const result = spawnSync(resolved.command, resolved.args, {
+    stdio: "ignore",
+    shell: resolved.shell,
+  });
+
+  return result.status === 0;
 }
 
 function ensureCleanWorkingTree() {
-	const status = read("git", ["status", "--porcelain"]);
+  const status = read("git", ["status", "--porcelain"]);
 
-	if (status.length > 0) {
-		console.error("Release aborted: commit or stash your current changes first.");
-		console.error(status);
-		process.exit(1);
-	}
+  if (status.length > 0) {
+    console.error(
+      "Release aborted: commit or stash your current changes first.",
+    );
+    console.error(status);
+    process.exit(1);
+  }
+}
+
+function createGitHubRelease(tag, version) {
+  if (!commandExists("gh")) {
+    throw new Error(
+      "GitHub CLI is required to create the release. Install gh or use --no-github-release.",
+    );
+  }
+
+  const releaseArgs = [
+    "release",
+    "create",
+    tag,
+    "--verify-tag",
+    "--generate-notes",
+    "--title",
+    tag,
+  ];
+
+  if (isDraft) {
+    releaseArgs.push("--draft");
+  }
+
+  if (explicitPrerelease || version.includes("-")) {
+    releaseArgs.push("--prerelease");
+  }
+
+  run("gh", releaseArgs);
 }
 
 function main() {
-	if (!validReleaseTypes.has(releaseType)) {
-		printUsage();
-		process.exit(1);
-	}
+  if (!validReleaseTypes.has(releaseType)) {
+    printUsage();
+    process.exit(1);
+  }
 
-	ensureCleanWorkingTree();
+  ensureCleanWorkingTree();
 
-	if (shouldRunTests) {
-		run("npm", ["run", "test:ci"]);
-	}
+  if (shouldRunTests) {
+    run("npm", ["run", "test:ci"]);
+  }
 
-	run("npm", ["version", releaseType, "-m", "chore(release): v%s"]);
+  run("npm", ["version", releaseType, "-m", "chore(release): v%s"]);
 
-	const version = read("node", ["-p", "require('./package.json').version"]);
-	const tag = `v${version}`;
+  const version = read("node", ["-p", "require('./package.json').version"]);
+  const tag = `v${version}`;
 
-	console.log(`Created release ${tag}.`);
+  console.log(`Created release commit and tag ${tag}.`);
 
-	if (shouldPush) {
-		const branch = read("git", ["branch", "--show-current"]);
+  if (!shouldPush) {
+    console.log(
+      `Skipped push. Run "git push origin HEAD" and "git push origin ${tag}" when ready.`,
+    );
+    return;
+  }
 
-		if (!branch) {
-			throw new Error("Could not determine current branch to push.");
-		}
+  const branch = read("git", ["branch", "--show-current"]);
 
-		run("git", ["push", "origin", branch]);
-		run("git", ["push", "origin", tag]);
-		console.log(`Pushed ${branch} and ${tag}. GitHub Actions will publish the release.`);
-	} else {
-		console.log(`Skipped push. Run "git push origin HEAD" and "git push origin ${tag}" when ready.`);
-	}
+  if (!branch) {
+    throw new Error("Could not determine current branch to push.");
+  }
+
+  run("git", ["push", "origin", branch]);
+  run("git", ["push", "origin", tag]);
+  console.log(`Pushed ${branch} and ${tag}.`);
+
+  if (shouldCreateGitHubRelease) {
+    createGitHubRelease(tag, version);
+    console.log(
+      `Published GitHub release ${tag}. The Windows release workflow will upload assets.`,
+    );
+  } else {
+    console.log(
+      `Skipped GitHub release creation. Create or publish ${tag} manually to start the workflow.`,
+    );
+  }
 }
 
 try {
-	main();
+  main();
 } catch (error) {
-	console.error(error instanceof Error ? error.message : error);
-	process.exit(1);
+  console.error(error instanceof Error ? error.message : error);
+  process.exit(1);
 }
