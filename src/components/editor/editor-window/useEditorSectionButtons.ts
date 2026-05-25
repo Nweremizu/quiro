@@ -71,11 +71,11 @@ export function useEditorSectionButtons(t: Translate): EditorSectionButton[] {
         icon: Settings01Icon,
       },
       ...extensionSectionButtons,
-      {
-        id: "extensions" as const,
-        label: t("settings.sections.extensions", "Extensions"),
-        icon: PuzzleIcon,
-      },
+      // {
+      //   id: "extensions" as const,
+      //   label: t("settings.sections.extensions", "Extensions"),
+      //   icon: PuzzleIcon,
+      // },
     ],
     [t, extensionSectionButtons],
   );

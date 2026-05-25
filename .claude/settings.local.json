@@ -7,7 +7,21 @@
       "PowerShell(node --version)",
       "PowerShell(python --version 2>&1)",
       "Bash(git push *)",
-      "Bash(gh pr *)"
+      "Bash(gh pr *)",
+      "Bash(python -c ' *)",
+      "Bash(pip install *)",
+      "Bash(where python *)",
+      "Bash(C:\\\\Users\\\\Bruno\\\\AppData\\\\Local\\\\Python\\\\bin\\\\python.exe -m pip install pdfplumber --quiet)",
+      "PowerShell(& \"C:\\\\Users\\\\Bruno\\\\AppData\\\\Local\\\\Python\\\\bin\\\\python.exe\" -m pip install pdfplumber --quiet 2>&1)",
+      "Bash(cd '/c/Development/Desktop Apps/quiro' && find . -type f \\\\\\( -name \"*.ts\" -o -name \"*.tsx\" -o -name \"*.js\" -o -name \"*.jsx\" -o -name \"*.vue\" \\\\\\) | head -40)",
+      "Bash(xargs grep -l \"drawCursorOnCanvas\\\\|frame-renderer\\\\|export.*cursor\")",
+      "Bash(npx tsc *)",
+      "Bash(npx vitest *)",
+      "Bash(xxd \"C:\\\\Development\\\\Desktop Apps\\\\quiro\\\\public\\\\wasm\\\\web-demuxer.wasm\")",
+      "Bash(node scripts/copy-wasm-assets.mjs)",
+      "Bash(npm run *)",
+      "Bash(git remote *)",
+      "Bash(Remove-Item \"C:\\\\Development\\\\Desktop Apps\\\\quiro\\\\src\\\\index.css.old\" -Force)"
     ]
   }
 }

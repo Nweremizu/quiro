@@ -63,10 +63,10 @@ export async function openExportStreamSession(options?: {
   try {
     // Ensure the session directory has strict permissions to prevent unauthorized access.
     await fsp.chmod(sessionDir, 0o700);
-  } catch {
-    // If chmod fails, we should clean up the session directory to avoid leaving behind insecure directories.
-    // await fsp.rm(sessionDir, { recursive: true, force: true });
-    // throw err;
+  } catch (err) {
+    // If chmod fails, clean up the session directory to avoid leaving behind insecure temp directories.
+    await fsp.rm(sessionDir, { recursive: true, force: true });
+    throw err;
   }
 
   const tempPath = path.join(sessionDir, `${sessionId}.${extension}`);
@@ -134,7 +134,7 @@ export async function writeToExportStreamSession(
 
 export async function finalizeExportStreamSession(
   sessionId: string,
-  options: { abort?: boolean }
+  options: { abort?: boolean } = {}
 ): Promise<{ tempPath: string | null; bytesWritten: number }> {
   const session = exportStreamSessions.get(sessionId);
   if (!session) {

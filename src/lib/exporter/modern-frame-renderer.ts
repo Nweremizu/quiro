@@ -671,7 +671,7 @@ export class FrameRenderer {
         strength: 0,
         maxKernelSize: 13,
       });
-      this.motionBlurFilter = new MotionBlurFilter([0, 0], 5, 0);
+      this.motionBlurFilter = new MotionBlurFilter({ velocity: { x: 0, y: 0 }, kernelSize: 5, offset: 0 });
     }
 
     this.compositeCanvas = document.createElement("canvas");
@@ -1499,7 +1499,7 @@ export class FrameRenderer {
 
       if (this.config.backgroundBlur > 0) {
         this.backgroundBlurFilter = new BlurFilter();
-        this.backgroundBlurFilter.blur = this.config.backgroundBlur * 3;
+        this.backgroundBlurFilter.strength = this.config.backgroundBlur * 3;
         this.backgroundBlurFilter.quality = 4;
         this.backgroundBlurFilter.resolution =
           this.app?.renderer.resolution ?? 1;

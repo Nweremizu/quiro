@@ -3278,8 +3278,7 @@ export default function EditorWindow() {
     const totalMs = Math.max(0, Math.round(duration * 1000));
     return normalizeCursorTelemetrySamples(
       cursorTelemetry,
-      // @ts-expect-error - Guard against invalid durations that can cause normalization to throw. Should not be necessary long-term once underlying duration issues are resolved.
-      totalMs > 0 ? totalMs : Number.MAX_SAFE_INTEGER,
+      totalMs > 0 ? totalMs : undefined,
     );
   }, [cursorTelemetry, duration]);
 
@@ -3845,7 +3844,10 @@ export default function EditorWindow() {
           currentTimeRef.current * 1000,
           clipRegions,
         );
-        const nextTimelineMs = Math.min(duration * 1000, timelineMs + elapsedMs);
+        const nextTimelineMs = Math.min(
+          duration * 1000,
+          timelineMs + elapsedMs,
+        );
         const nextSourceSeconds =
           resolveTimelineTimeToSourceTime(nextTimelineMs, clipRegions) / 1000;
         currentTimeRef.current = nextSourceSeconds;
@@ -6855,7 +6857,7 @@ export default function EditorWindow() {
       {projectBrowser}
       {nativeCaptureUnavailableDialog}
 
-      <Toaster className="pointer-events-auto" />
+      <Toaster  className="pointer-events-auto" />
     </div>
   );
 }

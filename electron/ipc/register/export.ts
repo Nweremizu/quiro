@@ -487,7 +487,6 @@ export function registerExportHandlers() {
     "export-stream-close",
     async (_event, streamId: string, options?: { abort?: boolean }) => {
       try {
-        // @ts-expect-error - options is currently unused but we may want to support an abort signal in the future, so allow it through the type system now to avoid a breaking change later.
         const result = await finalizeExportStreamSession(streamId, options);
         return {
           success: true,

@@ -40,6 +40,10 @@ function runScript(scriptName) {
 	return true;
 }
 
+if (!runScript("copy:wasm")) {
+	process.exit(1);
+}
+
 if (!runScript("rebuild:native")) {
 	process.exit(1);
 }
