@@ -8,6 +8,7 @@ function clamp(value: number, min: number, max: number) {
 
 export function normalizeCursorTelemetrySamples(
   rawSamples: unknown,
+  maxTimeMs?: number,
 ): CursorTelemetryPoint[] {
   const samples = Array.isArray(rawSamples)
     ? rawSamples
@@ -17,6 +18,11 @@ export function normalizeCursorTelemetrySamples(
       ? ((rawSamples as { samples: unknown[] }).samples ?? [])
       : [];
   const boundedSamples = samples.slice(0, MAX_CURSOR_SAMPLES);
+
+  const capMs =
+    typeof maxTimeMs === "number" && Number.isFinite(maxTimeMs) && maxTimeMs > 0
+      ? maxTimeMs
+      : null;
 
   return boundedSamples
     .filter((sample: unknown) => Boolean(sample && typeof sample === "object"))
@@ -58,5 +64,6 @@ export function normalizeCursorTelemetrySamples(
             : undefined,
       };
     })
+    .filter((point) => capMs === null || point.timeMs <= capMs)
     .sort((a, b) => a.timeMs - b.timeMs);
 }

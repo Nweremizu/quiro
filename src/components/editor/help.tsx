@@ -7,6 +7,7 @@ import {
   ScissorIcon,
   Settings02Icon,
   NewTwitterIcon,
+  GithubIcon,
 } from "@/components/icons/generated";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -32,7 +33,8 @@ import { cn } from "@/lib/utils";
 
 export const QUIRO_ISSUES_URL = "https://github.com/nweremizu/QUIRO/issues";
 const QUIRO_DISCORD_URL = "https://discord.gg/sdv2FBVNgE";
-const QUIRO_X_URL = "https://x.com/brunex790";
+const QUIRO_X_URL = "https://x.com/Brunex7900";
+const QUIRO_GITHUB_URL = "https://github.com/nweremizu";
 const CONTACT_EMAIL = "bnweremizu@gmail.com";
 export const APP_HEADER_ACTION_BUTTON_CLASS =
   "h-7 px-2 text-xs text-muted-foreground hover:bg-foreground/10 hover:text-foreground transition-all gap-1.5";
@@ -151,7 +153,7 @@ export function FeedbackDialog() {
                   {t("feedback.xLabel", "X")}
                 </p>
                 <p className="mt-1 text-sm font-medium text-foreground">
-                  @webadderall
+                  @Brunex7900
                 </p>
               </div>
               <Button
@@ -166,6 +168,29 @@ export function FeedbackDialog() {
                 className="border-foreground/10 bg-foreground/5 text-foreground hover:bg-foreground/10 hover:text-foreground"
               >
                 <NewTwitterIcon className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-foreground/5 bg-foreground/5 px-3 py-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground/70">
+                  {t("feedback.githubLabel", "GitHub")}
+                </p>
+                <p className="mt-1 text-sm font-medium text-foreground">
+                  @nweremizu
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  void openExternalLink(
+                    QUIRO_GITHUB_URL,
+                    t("feedback.openFailed", "Failed to open link."),
+                  )
+                }
+                className="border-foreground/10 bg-foreground/5 text-foreground hover:bg-foreground/10 hover:text-foreground"
+              >
+                <GithubIcon className="h-3.5 w-3.5" />
               </Button>
             </div>
           </div>

@@ -18,13 +18,14 @@ const TRANSITION: Transition = {
   type: "spring",
   stiffness: 380,
   damping: 30,
+  duration: 0.2,
 };
 
 const CONTENT_VARIANTS: Variants = {
   initial: {
     opacity: 0,
     scale: 0.8,
-    filter: "blur(10px)",
+    filter: "blur(8px)",
   },
 
   animate: {

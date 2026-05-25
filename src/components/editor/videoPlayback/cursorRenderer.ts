@@ -907,6 +907,7 @@ export class SmoothedCursorState {
   private trailLength: number;
   private initialized = false;
   private lastTimeMs: number | null = null;
+  private lastWallClockMs: number | null = null;
   private xSpring = createSpringState(0.5);
   private ySpring = createSpringState(0.5);
 
@@ -927,6 +928,7 @@ export class SmoothedCursorState {
       this.y = targetY;
       this.initialized = true;
       this.lastTimeMs = timeMs;
+      this.lastWallClockMs = performance.now();
       this.xSpring.value = targetX;
       this.ySpring.value = targetY;
       this.xSpring.velocity = 0;
@@ -950,11 +952,17 @@ export class SmoothedCursorState {
       this.trail.length = this.trailLength;
     }
 
+    // Use wall-clock time for spring deltaMs so the cursor advances at a
+    // consistent rate regardless of video frame rate.  With video-time deltas
+    // the spring alternates between ~1 ms (no new video frame) and ~33 ms (new
+    // frame), producing a visible jump-stall-jump pattern on 30 fps video.
+    const now = performance.now();
     const deltaMs =
-      this.lastTimeMs === null
+      this.lastWallClockMs === null
         ? 1000 / 60
-        : Math.max(1, timeMs - this.lastTimeMs);
+        : Math.max(1, now - this.lastWallClockMs);
     this.lastTimeMs = timeMs;
+    this.lastWallClockMs = now;
 
     const springConfig = getCursorSpringConfig(
       this.smoothingFactor,
@@ -977,6 +985,7 @@ export class SmoothedCursorState {
     this.y = targetY;
     this.initialized = true;
     this.lastTimeMs = timeMs;
+    this.lastWallClockMs = performance.now();
     this.xSpring.value = targetX;
     this.ySpring.value = targetY;
     this.xSpring.velocity = 0;
@@ -989,6 +998,7 @@ export class SmoothedCursorState {
   reset(): void {
     this.initialized = false;
     this.lastTimeMs = null;
+    this.lastWallClockMs = null;
     this.trail = [];
     resetSpringState(this.xSpring, this.x);
     resetSpringState(this.ySpring, this.y);
@@ -1009,6 +1019,7 @@ export class PixiCursorOverlay {
   private config: CursorRenderConfig;
   private lastRenderedPoint: { px: number; py: number } | null = null;
   private lastRenderedTimeMs: number | null = null;
+  private lastRenderedWallClockMs: number | null = null;
   private swayRotation = 0;
   private swaySpring = createSpringState(0);
 
@@ -1037,7 +1048,7 @@ export class PixiCursorOverlay {
     this.customCursorShadowSprite.tint = CURSOR_SHADOW_COLOR;
     this.customCursorShadowSprite.alpha = CURSOR_SHADOW_ALPHA;
     this.customCursorShadowFilter = new BlurFilter();
-    this.customCursorShadowFilter.blur = CURSOR_SHADOW_BLUR;
+    this.customCursorShadowFilter.strength = CURSOR_SHADOW_BLUR;
     this.customCursorShadowFilter.quality = 4;
     this.customCursorShadowFilter.padding = CURSOR_SHADOW_PADDING;
     this.customCursorShadowSprite.filters = [this.customCursorShadowFilter];
@@ -1059,7 +1070,7 @@ export class PixiCursorOverlay {
       shadowSprite.tint = CURSOR_SHADOW_COLOR;
       shadowSprite.alpha = CURSOR_SHADOW_ALPHA;
       const shadowFilter = new BlurFilter();
-      shadowFilter.blur = CURSOR_SHADOW_BLUR;
+      shadowFilter.strength = CURSOR_SHADOW_BLUR;
       shadowFilter.quality = 4;
       shadowFilter.padding = CURSOR_SHADOW_PADDING;
       shadowSprite.filters = [shadowFilter];
@@ -1072,7 +1083,7 @@ export class PixiCursorOverlay {
       this.cursorSprites[key] = sprite;
     }
 
-    this.cursorMotionBlurFilter = new MotionBlurFilter([0, 0], 5, 0);
+    this.cursorMotionBlurFilter = new MotionBlurFilter({ velocity: { x: 0, y: 0 }, kernelSize: 5, offset: 0 });
     this.container.filters = null;
 
     this.container.addChild(
@@ -1181,6 +1192,7 @@ export class PixiCursorOverlay {
     visible: boolean,
     freeze = false,
   ): void {
+    const nowMs = performance.now();
     if (
       !visible ||
       samples.length === 0 ||
@@ -1190,6 +1202,7 @@ export class PixiCursorOverlay {
       this.container.visible = false;
       this.lastRenderedPoint = null;
       this.lastRenderedTimeMs = null;
+      this.lastRenderedWallClockMs = null;
       this.swayRotation = 0;
       resetSpringState(this.swaySpring, 0);
       this.cursorMotionBlurFilter.velocity = { x: 0, y: 0 };
@@ -1210,6 +1223,7 @@ export class PixiCursorOverlay {
       this.container.visible = false;
       this.lastRenderedPoint = null;
       this.lastRenderedTimeMs = null;
+      this.lastRenderedWallClockMs = null;
       this.swayRotation = 0;
       resetSpringState(this.swaySpring, 0);
       this.cursorMotionBlurFilter.velocity = { x: 0, y: 0 };
@@ -1251,7 +1265,7 @@ export class PixiCursorOverlay {
     const swayRotation = this.updateCursorSway(
       px,
       py,
-      timeMs,
+      nowMs,
       shouldFreezeCursorMotion,
     );
 
@@ -1389,27 +1403,28 @@ export class PixiCursorOverlay {
       this.customCursorSprite.rotation = swayRotation;
     }
 
-    this.applyCursorMotionBlur(px, py, timeMs, shouldFreezeCursorMotion);
+    this.applyCursorMotionBlur(px, py, nowMs, shouldFreezeCursorMotion);
     this.lastRenderedPoint = { px, py };
     this.lastRenderedTimeMs = timeMs;
+    this.lastRenderedWallClockMs = nowMs;
   }
 
   private updateCursorSway(
     px: number,
     py: number,
-    timeMs: number,
+    nowMs: number,
     freeze: boolean,
   ) {
     const deltaMs =
-      this.lastRenderedTimeMs === null || freeze
+      this.lastRenderedWallClockMs === null || freeze
         ? 1000 / 60
-        : Math.max(1, timeMs - this.lastRenderedTimeMs);
+        : Math.max(1, nowMs - this.lastRenderedWallClockMs);
     const targetRotation =
-      !freeze && this.lastRenderedPoint && this.lastRenderedTimeMs !== null
+      !freeze && this.lastRenderedPoint && this.lastRenderedWallClockMs !== null
         ? computeCursorSwayRotation(
             px - this.lastRenderedPoint.px,
             py - this.lastRenderedPoint.py,
-            timeMs - this.lastRenderedTimeMs,
+            nowMs - this.lastRenderedWallClockMs,
             this.config.sway,
           )
         : 0;
@@ -1434,14 +1449,14 @@ export class PixiCursorOverlay {
   private applyCursorMotionBlur(
     px: number,
     py: number,
-    timeMs: number,
+    nowMs: number,
     freeze: boolean,
   ) {
     if (
       freeze ||
       this.config.motionBlur <= 0 ||
       !this.lastRenderedPoint ||
-      this.lastRenderedTimeMs === null
+      this.lastRenderedWallClockMs === null
     ) {
       this.cursorMotionBlurFilter.velocity = { x: 0, y: 0 };
       this.cursorMotionBlurFilter.kernelSize = 5;
@@ -1449,7 +1464,7 @@ export class PixiCursorOverlay {
       return;
     }
 
-    const deltaMs = Math.max(1, timeMs - this.lastRenderedTimeMs);
+    const deltaMs = Math.max(1, nowMs - this.lastRenderedWallClockMs);
     const dx = px - this.lastRenderedPoint.px;
     const dy = py - this.lastRenderedPoint.py;
     const velocityScale =
@@ -1487,6 +1502,7 @@ export class PixiCursorOverlay {
     this.container.visible = false;
     this.lastRenderedPoint = null;
     this.lastRenderedTimeMs = null;
+    this.lastRenderedWallClockMs = null;
     this.swayRotation = 0;
     resetSpringState(this.swaySpring, 0);
     this.cursorMotionBlurFilter.velocity = { x: 0, y: 0 };

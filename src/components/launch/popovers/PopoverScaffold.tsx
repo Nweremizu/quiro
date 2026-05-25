@@ -87,12 +87,14 @@ export function HudPopover({
   trigger,
   children,
   align = "center",
+  className,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   trigger: ReactElement;
   children: ReactNode;
   align?: "start" | "center" | "end";
+  className?: string;
 }) {
   const { onMouseEnter } = useHudInteraction();
   return (
@@ -100,11 +102,12 @@ export function HudPopover({
       <PopoverTrigger>{trigger}</PopoverTrigger>
       <PopoverContent
         className={cn(
-          "source-selector-scroll w-75 max-h-100 overflow-y-auto rounded-xl border border-white/10",
+          "source-selector-scroll min-w-75! max-w-200! max-h-100 overflow-y-auto rounded-xl border border-white/10",
           "bg-[#171411]/95 p-2 text-stone-100 shadow-[0_24px_70px_rgba(13,12,10,0.42),0_8px_24px_rgba(13,12,10,0.3),inset_0_1px_0_rgba(255,255,255,0.08)]",
           "backdrop-blur-xl backdrop-saturate-125",
           "mt-auto mb-2 pointer-events-auto",
           "no-drag",
+          className,
         )}
         side="top"
         align={align}

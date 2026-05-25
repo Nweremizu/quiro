@@ -13,6 +13,7 @@ import "./App.css";
 import { ShortcutsProvider } from "@/contexts/shortcut-context";
 import EditorWindow from "@/components/editor/window";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 
 export default function App() {
   const [windowType, setWindowType] = useState("");
@@ -64,25 +65,27 @@ export default function App() {
   switch (windowType) {
     case "hud-overlay":
       return (
-        <>
+        <ErrorBoundary>
           <LaunchWindow />
           <Toaster className="pointer-events-auto" />
-        </>
+        </ErrorBoundary>
       );
     case "source-selector":
-      return <SourceSelector />;
+      return <ErrorBoundary><SourceSelector /></ErrorBoundary>;
     case "countdown":
-      return <CountdownOverlay />;
+      return <ErrorBoundary><CountdownOverlay /></ErrorBoundary>;
     // case "update-toast":
     //   return <UpdateToastWindow />;
     case "editor":
       return (
-        <ShortcutsProvider>
-          <TooltipProvider>
-            <EditorWindow />
-          </TooltipProvider>
-          {/* <ShortcutsConfigDialog /> */}
-        </ShortcutsProvider>
+        <ErrorBoundary>
+          <ShortcutsProvider>
+            <TooltipProvider>
+              <EditorWindow />
+            </TooltipProvider>
+            {/* <ShortcutsConfigDialog /> */}
+          </ShortcutsProvider>
+        </ErrorBoundary>
       );
     default:
       return (

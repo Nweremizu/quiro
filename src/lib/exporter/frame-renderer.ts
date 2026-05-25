@@ -504,7 +504,7 @@ export class FrameRenderer {
         strength: 0,
         maxKernelSize: 13,
       });
-      this.motionBlurFilter = new MotionBlurFilter([0, 0], 5, 0);
+      this.motionBlurFilter = new MotionBlurFilter({ velocity: { x: 0, y: 0 }, kernelSize: 5, offset: 0 });
       this.videoContainer.filterArea = new Rectangle(
         0,
         0,

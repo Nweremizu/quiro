@@ -30,6 +30,7 @@ export function ProjectPopover({
       }}
       trigger={trigger}
       align="center"
+      className="w-fit"
     >
       <ProjectBrowserDialog
         open={open}
