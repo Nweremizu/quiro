@@ -58,7 +58,7 @@ jobs:
         run: |
           sudo apt-get update -q
           sudo apt-get install -y --no-install-recommends \
-            libx11-dev libxtst-dev libxinerama-dev libxrandr-dev
+            libx11-dev libxt-dev libxtst-dev libxinerama-dev libxrandr-dev
 
       - name: Install dependencies
         run: npm ci
