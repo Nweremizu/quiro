@@ -16,6 +16,7 @@
     "test:coverage": "vitest run --coverage --config vitest.config.ts",
     "test:feature": "npm run build:app && playwright test --config playwright.config.ts",
     "test:ci": "npm run typecheck && npm run test:unit && npm run test:feature",
+    "postinstall": "node scripts/postinstall.mjs",
     "copy:wasm": "node scripts/copy-wasm-assets.mjs",
     "rebuild:native": "node ./node_modules/@electron/rebuild/lib/cli.js --force --only uiohook-napi",
     "build:native-helpers": "node scripts/build-native-helpers.mjs",
