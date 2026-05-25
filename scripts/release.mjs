@@ -6,6 +6,18 @@ const releaseType = args.find((arg) => !arg.startsWith("--"));
 const shouldPush = !args.includes("--no-push");
 const shouldRunTests = !args.includes("--skip-tests");
 
+function commandFor(command) {
+	if (process.platform !== "win32") {
+		return command;
+	}
+
+	if (command === "npm") {
+		return "npm.cmd";
+	}
+
+	return command;
+}
+
 function printUsage() {
 	console.log(`
 Usage:
@@ -20,9 +32,9 @@ Options:
 }
 
 function run(command, args, options = {}) {
-	const result = spawnSync(command, args, {
+	const result = spawnSync(commandFor(command), args, {
 		stdio: "inherit",
-		shell: process.platform === "win32",
+		shell: false,
 		...options,
 	});
 
@@ -36,9 +48,9 @@ function run(command, args, options = {}) {
 }
 
 function read(command, args) {
-	const result = spawnSync(command, args, {
+	const result = spawnSync(commandFor(command), args, {
 		encoding: "utf8",
-		shell: process.platform === "win32",
+		shell: false,
 	});
 
 	if (result.error) {
