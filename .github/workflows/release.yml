@@ -13,8 +13,6 @@ on:
 permissions:
   contents: write
   actions: write
-  id-token: write
-  attestations: write
 
 concurrency:
   group: release-${{ github.event.release.tag_name || github.event.inputs.tag_name || github.run_id }}
@@ -153,11 +151,6 @@ jobs:
 
           $checksumPath = Join-Path "release" "SHA256SUMS-windows-x64.txt"
           $lines | Sort-Object | Set-Content -Path $checksumPath -Encoding ascii
-
-      - name: Attest Windows artifacts
-        uses: actions/attest@v4
-        with:
-          subject-checksums: release/SHA256SUMS-windows-x64.txt
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
