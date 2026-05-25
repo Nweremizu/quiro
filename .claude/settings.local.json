@@ -23,7 +23,12 @@
       "Bash(git remote *)",
       "Bash(Remove-Item \"C:\\\\Development\\\\Desktop Apps\\\\quiro\\\\src\\\\index.css.old\" -Force)",
       "Bash(npm -v)",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(node -e \"const pkg = require\\('./node_modules/vitest/package.json'\\); console.log\\(JSON.stringify\\(pkg.dependencies?.esbuild || pkg.peerDependencies?.esbuild || 'not found'\\)\\); console.log\\(JSON.stringify\\(pkg.optionalDependencies?.esbuild || 'no opt dep'\\)\\)\")",
+      "Bash(node -e \"const v = require\\('./node_modules/vite/package.json'\\); console.log\\('vite version:', v.version\\); console.log\\('vite esbuild dep:', v.dependencies?.esbuild\\)\")",
+      "Bash(npm list *)",
+      "Bash(node -e \"const lock = require\\('./package-lock.json'\\); const keys = Object.keys\\(lock.packages\\).filter\\(k => k.includes\\('esbuild'\\)\\); console.log\\(keys.join\\('\\\\n'\\)\\)\")",
+      "Bash(node -e ' *)"
     ]
   }
 }
