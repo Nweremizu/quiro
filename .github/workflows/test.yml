@@ -5,26 +5,54 @@ on:
     branches: [main]
   pull_request:
 
+# Cancel redundant runs on the same branch/PR so each push doesn't queue
+# behind the previous one.
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
-    name: Typecheck, Unit, Feature (${{ matrix.os }})
+    name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        include:
+          - os: windows-latest
+            name: Windows
+          - os: macos-latest
+            name: macOS
+          - os: ubuntu-latest
+            name: Linux
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
-      - name: Install Linux display dependencies
+      # Caching the Electron binary avoids re-downloading ~100 MB on every run.
+      # Paths cover all three platforms; non-existent paths are silently skipped.
+      - name: Cache Electron binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            electron-${{ runner.os }}-
+
+      - name: Install Linux display server
         if: runner.os == 'Linux'
         run: sudo apt-get install -y xvfb
 
@@ -35,7 +63,8 @@ jobs:
         if: runner.os != 'Linux'
         run: npm run test:ci
 
-      - name: Run CI tests (Linux with virtual display)
+      # Playwright launches a real Electron window; Linux CI needs a virtual display.
+      - name: Run CI tests (Linux — xvfb)
         if: runner.os == 'Linux'
         run: xvfb-run --auto-servernum npm run test:ci
 
@@ -46,11 +75,13 @@ jobs:
           name: playwright-report-${{ matrix.os }}
           path: playwright-report/
           if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload Playwright traces
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-traces-${{ matrix.os }}
           path: test-results/
           if-no-files-found: ignore
+          retention-days: 7
