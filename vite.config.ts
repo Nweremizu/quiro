@@ -4,6 +4,33 @@ import electron from "vite-plugin-electron/simple";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
+const manualChunks = (id: string) => {
+  if (!id.includes("node_modules")) {
+    return undefined;
+  }
+
+  if (id.includes("node_modules/pixi.js/")) {
+    return "pixi";
+  }
+
+  if (
+    id.includes("node_modules/react/") ||
+    id.includes("node_modules/react-dom/")
+  ) {
+    return "react-vendor";
+  }
+
+  if (
+    id.includes("node_modules/mediabunny/") ||
+    id.includes("node_modules/mp4box/") ||
+    id.includes("node_modules/@fix-webm-duration/fix/")
+  ) {
+    return "video-processing";
+  }
+
+  return undefined;
+};
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
@@ -80,15 +107,7 @@ export default defineConfig({
     },
     rollupOptions: {
       output: {
-        manualChunks: {
-          pixi: ["pixi.js"],
-          "react-vendor": ["react", "react-dom"],
-          "video-processing": [
-            "mediabunny",
-            "mp4box",
-            "@fix-webm-duration/fix",
-          ],
-        },
+        manualChunks,
       },
     },
     chunkSizeWarningLimit: 1000,

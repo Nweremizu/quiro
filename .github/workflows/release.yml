@@ -1,4 +1,4 @@
-name: Publish Windows Release
+name: Publish Release
 
 on:
   release:
@@ -181,11 +181,110 @@ jobs:
             release-upload/SHA256SUMS-windows-x64.txt
           if-no-files-found: error
 
+  build-macos:
+    name: Build macOS (x64 + arm64)
+    needs: prepare-release
+    runs-on: macos-latest
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-release.outputs.source_sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Copy WASM assets
+        run: npm run copy:wasm
+
+      - name: Remove stale uiohook build output
+        run: rm -rf node_modules/uiohook-napi/build
+
+      - name: Install app dependencies
+        run: npx electron-builder install-app-deps
+
+      - name: Generate macOS icon (ICNS)
+        run: |
+          set -euo pipefail
+          ICONSET_DIR="$(mktemp -d)/Quiro.iconset"
+          mkdir -p "$ICONSET_DIR"
+          SRC="icons/icons/png/quiro-512.png"
+          sips -z 16   16   "$SRC" --out "$ICONSET_DIR/icon_16x16.png"
+          sips -z 32   32   "$SRC" --out "$ICONSET_DIR/icon_16x16@2x.png"
+          sips -z 32   32   "$SRC" --out "$ICONSET_DIR/icon_32x32.png"
+          sips -z 64   64   "$SRC" --out "$ICONSET_DIR/icon_32x32@2x.png"
+          sips -z 128  128  "$SRC" --out "$ICONSET_DIR/icon_128x128.png"
+          sips -z 256  256  "$SRC" --out "$ICONSET_DIR/icon_128x128@2x.png"
+          sips -z 256  256  "$SRC" --out "$ICONSET_DIR/icon_256x256.png"
+          sips -z 512  512  "$SRC" --out "$ICONSET_DIR/icon_256x256@2x.png"
+          sips -z 512  512  "$SRC" --out "$ICONSET_DIR/icon_512x512.png"
+          sips -z 1024 1024 "$SRC" --out "$ICONSET_DIR/icon_512x512@2x.png"
+          mkdir -p icons/icons/mac
+          iconutil --convert icns "$ICONSET_DIR" --output icons/icons/mac/icon.icns
+          rm -rf "$ICONSET_DIR"
+
+      - name: Build macOS native helpers (Swift)
+        run: npm run build:platform-native-helpers
+
+      - name: Build app (Vite + TypeScript)
+        run: npm run build:app
+
+      - name: Build macOS packages (DMG + ZIP, x64 + arm64)
+        run: npx electron-builder --mac dmg zip --x64 --arm64 --publish never
+
+      - name: Collect and checksum macOS artifacts
+        run: |
+          set -euo pipefail
+          UPLOAD_DIR="release-upload-mac"
+          rm -rf "$UPLOAD_DIR"
+          mkdir -p "$UPLOAD_DIR"
+
+          # electron-builder outputs to release/${version}/
+          # -maxdepth 2 avoids descending into mac/ and mac-arm64/ unpacked dirs
+          find release -maxdepth 2 \( \
+            -name "*.dmg" -o \
+            -name "*.dmg.blockmap" -o \
+            -name "*.zip" -o \
+            -name "*.zip.blockmap" -o \
+            -name "latest-mac.yml" \
+          \) | while read -r f; do
+            name="$(basename "$f")"
+            if [ -e "$UPLOAD_DIR/$name" ]; then
+              echo "Duplicate asset: $name" && exit 1
+            fi
+            cp "$f" "$UPLOAD_DIR/$name"
+          done
+
+          (cd "$UPLOAD_DIR" && shasum -a 256 -- *.dmg *.dmg.blockmap *.zip *.zip.blockmap latest-mac.yml | sort > SHA256SUMS-macos.txt)
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-release
+          path: |
+            release-upload-mac/*.dmg
+            release-upload-mac/*.dmg.blockmap
+            release-upload-mac/*.zip
+            release-upload-mac/*.zip.blockmap
+            release-upload-mac/latest-mac.yml
+            release-upload-mac/SHA256SUMS-macos.txt
+          if-no-files-found: error
+
   publish-release-assets:
     name: Publish release assets
     needs:
       - prepare-release
       - build-windows-x64
+      - build-macos
     runs-on: ubuntu-latest
     steps:
       - name: Download Windows artifacts
@@ -193,6 +292,12 @@ jobs:
         with:
           name: windows-x64-release
           path: release-assets/windows-x64
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-release
+          path: release-assets/macos
 
       - name: Stage release assets
         shell: bash
@@ -206,6 +311,12 @@ jobs:
             release-assets/windows-x64/*.blockmap
             release-assets/windows-x64/latest*.yml
             release-assets/windows-x64/SHA256SUMS-windows-x64.txt
+            release-assets/macos/*.dmg
+            release-assets/macos/*.dmg.blockmap
+            release-assets/macos/*.zip
+            release-assets/macos/*.zip.blockmap
+            release-assets/macos/latest-mac.yml
+            release-assets/macos/SHA256SUMS-macos.txt
           )
 
           if [ ${#assets[@]} -eq 0 ]; then

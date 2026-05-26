@@ -1,8 +1,8 @@
 # Release Command Guide
 
-Quiro currently publishes Windows releases only.
+Quiro publishes Windows and macOS releases.
 
-The release helper bumps the app version, creates a Git commit, creates a `vX.Y.Z` tag, pushes both to GitHub, and publishes a GitHub Release. Publishing that GitHub Release starts `.github/workflows/release.yml`, which builds the Windows installer and uploads the assets back to the release.
+The release helper bumps the app version, creates a Git commit, creates a `vX.Y.Z` tag, pushes both to GitHub, and publishes a GitHub Release. Publishing that GitHub Release starts `.github/workflows/release.yml`, which builds the Windows installer plus macOS DMG/ZIP packages and uploads the assets back to the release.
 
 ## Requirements
 
@@ -59,12 +59,24 @@ Each release command:
 7. Pushes the version tag.
 8. Creates and publishes a GitHub Release with generated release notes.
 
-After the GitHub Release is published, the Windows release workflow builds the installer and uploads:
+After the GitHub Release is published, the release workflow builds and uploads:
 
-- the `.exe` installer
-- `.blockmap` update files
-- `latest*.yml` update metadata
+- `Quiro-windows-x64.exe`
+- Windows `.blockmap` update files
+- Windows `latest*.yml` update metadata
 - `SHA256SUMS-windows-x64.txt`
+- `Quiro-x64.dmg`
+- `Quiro-x64.dmg.blockmap`
+- `Quiro-arm64.dmg`
+- `Quiro-arm64.dmg.blockmap`
+- `Quiro-x64-mac.zip`
+- `Quiro-x64-mac.zip.blockmap`
+- `Quiro-arm64-mac.zip`
+- `Quiro-arm64-mac.zip.blockmap`
+- `latest-mac.yml`
+- `SHA256SUMS-macos.txt`
+
+macOS builds are unsigned for now. Gatekeeper will warn on first open; users can right-click the app and choose Open to bypass the warning.
 
 ## Useful Options
 
@@ -117,7 +129,7 @@ Use the manual dispatch for `.github/workflows/release.yml` and provide the exis
 v1.0.1
 ```
 
-The workflow validates that the tag version matches `package.json`, rebuilds Windows, and replaces release assets with the new ones.
+The workflow validates that the tag version matches `package.json`, rebuilds Windows and macOS, and replaces release assets with the new ones.
 
 ## Signing
 
@@ -127,3 +139,11 @@ Windows signing is optional. If these repository secrets are missing, the workfl
 - `WINDOWS_SIGNING_CERTIFICATE_PASSWORD`
 
 Unsigned installers still publish, but Windows SmartScreen may warn users.
+
+macOS signing and notarization are not enabled yet. When they are added later, configure these repository secrets:
+
+- `CSC_LINK`
+- `CSC_KEY_PASSWORD`
+- `APPLE_ID`
+- `APPLE_APP_SPECIFIC_PASSWORD`
+- `APPLE_TEAM_ID`
