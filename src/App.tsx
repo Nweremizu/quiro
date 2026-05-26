@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { CountdownOverlay } from "./components/countdown/CountdownOverlay";
 import { LaunchWindow } from "@/components/launch/window";
 import { SourceSelector } from "./components/launch/source-selector";
-// import { UpdateToastWindow } from "./components/launch/UpdateToastWindow";
+import { UpdateToastWindow } from "./components/launch/UpdateToastWindow";
 import { Toaster } from "./components/ui/sonner";
 // import { ShortcutsConfigDialog } from "./components/editor/ShortcutsConfigDialog";
 // import VideoEditor from "./components/editor/VideoEditor";
@@ -74,8 +74,8 @@ export default function App() {
       return <ErrorBoundary><SourceSelector /></ErrorBoundary>;
     case "countdown":
       return <ErrorBoundary><CountdownOverlay /></ErrorBoundary>;
-    // case "update-toast":
-    //   return <UpdateToastWindow />;
+    case "update-toast":
+      return <UpdateToastWindow />;
     case "editor":
       return (
         <ErrorBoundary>
