@@ -139,17 +139,35 @@ jobs:
       - name: Generate Windows checksums
         shell: pwsh
         run: |
-          $files = Get-ChildItem -Path release -File -Include *.exe,*.blockmap,latest*.yml
+          $uploadDir = "release-upload"
+          if (Test-Path $uploadDir) {
+            Remove-Item $uploadDir -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $uploadDir | Out-Null
+
+          $files = Get-ChildItem -Path release -Recurse -File -Include *.exe,*.blockmap,latest*.yml |
+            Where-Object { $_.FullName -notmatch '[\\/]win-unpacked[\\/]' }
+
           if ($files.Count -eq 0) {
             throw "No Windows release files found."
           }
 
+          $seenNames = @{}
+          foreach ($file in $files) {
+            if ($seenNames.ContainsKey($file.Name)) {
+              throw "Duplicate release asset name found: $($file.Name)"
+            }
+            $seenNames[$file.Name] = $true
+            Copy-Item -LiteralPath $file.FullName -Destination (Join-Path $uploadDir $file.Name)
+          }
+
+          $stagedFiles = Get-ChildItem -Path $uploadDir -File
           $lines = foreach ($file in $files) {
             $hash = Get-FileHash -Algorithm SHA256 -Path $file.FullName
             "$($hash.Hash.ToLowerInvariant())  $($file.Name)"
           }
 
-          $checksumPath = Join-Path "release" "SHA256SUMS-windows-x64.txt"
+          $checksumPath = Join-Path $uploadDir "SHA256SUMS-windows-x64.txt"
           $lines | Sort-Object | Set-Content -Path $checksumPath -Encoding ascii
 
       - name: Upload Windows artifacts
@@ -157,10 +175,10 @@ jobs:
         with:
           name: windows-x64-release
           path: |
-            release/*.exe
-            release/*.blockmap
-            release/latest*.yml
-            release/SHA256SUMS-windows-x64.txt
+            release-upload/*.exe
+            release-upload/*.blockmap
+            release-upload/latest*.yml
+            release-upload/SHA256SUMS-windows-x64.txt
           if-no-files-found: error
 
   publish-release-assets:
