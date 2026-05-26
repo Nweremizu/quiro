@@ -1,6 +1,9 @@
 name: Publish Release
 
 on:
+  push:
+    tags:
+      - "v*"
   release:
     types: [published]
   workflow_dispatch:
@@ -15,7 +18,7 @@ permissions:
   actions: write
 
 concurrency:
-  group: release-${{ github.event.release.tag_name || github.event.inputs.tag_name || github.run_id }}
+  group: release-${{ github.event.release.tag_name || github.event.inputs.tag_name || github.ref_name || github.run_id }}
   cancel-in-progress: false
 
 jobs:
@@ -31,7 +34,7 @@ jobs:
       - name: Checkout release source
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.event.inputs.tag_name }}
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.event.inputs.tag_name || github.ref_name }}
           fetch-depth: 0
 
       - name: Validate release tag
@@ -45,8 +48,11 @@ jobs:
           if [ "${{ github.event_name }}" = "release" ]; then
             TAG_NAME="${{ github.event.release.tag_name }}"
             IS_PRERELEASE="${{ github.event.release.prerelease }}"
-          else
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TAG_NAME="${{ github.event.inputs.tag_name }}"
+            IS_PRERELEASE="$(gh release view "$TAG_NAME" --repo "${{ github.repository }}" --json isPrerelease --jq '.isPrerelease' 2>/dev/null || echo false)"
+          else
+            TAG_NAME="${GITHUB_REF_NAME}"
             IS_PRERELEASE="$(gh release view "$TAG_NAME" --repo "${{ github.repository }}" --json isPrerelease --jq '.isPrerelease' 2>/dev/null || echo false)"
           fi
 
@@ -63,7 +69,7 @@ jobs:
             exit 1
           fi
 
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" != "release" ]; then
             gh release view "$TAG_NAME" --repo "${{ github.repository }}" >/dev/null 2>&1 || \
               gh release create "$TAG_NAME" --repo "${{ github.repository }}" --verify-tag --title "$TAG_NAME"
           fi

@@ -59,7 +59,7 @@ Each release command:
 7. Pushes the version tag.
 8. Creates and publishes a GitHub Release with generated release notes.
 
-After the GitHub Release is published, the release workflow builds and uploads:
+After the version tag is pushed, the release workflow builds and uploads:
 
 - `Quiro-windows-x64.exe`
 - Windows `.blockmap` update files
@@ -80,7 +80,7 @@ macOS builds are unsigned for now. Gatekeeper will warn on first open; users can
 
 ## In-App Updates
 
-Quiro uses `electron-updater` with the GitHub provider configured in `electron-builder.json5`. The release workflow must upload the installer/package files, `.blockmap` files, and `latest*.yml` metadata because the app reads those GitHub release assets to check, download, and install updates.
+Quiro uses `electron-updater` with the GitHub provider configured in `electron-builder.json5`. The release workflow starts from pushed `v*` tags, creates or reuses the matching GitHub Release, and must upload the installer/package files, `.blockmap` files, and `latest*.yml` metadata because the app reads those GitHub release assets to check, download, and install updates.
 
 Users can check manually from the HUD menu with More -> Check for updates. Packaged builds also check automatically after startup and then periodically while the app is running.
 
