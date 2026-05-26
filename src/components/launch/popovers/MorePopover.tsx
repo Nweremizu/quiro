@@ -40,6 +40,7 @@ export function MorePopover({
   onOpenVideoFile,
   onOpenProjectBrowser,
   showDevUpdatePreview,
+  onCheckForUpdates,
   onPreviewUpdateUi,
   appVersion,
 }: {
@@ -51,6 +52,7 @@ export function MorePopover({
   onOpenVideoFile: () => void;
   onOpenProjectBrowser: () => void;
   showDevUpdatePreview: boolean;
+  onCheckForUpdates: () => void;
   onPreviewUpdateUi: () => void;
   appVersion: string | null;
 }) {
@@ -116,6 +118,15 @@ export function MorePopover({
         }}
       >
         {t("recording.openProject")}
+      </DropdownItem>
+      <DropdownItem
+        icon={<RefreshCcw01Icon size={16} />}
+        onClick={() => {
+          requestClose(POPOVER_ID);
+          onCheckForUpdates();
+        }}
+      >
+        {t("recording.checkForUpdates", "Check for updates")}
       </DropdownItem>
       {showDevUpdatePreview ? (
         <DropdownItem

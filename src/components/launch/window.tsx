@@ -407,6 +407,12 @@ function LaunchWindowContent() {
           });
         }}
         showDevUpdatePreview={SHOW_DEV_UPDATE_PREVIEW}
+        onCheckForUpdates={() => {
+          if (openId) requestClose(openId);
+          void window.electronAPI.checkForAppUpdates().catch((error) => {
+            console.warn("Failed to check for updates:", error);
+          });
+        }}
         onPreviewUpdateUi={() => {
           if (openId) requestClose(openId);
           void window.electronAPI.previewUpdateToast().catch((error) => {

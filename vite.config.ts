@@ -54,7 +54,7 @@ export default defineConfig({
               formats: ["cjs"],
             },
             rollupOptions: {
-              external: ["ffmpeg-static", "uiohook-napi"],
+              external: ["electron-updater", "ffmpeg-static", "uiohook-napi"],
               output: {
                 format: "cjs",
                 entryFileNames: "[name].cjs",

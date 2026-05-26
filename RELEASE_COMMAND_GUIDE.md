@@ -78,6 +78,14 @@ After the GitHub Release is published, the release workflow builds and uploads:
 
 macOS builds are unsigned for now. Gatekeeper will warn on first open; users can right-click the app and choose Open to bypass the warning.
 
+## In-App Updates
+
+Quiro uses `electron-updater` with the GitHub provider configured in `electron-builder.json5`. The release workflow must upload the installer/package files, `.blockmap` files, and `latest*.yml` metadata because the app reads those GitHub release assets to check, download, and install updates.
+
+Users can check manually from the HUD menu with More -> Check for updates. Packaged builds also check automatically after startup and then periodically while the app is running.
+
+Windows update installation works with the NSIS release assets. macOS update prompts and downloads are wired, but production macOS installs should be validated after enabling signing and notarization.
+
 ## Useful Options
 
 Create the version commit and tag locally without pushing:
