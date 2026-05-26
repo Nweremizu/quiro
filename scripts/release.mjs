@@ -101,6 +101,25 @@ function commandExists(command, commandArgs = ["--version"]) {
   return result.status === 0;
 }
 
+function commandSucceeds(command, commandArgs) {
+  const resolved = resolveCommand(command, commandArgs);
+  const result = spawnSync(resolved.command, resolved.args, {
+    stdio: "ignore",
+    shell: resolved.shell,
+  });
+
+  return result.status === 0;
+}
+
+function tryRun(command, commandArgs, options = {}) {
+  const resolved = resolveCommand(command, commandArgs);
+  return spawnSync(resolved.command, resolved.args, {
+    stdio: "inherit",
+    shell: resolved.shell,
+    ...options,
+  });
+}
+
 function ensureCleanWorkingTree() {
   const status = read("git", ["status", "--porcelain"]);
 
@@ -118,6 +137,11 @@ function createGitHubRelease(tag, version) {
     throw new Error(
       "GitHub CLI is required to create the release. Install gh or use --no-github-release.",
     );
+  }
+
+  if (commandSucceeds("gh", ["release", "view", tag])) {
+    console.log(`GitHub release ${tag} already exists.`);
+    return;
   }
 
   const releaseArgs = [
@@ -138,7 +162,17 @@ function createGitHubRelease(tag, version) {
     releaseArgs.push("--prerelease");
   }
 
-  run("gh", releaseArgs);
+  const result = tryRun("gh", releaseArgs);
+  if (result.error) {
+    throw new Error(`Failed to start gh: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    if (commandSucceeds("gh", ["release", "view", tag])) {
+      console.log(`GitHub release ${tag} already exists.`);
+      return;
+    }
+    throw new Error(`gh ${releaseArgs.join(" ")} exited with code ${result.status}`);
+  }
 }
 
 function main() {
@@ -180,7 +214,7 @@ function main() {
   if (shouldCreateGitHubRelease) {
     createGitHubRelease(tag, version);
     console.log(
-      `Published GitHub release ${tag}. The Windows release workflow will upload assets.`,
+      `Published GitHub release ${tag}. The release workflow will upload assets.`,
     );
   } else {
     console.log(
