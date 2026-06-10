@@ -1,5 +1,5 @@
 {
-  "name": "quiro",
+  "name": "@quiro/desktop",
   "private": true,
   "version": "1.0.5",
   "type": "module",
