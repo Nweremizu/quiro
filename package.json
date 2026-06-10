@@ -1,0 +1,25 @@
+{
+  "name": "quiro-workspace",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "dev:desktop": "turbo run dev --filter=@quiro/desktop",
+    "dev:web": "turbo run dev --filter=@quiro/web",
+    "build:desktop": "turbo run build --filter=@quiro/desktop",
+    "build:web": "turbo run build --filter=@quiro/web"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.4"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
