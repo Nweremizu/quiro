@@ -1,4 +1,4 @@
-import type { Platform } from "./github.js";
+import type { Platform } from "./github";
 
 /**
  * Detects the visitor's OS from a User-Agent string.

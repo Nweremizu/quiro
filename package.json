@@ -17,7 +17,13 @@
     "build:web": "turbo run build --filter=@quiro/web"
   },
   "devDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "turbo": "^2.5.4"
+  },
+  "overrides": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "engines": {
     "node": ">=22"
