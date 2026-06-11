@@ -61,7 +61,10 @@ jobs:
             libx11-dev libxt-dev libxtst-dev libxinerama-dev libxrandr-dev
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
-      - name: Run CI tests
-        run: npm run test:ci
+      - name: Run desktop CI tests
+        run: npm run test:ci -w @quiro/desktop
+
+      - name: Typecheck web
+        run: npm run typecheck -w @quiro/web

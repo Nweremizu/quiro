@@ -1,2 +1,2 @@
-export * from "./github.js";
-export * from "./platform.js";
+export * from "./github";
+export * from "./platform";

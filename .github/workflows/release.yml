@@ -62,7 +62,7 @@ jobs:
           fi
 
           TAG_VERSION="${TAG_NAME#v}"
-          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          PACKAGE_VERSION="$(node -p "require('./apps/desktop/package.json').version")"
 
           if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
             echo "Release tag version ($TAG_VERSION) does not match package.json version ($PACKAGE_VERSION)."
@@ -123,7 +123,7 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Copy WASM assets
-        run: npm run copy:wasm
+        run: npm run copy:wasm -w @quiro/desktop
 
       - name: Remove stale uiohook build output
         shell: pwsh
@@ -133,13 +133,15 @@ jobs:
           }
 
       - name: Install app dependencies
+        working-directory: apps/desktop
         run: npx electron-builder install-app-deps
 
       - name: Build Windows x64
+        working-directory: apps/desktop
         shell: pwsh
         run: |
-          npm run build:platform-native-helpers
-          npm run build:app
+          npm run build:platform-native-helpers -w @quiro/desktop
+          npm run build:app -w @quiro/desktop
           npx electron-builder --win dir nsis --x64 --publish never
 
       - name: Generate Windows checksums
@@ -151,7 +153,7 @@ jobs:
           }
           New-Item -ItemType Directory -Path $uploadDir | Out-Null
 
-          $files = Get-ChildItem -Path release -Recurse -File -Include *.exe,*.blockmap,latest*.yml |
+          $files = Get-ChildItem -Path apps/desktop/release -Recurse -File -Include *.exe,*.blockmap,latest*.yml |
             Where-Object { $_.FullName -notmatch '[\\/]win-unpacked[\\/]' }
 
           if ($files.Count -eq 0) {
@@ -210,15 +212,17 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Copy WASM assets
-        run: npm run copy:wasm
+        run: npm run copy:wasm -w @quiro/desktop
 
       - name: Remove stale uiohook build output
         run: rm -rf node_modules/uiohook-napi/build
 
       - name: Install app dependencies
+        working-directory: apps/desktop
         run: npx electron-builder install-app-deps
 
       - name: Generate macOS icon (ICNS)
+        working-directory: apps/desktop
         run: |
           set -euo pipefail
           ICONSET_DIR="$(mktemp -d)/Quiro.iconset"
@@ -239,12 +243,15 @@ jobs:
           rm -rf "$ICONSET_DIR"
 
       - name: Build macOS native helpers (Swift)
-        run: npm run build:platform-native-helpers
+        working-directory: apps/desktop
+        run: npm run build:platform-native-helpers -w @quiro/desktop
 
       - name: Build app (Vite + TypeScript)
-        run: npm run build:app
+        working-directory: apps/desktop
+        run: npm run build:app -w @quiro/desktop
 
       - name: Build macOS packages (DMG + ZIP, x64 + arm64)
+        working-directory: apps/desktop
         run: npx electron-builder --mac dmg zip --x64 --arm64 --publish never
 
       - name: Collect and checksum macOS artifacts
@@ -254,9 +261,9 @@ jobs:
           rm -rf "$UPLOAD_DIR"
           mkdir -p "$UPLOAD_DIR"
 
-          # electron-builder outputs to release/${version}/
+          # electron-builder outputs to apps/desktop/release/${version}/
           # -maxdepth 2 avoids descending into mac/ and mac-arm64/ unpacked dirs
-          find release -maxdepth 2 \( \
+          find apps/desktop/release -maxdepth 2 \( \
             -name "*.dmg" -o \
             -name "*.dmg.blockmap" -o \
             -name "*.zip" -o \
