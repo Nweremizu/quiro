@@ -77,7 +77,10 @@ jobs:
   build-windows-x64:
     name: Build Windows x64
     needs: prepare-release
-    runs-on: windows-latest
+    # Pin to windows-2022: the native helper build scripts target the
+    # "Visual Studio 17 2022" CMake generator, and `windows-latest` is being
+    # redirected to a VS2026 image where that generator (and VS2019) is absent.
+    runs-on: windows-2022
     timeout-minutes: 90
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

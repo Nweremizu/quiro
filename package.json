@@ -37,9 +37,18 @@
     "@esbuild/darwin-x64": "^0.28.0",
     "@esbuild/linux-x64": "^0.28.0",
     "@esbuild/win32-x64": "^0.28.0",
+    "@img/sharp-darwin-arm64": "^0.34.5",
+    "@img/sharp-darwin-x64": "^0.34.5",
+    "@img/sharp-linux-x64": "^0.34.5",
     "@rolldown/binding-darwin-arm64": "^1.0.2",
     "@rolldown/binding-darwin-x64": "^1.0.2",
     "@rolldown/binding-linux-x64-gnu": "^1.0.2",
-    "@rolldown/binding-win32-x64-msvc": "^1.0.2"
+    "@rolldown/binding-win32-x64-msvc": "^1.0.2",
+    "@tailwindcss/oxide-darwin-arm64": "^4.3.0",
+    "@tailwindcss/oxide-darwin-x64": "^4.3.0",
+    "@tailwindcss/oxide-linux-x64-gnu": "^4.3.0",
+    "lightningcss-darwin-arm64": "^1.32.0",
+    "lightningcss-darwin-x64": "^1.32.0",
+    "lightningcss-linux-x64-gnu": "^1.32.0"
   }
 }
