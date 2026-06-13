@@ -64,18 +64,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             libx11-dev libxt-dev libxtst-dev libxinerama-dev libxrandr-dev
 
-      # The committed package-lock.json is generated on Windows and, per
-      # npm/cli#4828, omits the package nodes for non-host-platform optional
-      # native bindings (rolldown/esbuild). With that lockfile present neither
-      # `npm ci` nor `npm install` installs the darwin/linux binding it lacks
-      # (optional deps fail silently), so we drop the lockfile and let each
-      # runner resolve its own platform's binaries fresh from package.json.
-      # `shell: bash` makes `rm` work on the Windows runner too.
       - name: Install dependencies
-        shell: bash
-        run: |
-          rm -f package-lock.json
-          npm install --ignore-scripts --no-audit --no-fund
+        run: npm ci --ignore-scripts
 
       - name: Run desktop CI tests
         run: npm run test:ci -w @quiro/desktop
