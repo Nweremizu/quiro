@@ -7,6 +7,19 @@ import type {
 
 const MIN_WEBCAM_OVERLAY_SIZE_PX = 56;
 
+/**
+ * In side-by-side layout the webcam and the screen video are sized to the same
+ * height and centered as a pair inside the padded content area. The webcam is a
+ * portrait panel whose width/height ratio is fixed below; the screen video
+ * fills its own equal-height box at its natural aspect (no letterboxing). These
+ * constants are shared by the preview (layoutUtils) and the export renderers so
+ * the two pipelines stay in sync.
+ */
+export const SIDE_BY_SIDE_WEBCAM_ASPECT = 0.62;
+export const SIDE_BY_SIDE_GAP_FRACTION = 0.03;
+/** Fallback column width used only when the shared-height panel rect is absent. */
+export const SIDE_BY_SIDE_WEBCAM_WIDTH_FRACTION = 0.36;
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
@@ -121,7 +134,7 @@ export function getWebcamOverlaySizeRect({
     const safeMargin = Math.max(0, margin);
     const width = Math.max(
       MIN_WEBCAM_OVERLAY_SIZE_PX,
-      containerWidth * 0.36 - safeMargin,
+      containerWidth * SIDE_BY_SIDE_WEBCAM_WIDTH_FRACTION - safeMargin,
     );
     const height = Math.max(
       MIN_WEBCAM_OVERLAY_SIZE_PX,

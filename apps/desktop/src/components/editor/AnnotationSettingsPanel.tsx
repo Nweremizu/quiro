@@ -812,7 +812,8 @@ export function AnnotationSettingsPanel({
                 onValueChange={(strokeWidth) =>
                   onFigureDataChange?.({ ...figureData, strokeWidth })
                 }
-                valueFormatter={(value) => `${Math.round(value)} px`}
+                decimals={0}
+                suffix=" px"
               />
             </SettingsGroup>
 
@@ -854,7 +855,8 @@ export function AnnotationSettingsPanel({
                 max={100}
                 step={1}
                 onValueChange={(value) => onBlurIntensityChange?.(value)}
-                valueFormatter={(value) => `${Math.round(value)}%`}
+                decimals={0}
+                suffix="%"
               />
             </SettingsGroup>
 
@@ -988,7 +990,8 @@ export function AnnotationSettingsPanel({
                   onValueChange={(durationMs) =>
                     updateAnimation({ durationMs: Math.round(durationMs) })
                   }
-                  valueFormatter={(v) => `${Math.round(v)}ms`}
+                  decimals={0}
+                  suffix="ms"
                 />
               ) : null}
 
@@ -1040,7 +1043,7 @@ export function AnnotationSettingsPanel({
                     max={4}
                     step={0.05}
                     onValueChange={onScaleChange}
-                    valueFormatter={(v) => `${v.toFixed(2)}×`}
+                    suffix="×"
                   />
                   <Scrubber
                     size="sm"
@@ -1055,7 +1058,7 @@ export function AnnotationSettingsPanel({
                         springStiffness: Math.round(springStiffness),
                       })
                     }
-                    valueFormatter={(v) => `${Math.round(v)}`}
+                    decimals={0}
                   />
                   <Scrubber
                     size="sm"
@@ -1068,7 +1071,7 @@ export function AnnotationSettingsPanel({
                     onValueChange={(springDamping) =>
                       updateAnimation({ springDamping: Math.round(springDamping) })
                     }
-                    valueFormatter={(v) => `${Math.round(v)}`}
+                    decimals={0}
                   />
                   <div className="flex items-center gap-2">
                     <Button

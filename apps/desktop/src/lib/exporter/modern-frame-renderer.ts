@@ -198,6 +198,12 @@ interface LayoutCache {
     height: number;
     sourceCrop: CropRegion;
   };
+  webcamPanel?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null;
 }
 
 interface MutableVideoTextureSource {
@@ -2896,28 +2902,38 @@ export class FrameRenderer {
     }
 
     const margin = webcam.margin ?? 24;
-    const size = getWebcamOverlaySizeRect({
-      containerWidth: this.config.width,
-      containerHeight: this.config.height,
-      sizePercent: webcam.size ?? 50,
-      margin,
-      zoomScale: this.animationState.appliedScale || 1,
-      reactToZoom: webcam.reactToZoom ?? true,
-      aspectRatio: webcam.aspectRatio ?? 1,
-      layoutMode: webcam.layoutMode ?? "overlay",
-    });
-    const position = getWebcamOverlayPosition({
-      containerWidth: this.config.width,
-      containerHeight: this.config.height,
-      size: size.height,
-      width: size.width,
-      height: size.height,
-      margin,
-      positionPreset: webcam.positionPreset ?? webcam.corner,
-      positionX: webcam.positionX ?? 1,
-      positionY: webcam.positionY ?? 1,
-      legacyCorner: webcam.corner,
-    });
+    // In side-by-side layout the webcam fills the column reserved by the video
+    // layout pass; otherwise it floats as an overlay at its configured position.
+    const sideBySidePanel =
+      webcam.layoutMode === "side-by-side"
+        ? (this.layoutCache?.webcamPanel ?? null)
+        : null;
+    const size = sideBySidePanel
+      ? { width: sideBySidePanel.width, height: sideBySidePanel.height }
+      : getWebcamOverlaySizeRect({
+          containerWidth: this.config.width,
+          containerHeight: this.config.height,
+          sizePercent: webcam.size ?? 50,
+          margin,
+          zoomScale: this.animationState.appliedScale || 1,
+          reactToZoom: webcam.reactToZoom ?? true,
+          aspectRatio: webcam.aspectRatio ?? 1,
+          layoutMode: webcam.layoutMode ?? "overlay",
+        });
+    const position = sideBySidePanel
+      ? { x: sideBySidePanel.x, y: sideBySidePanel.y }
+      : getWebcamOverlayPosition({
+          containerWidth: this.config.width,
+          containerHeight: this.config.height,
+          size: size.height,
+          width: size.width,
+          height: size.height,
+          margin,
+          positionPreset: webcam.positionPreset ?? webcam.corner,
+          positionX: webcam.positionX ?? 1,
+          positionY: webcam.positionY ?? 1,
+          legacyCorner: webcam.corner,
+        });
     const radius = Math.max(0, webcam.cornerRadius ?? 18);
     const shadowStrength = clampUnitInterval(webcam.shadow ?? 0);
 
@@ -3556,6 +3572,11 @@ export class FrameRenderer {
       cropRegion,
       videoWidth,
       videoHeight,
+      sideBySide:
+        this.config.webcam?.enabled &&
+        this.config.webcam?.layoutMode === "side-by-side"
+          ? { side: "right" }
+          : null,
     });
 
     this.videoSprite.scale.set(layout.scale);
@@ -3602,6 +3623,7 @@ export class FrameRenderer {
         height: layout.croppedDisplayHeight,
         sourceCrop: cropRegion,
       },
+      webcamPanel: layout.webcamPanel,
     };
   }
 

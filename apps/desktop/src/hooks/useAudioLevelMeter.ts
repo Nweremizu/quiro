@@ -8,6 +8,7 @@ export interface AudioLevelMeterOptions {
 
 export function useAudioLevelMeter(options: AudioLevelMeterOptions) {
   const [level, setLevel] = useState(0);
+  const lastLevelRef = useRef(0);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -32,6 +33,7 @@ export function useAudioLevelMeter(options: AudioLevelMeterOptions) {
 
     if (!options.enabled) {
       cleanup();
+      lastLevelRef.current = 0;
       setLevel(0);
       return cleanup;
     }
@@ -84,7 +86,12 @@ export function useAudioLevelMeter(options: AudioLevelMeterOptions) {
 
           const rms = Math.sqrt(sum / dataArray.length);
           const normalizedLevel = Math.min(100, (rms / 255) * 100 * 2);
-          setLevel(normalizedLevel);
+          // Runs every animation frame; skip the React re-render when the
+          // change wouldn't be visible (sub-pixel on a 0-100 meter).
+          if (Math.abs(normalizedLevel - lastLevelRef.current) >= 0.5) {
+            lastLevelRef.current = normalizedLevel;
+            setLevel(normalizedLevel);
+          }
           animationFrameRef.current = requestAnimationFrame(updateLevel);
         };
 

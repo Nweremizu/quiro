@@ -23,7 +23,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+apps/desktop/release/**
 release/**
+apps/desktop/release-verify/**
+release-verify/**
 *.kiro/
 # npx electron-builder --mac --win
 .tmp/
@@ -49,3 +53,4 @@ apps/desktop/electron/native/bin/*/whisper-runtime.json
 tmp-*.ps1
 .tmp-*.ps1
 gpu-export-probe.mp4
+.turbo/

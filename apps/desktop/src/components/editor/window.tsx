@@ -25,12 +25,22 @@ import {
 } from "@tabler/icons-react";
 import type { Span } from "dnd-timeline";
 import { motion } from "motion/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Profiler,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { toast } from "sonner";
-import { Input } from "@/components/ui/input";
 import { Toaster } from "@/components/ui/sonner";
 import { useI18n } from "@/contexts/I18nContext";
 import { useShortcuts } from "@/contexts/shortcut-context";
+import { useSystemHealthWarning } from "@/hooks/useSystemHealthWarning";
+import { playbackSessionDebug } from "@/lib/playbackSessionDebug";
+import { playbackTimeStore } from "@/lib/playbackTimeStore";
 import {
   calculateOutputDimensions,
   DEFAULT_MP4_CODEC,
@@ -173,6 +183,7 @@ import TimelineEditor, {
   type TimelineEditorHandle,
 } from "@/components/editor/timeline/TimelineEditor";
 import {
+  getTimelinePanelSizing,
   TIMELINE_DENSITY_OPTIONS,
   type TimelineDensityMode,
 } from "@/components/editor/timeline/timelineLayout";
@@ -189,10 +200,12 @@ import {
   QUIRO_ISSUES_URL,
 } from "@/components/editor/help";
 import { Button } from "@/components/ui/button";
+import { ShortcutTooltip } from "@/components/ui/shortcut-tooltip";
 import Scrubber from "@/components/ui/scrubber";
 import ProjectBrowserDialog from "@/components/editor/dialog/ProjectBrowserDialog";
 import { Spinner } from "@/components/ui/spinner";
 import { SettingsPanel } from "@/components/editor/SettingsPanel";
+import { ProjectNameEditor } from "@/components/editor/ProjectNameEditor";
 import { AddLayerDropdown } from "@/components/editor/editor-window/AddLayerDropdown";
 import { AspectRatioDropdown } from "@/components/editor/editor-window/AspectRatioDropdown";
 import { CropEditorDialog } from "@/components/editor/editor-window/CropEditorDialog";
@@ -247,8 +260,24 @@ declare global {
   }
 }
 
+/**
+ * Header playhead clock. Subscribes to the per-frame time store so it keeps
+ * ticking during playback (when the editor-wide React time state is frozen)
+ * while only re-rendering this tiny component.
+ */
+function LiveTimecode({ fallbackSec }: { fallbackSec: number }) {
+  const live = useSyncExternalStore(
+    playbackTimeStore.subscribe,
+    playbackTimeStore.get,
+  );
+  return <>{formatTime(live ? live.timelineMs / 1000 : fallbackSec)}</>;
+}
+
 export default function EditorWindow() {
   const { t } = useI18n();
+  // Tell the user up front if GPU acceleration is unavailable or the CPU is
+  // saturated — the editor's playback pipeline depends heavily on both.
+  useSystemHealthWarning();
   const smokeExportConfig = useMemo(
     () =>
       getSmokeExportConfig(
@@ -283,9 +312,6 @@ export default function EditorWindow() {
     ProjectLibraryEntry[]
   >([]);
   const [projectBrowserOpen, setProjectBrowserOpen] = useState(false);
-  const [isEditingProjectName, setIsEditingProjectName] = useState(false);
-  const [projectNameDraft, setProjectNameDraft] = useState("");
-  const [isSavingProjectName, setIsSavingProjectName] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -569,7 +595,6 @@ export default function EditorWindow() {
   const projectBrowserFallbackTriggerRef = useRef<HTMLButtonElement | null>(
     null,
   );
-  const projectNameInputRef = useRef<HTMLInputElement | null>(null);
   const nextZoomIdRef = useRef(1);
   const nextClipIdRef = useRef(1);
   const nextAudioIdRef = useRef(1);
@@ -1636,27 +1661,6 @@ export default function EditorWindow() {
     return withoutExtension || t("editor.project.untitled", "Untitled");
   }, [currentProjectPath, currentSourcePath, t]);
 
-  useEffect(() => {
-    if (!isEditingProjectName) {
-      setProjectNameDraft(projectDisplayName);
-    }
-  }, [isEditingProjectName, projectDisplayName]);
-
-  useEffect(() => {
-    if (!isEditingProjectName) {
-      return;
-    }
-
-    const frameId = window.requestAnimationFrame(() => {
-      projectNameInputRef.current?.focus();
-      projectNameInputRef.current?.select();
-    });
-
-    return () => {
-      window.cancelAnimationFrame(frameId);
-    };
-  }, [isEditingProjectName]);
-
   const currentPersistedEditorState = useMemo(
     () =>
       buildPersistedEditorState({
@@ -2119,6 +2123,14 @@ export default function EditorWindow() {
     },
     [currentPersistedEditorState],
   );
+
+  const handleCreateManualSnapshot = useCallback(() => {
+    createProjectSnapshot("manual");
+  }, [createProjectSnapshot]);
+
+  const handleOpenNativeCaptureUnavailableModal = useCallback(() => {
+    setNativeCaptureUnavailableModalOpen(true);
+  }, []);
 
   const restoreProjectSnapshot = useCallback(
     (snapshotId: string) => {
@@ -3073,47 +3085,6 @@ export default function EditorWindow() {
     ],
   );
 
-  /**
-   * Resets the inline project-name editor back to the current saved display name.
-   */
-  const closeProjectNameEditor = useCallback(() => {
-    setProjectNameDraft(projectDisplayName);
-    setIsEditingProjectName(false);
-  }, [projectDisplayName]);
-
-  /**
-   * Commits the inline project-name editor and persists the project under that name.
-   */
-  const handleProjectNameSubmit = useCallback(
-    async (event?: React.FormEvent<HTMLFormElement>) => {
-      event?.preventDefault();
-      const trimmedProjectName = projectNameDraft.trim();
-      if (!trimmedProjectName) {
-        closeProjectNameEditor();
-        return;
-      }
-
-      setIsSavingProjectName(true);
-      let saved = false;
-      try {
-        saved = await saveProjectWithName(trimmedProjectName);
-      } catch (error) {
-        toast.error(getErrorMessage(error));
-      } finally {
-        setIsSavingProjectName(false);
-      }
-
-      if (saved) {
-        setIsEditingProjectName(false);
-        return;
-      }
-
-      projectNameInputRef.current?.focus();
-      projectNameInputRef.current?.select();
-    },
-    [closeProjectNameEditor, projectNameDraft, saveProjectWithName],
-  );
-
   const handleOpenProjectFromLibrary = useCallback(
     async (projectPath: string) => {
       const normalizeForCompare = (value: string | null | undefined) =>
@@ -3377,6 +3348,51 @@ export default function EditorWindow() {
     [clipRegions],
   );
 
+  // Per-frame time updates go to playbackTimeStore (read by the playhead,
+  // the preview, and media-sync logic). The React state is NOT committed at
+  // all while playing: even a throttled commit re-renders this whole tree at
+  // 100ms+ a pass, which freezes video presentation (the playback stutter).
+  // State is flushed from the store on pause/seek instead.
+  const isPlayingLiveRef = useRef(false);
+
+  const handlePlaybackTimeUpdate = useCallback(
+    (time: number) => {
+      if (isPlayingLiveRef.current) {
+        playbackTimeStore.set({
+          sourceSec: time,
+          timelineMs: mapSourceTimeToTimelineTime(time * 1000),
+        });
+        return;
+      }
+      setCurrentTime(time);
+    },
+    [mapSourceTimeToTimelineTime],
+  );
+
+  // Feeds React commit costs into the playback debug session, so re-render
+  // work can be lined up against playback stalls. recordPhase no-ops while
+  // no session is active (i.e. whenever the preview is paused).
+  const handleProfilerRender = useCallback(
+    (id: string, _phase: string, actualDuration: number) => {
+      playbackSessionDebug.recordPhase(`react:${id}`, actualDuration);
+    },
+    [],
+  );
+
+  const handlePlayStateChange = useCallback((playing: boolean) => {
+    isPlayingLiveRef.current = playing;
+    setIsPlaying(playing);
+    if (!playing) {
+      // Flush the freshest frame time into React state, then clear the live
+      // store so paused consumers fall back to state.
+      const live = playbackTimeStore.get();
+      if (live !== null) {
+        setCurrentTime(live.sourceSec);
+      }
+      playbackTimeStore.set(null);
+    }
+  }, []);
+
   const effectiveZoomRegions = useMemo<ZoomRegion[]>(
     () =>
       zoomRegions
@@ -3435,14 +3451,17 @@ export default function EditorWindow() {
     setAutoSuggestZoomsTrigger(0);
   }, []);
 
-  function handleSeek(time: number) {
-    const video = videoPlaybackRef.current?.video;
-    if (!video) return;
-    const nextSourceTime = mapTimelineTimeToSourceTime(time * 1000) / 1000;
-    currentTimeRef.current = nextSourceTime;
-    setCurrentTime(nextSourceTime);
-    video.currentTime = nextSourceTime;
-  }
+  const handleSeek = useCallback(
+    (time: number) => {
+      const video = videoPlaybackRef.current?.video;
+      if (!video) return;
+      const nextSourceTime = mapTimelineTimeToSourceTime(time * 1000) / 1000;
+      currentTimeRef.current = nextSourceTime;
+      setCurrentTime(nextSourceTime);
+      video.currentTime = nextSourceTime;
+    },
+    [mapTimelineTimeToSourceTime],
+  );
 
   // useEffect(() => {
   //   if (timelineClockRafRef.current !== null) {
@@ -4769,8 +4788,11 @@ export default function EditorWindow() {
   }, []);
 
   // Sync audio playback with video currentTime and isPlaying state
-  useEffect(() => {
-    const currentTimeMs = currentTime * 1000;
+  const syncOverlayAudio = useCallback(() => {
+    // React time state is frozen while playing; use the live frame time so
+    // the drift correction doesn't chase a stale target.
+    const liveTime = playbackTimeStore.get()?.sourceSec ?? currentTime;
+    const currentTimeMs = liveTime * 1000;
     const activeSpeedRegion = effectiveSpeedRegions.find(
       (region) =>
         currentTimeMs >= region.startMs && currentTimeMs < region.endMs,
@@ -4811,21 +4833,28 @@ export default function EditorWindow() {
   }, [isPlaying, currentTime, audioRegions, effectiveSpeedRegions]);
 
   useEffect(() => {
+    syncOverlayAudio();
+  }, [syncOverlayAudio]);
+
+  const syncSourceAudioFallback = useCallback(() => {
     if (previewSourceAudioFallbackPaths.length === 0) {
       lastSourceAudioSyncTimeRef.current = null;
       return;
     }
 
+    // React time state is frozen while playing; use the live frame time so
+    // the drift correction doesn't chase a stale target.
+    const liveCurrentTime = playbackTimeStore.get()?.sourceSec ?? currentTime;
     const activeSpeedRegion = effectiveSpeedRegions.find(
       (region) =>
-        currentTime * 1000 >= region.startMs &&
-        currentTime * 1000 < region.endMs,
+        liveCurrentTime * 1000 >= region.startMs &&
+        liveCurrentTime * 1000 < region.endMs,
     );
     const targetPlaybackRate = activeSpeedRegion ? activeSpeedRegion.speed : 1;
     const previousTimelineTime = lastSourceAudioSyncTimeRef.current;
     const timelineJumped =
       previousTimelineTime === null ||
-      Math.abs(currentTime - previousTimelineTime) > 0.25;
+      Math.abs(liveCurrentTime - previousTimelineTime) > 0.25;
     const driftThreshold = isPlaying ? 0.35 : 0.01;
 
     for (const audio of sourceAudioElementsRef.current.values()) {
@@ -4840,9 +4869,9 @@ export default function EditorWindow() {
           audio.dataset.sourceAudioPath ?? ""
         ],
       );
-      const beforeAudioStart = currentTime + 0.001 < startDelaySeconds;
+      const beforeAudioStart = liveCurrentTime + 0.001 < startDelaySeconds;
       const targetTime = clampMediaTimeToDuration(
-        currentTime - startDelaySeconds,
+        liveCurrentTime - startDelaySeconds,
         audioDuration,
       );
 
@@ -4874,7 +4903,7 @@ export default function EditorWindow() {
       }
     }
 
-    lastSourceAudioSyncTimeRef.current = currentTime;
+    lastSourceAudioSyncTimeRef.current = liveCurrentTime;
   }, [
     currentTime,
     duration,
@@ -4883,6 +4912,22 @@ export default function EditorWindow() {
     sourceAudioFallbackStartDelayMsByPath,
     effectiveSpeedRegions,
   ]);
+
+  useEffect(() => {
+    syncSourceAudioFallback();
+  }, [syncSourceAudioFallback]);
+
+  // While playing, React time state is frozen, so the audio drift correction
+  // above would only run once per play. Tick it on a timer instead; both
+  // callbacks read the live frame time from playbackTimeStore.
+  useEffect(() => {
+    if (!isPlaying) return;
+    const intervalId = window.setInterval(() => {
+      syncOverlayAudio();
+      syncSourceAudioFallback();
+    }, 250);
+    return () => window.clearInterval(intervalId);
+  }, [isPlaying, syncOverlayAudio, syncSourceAudioFallback]);
 
   const showExportSuccessToast = useCallback((filePath: string) => {
     toast.success(`Exported successfully to ${filePath}`, {
@@ -6026,6 +6071,7 @@ export default function EditorWindow() {
   }
 
   return (
+    <Profiler id="editor-root" onRender={handleProfilerRender}>
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden selection:bg-primary/30 selection:text-primary">
       <div
         className="relative flex h-11 shrink-0 items-center justify-between bg-editor-header/88 px-5 backdrop-blur-md border-b border-foreground/10 z-50"
@@ -6077,59 +6123,11 @@ export default function EditorWindow() {
           />
         </div>
         <div className="absolute left-1/2 flex min-w-0 -translate-x-1/2 items-center justify-center no-drag">
-          {isEditingProjectName ? (
-            <form
-              onSubmit={(event) => void handleProjectNameSubmit(event)}
-              className="flex max-w-[min(52vw,460px)] items-baseline gap-1 rounded-[7px] border border-foreground/10 bg-background px-2.5 py-1 shadow-[0_10px_28px_rgba(0,0,0,0.18)]"
-            >
-              {hasUnsavedChanges ? (
-                <span className="mt-px size-2 shrink-0 rounded-full bg-brand-400" />
-              ) : null}
-              <Input
-                ref={projectNameInputRef}
-                type="text"
-                value={projectNameDraft}
-                onChange={(event) => setProjectNameDraft(event.target.value)}
-                onBlur={() => {
-                  if (!isSavingProjectName) {
-                    closeProjectNameEditor();
-                  }
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Escape") {
-                    event.preventDefault();
-                    closeProjectNameEditor();
-                  }
-                }}
-                disabled={isSavingProjectName}
-                className="min-w-[10ch] max-w-[min(40vw,360px)] bg-transparent text-sm font-semibold tracking-tight text-foreground/95 outline-none placeholder:text-muted-foreground/60 disabled:cursor-wait"
-                style={{ width: `${Math.max(projectNameDraft.length, 10)}ch` }}
-                aria-label={t("editor.project.renameInput", "Project name")}
-              />
-              <span className="shrink-0 text-xs font-medium tracking-tight text-muted-foreground/70">
-                .quiro
-              </span>
-            </form>
-          ) : (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsEditingProjectName(true)}
-              title={t("editor.project.renameTitle", "Rename project")}
-              aria-label={t("editor.project.renameTitle", "Rename project")}
-            >
-              {hasUnsavedChanges ? (
-                <span className="mt-px size-2 shrink-0 rounded-full bg-primary" />
-              ) : null}
-              <span className="truncate text-sm font-semibold tracking-tight text-foreground/90">
-                {projectDisplayName}
-              </span>
-              <span className="shrink-0 text-xs font-medium tracking-tight text-muted-foreground/70">
-                .quiro
-              </span>
-            </Button>
-          )}
+          <ProjectNameEditor
+            displayValue={projectDisplayName}
+            hasUnsavedChanges={hasUnsavedChanges}
+            onSave={saveProjectWithName}
+          />
         </div>
         <div className="flex items-center justify-self-end pr-3 no-drag pl-3">
           <EditorPresetPopover
@@ -6210,6 +6208,7 @@ export default function EditorWindow() {
               onAccountClick={() => toast.info("Account coming soon")}
             />
             {activeEffectSection === "extensions" ? null : (
+              <Profiler id="settings-panel" onRender={handleProfilerRender}>
               <SettingsPanel
                 panelMode="editor"
                 activeEffectSection={activeEffectSection}
@@ -6220,9 +6219,7 @@ export default function EditorWindow() {
                     ? zoomRegions.find((z) => z.id === selectedZoomId)?.depth
                     : null
                 }
-                onZoomDepthChange={(depth) =>
-                  selectedZoomId && handleZoomDepthChange(depth)
-                }
+                onZoomDepthChange={handleZoomDepthChange}
                 selectedZoomId={selectedZoomId}
                 selectedZoomMode={
                   selectedZoomId
@@ -6236,9 +6233,7 @@ export default function EditorWindow() {
                         ?.presetId ?? null)
                     : null
                 }
-                onZoomModeChange={(mode) =>
-                  selectedZoomId && handleZoomModeChange(mode)
-                }
+                onZoomModeChange={handleZoomModeChange}
                 onZoomPresetChange={handleZoomPresetChange}
                 onZoomVisibilityChange={handleZoomVisibilityChange}
                 onZoomDelete={handleZoomDelete}
@@ -6255,12 +6250,8 @@ export default function EditorWindow() {
                         ?.muted ?? false)
                     : null
                 }
-                onClipSpeedChange={(speed) =>
-                  selectedClipId && handleClipSpeedChange(speed)
-                }
-                onClipMutedChange={(muted) =>
-                  selectedClipId && handleClipMutedChange(muted)
-                }
+                onClipSpeedChange={handleClipSpeedChange}
+                onClipMutedChange={handleClipMutedChange}
                 onClipDelete={handleClipDelete}
                 selectedAudioId={selectedAudioId}
                 selectedAudioVolume={
@@ -6382,7 +6373,7 @@ export default function EditorWindow() {
                 zoomRegions={zoomRegions}
                 annotationRegions={annotationRegions}
                 projectSnapshots={projectSnapshots}
-                onCreateProjectSnapshot={() => createProjectSnapshot("manual")}
+                onCreateProjectSnapshot={handleCreateManualSnapshot}
                 onRestoreProjectSnapshot={restoreProjectSnapshot}
                 onAnnotationVisibilityChange={handleAnnotationVisibilityChange}
                 onAnnotationReorder={handleAnnotationReorder}
@@ -6408,8 +6399,8 @@ export default function EditorWindow() {
                 nativeCaptureUnavailableSession={
                   sessionNativeCaptureUnavailable
                 }
-                onOpenNativeCaptureUnavailableModal={() =>
-                  setNativeCaptureUnavailableModalOpen(true)
+                onOpenNativeCaptureUnavailableModal={
+                  handleOpenNativeCaptureUnavailableModal
                 }
                 onAnnotationContentChange={handleAnnotationContentChange}
                 onAnnotationTypeChange={handleAnnotationTypeChange}
@@ -6421,6 +6412,7 @@ export default function EditorWindow() {
                 onAnnotationBlurColorChange={handleAnnotationBlurColorChange}
                 onAnnotationDelete={handleAnnotationDelete}
               />
+              </Profiler>
             )}
           </div>
 
@@ -6475,6 +6467,7 @@ export default function EditorWindow() {
                         ),
                       }}
                     >
+                      <Profiler id="preview" onRender={handleProfilerRender}>
                       <VideoPlayback
                         key={`${videoPath || "no-video"}:${workspaceReloadVersion}:${previewVersion}`}
                         aspectRatio={aspectRatio}
@@ -6482,9 +6475,9 @@ export default function EditorWindow() {
                         videoPath={videoPath || ""}
                         onDurationChange={setDuration}
                         onPreviewReadyChange={setIsPreviewReady}
-                        onTimeUpdate={setCurrentTime}
+                        onTimeUpdate={handlePlaybackTimeUpdate}
                         currentTime={currentTime}
-                        onPlayStateChange={setIsPlaying}
+                        onPlayStateChange={handlePlayStateChange}
                         onError={setError}
                         wallpaper={wallpaper}
                         zoomRegions={effectiveZoomRegions}
@@ -6554,6 +6547,7 @@ export default function EditorWindow() {
                         volume={shouldMutePreviewVideo ? 0 : previewVolume}
                         suspendRendering={shouldSuspendPreviewRendering}
                       />
+                      </Profiler>
                     </div>
                   </div>
                 </div>
@@ -6566,95 +6560,120 @@ export default function EditorWindow() {
                   onAddAudio={handleAddAudioLayer}
                 />
                 <div className="w-px h-4 bg-foreground/20" />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => timelineRef.current?.addZoom()}
-                  title={t("timeline.zoom.addZoom")}
+                <ShortcutTooltip
+                  label={t("timeline.zoom.addZoom")}
+                  action="addZoom"
+                  side="top"
                 >
-                  <SearchAddIcon className="w-3.5 h-3.5" />
-                  {/* <span className="font-medium">
-                    
-                </span>
-                <Kbd className="ml-1">Z</Kbd> */}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => timelineRef.current?.suggestZooms()}
-                  title={t("timeline.zoom.suggestZooms")}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => timelineRef.current?.addZoom()}
+                  >
+                    <SearchAddIcon className="w-3.5 h-3.5" />
+                  </Button>
+                </ShortcutTooltip>
+                <ShortcutTooltip
+                  label={t("timeline.zoom.suggestZooms")}
+                  side="top"
                 >
-                  <MagicWand01Icon className="w-3.5 h-3.5" />
-                  {/* <span className="font-medium">
-                  {t("timeline.zoom.suggestZooms")}
-                </span>
-                <Kbd className="ml-1">Shift</Kbd> */}
-                </Button>
-                <Button
-                  onClick={() => timelineRef.current?.splitClip()}
-                  variant="ghost"
-                  size="icon"
-                  title={t("editor.toolbar.splitClip")}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => timelineRef.current?.suggestZooms()}
+                  >
+                    <MagicWand01Icon className="w-3.5 h-3.5" />
+                  </Button>
+                </ShortcutTooltip>
+                <ShortcutTooltip
+                  label={t("editor.toolbar.splitClip")}
+                  action="splitClip"
+                  side="top"
                 >
-                  <Scissor01Icon className="w-4 h-4" />
-                </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => timelineRef.current?.splitClip()}
+                  >
+                    <Scissor01Icon className="w-4 h-4" />
+                  </Button>
+                </ShortcutTooltip>
               </div>
               <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
                 <div className="flex items-center gap-1.5 pointer-events-auto">
                   <span className="mr-1 text-xs font-medium tabular-nums text-muted-foreground">
-                    {formatTime(timelinePlayheadTime)}
+                    <LiveTimecode fallbackSec={timelinePlayheadTime} />
                   </span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    title={t("editor.playback.skipBack")}
-                    onClick={() => {
-                      const currentMs = timelinePlayheadTime * 1000;
-                      const kfs = timelineRef.current?.keyframes ?? [];
-                      const prev = [...kfs]
-                        .reverse()
-                        .find((k) => k.time < currentMs - 50);
-                      handleSeek(
-                        prev
-                          ? prev.time / 1000
-                          : Math.max(0, timelinePlayheadTime - 5),
-                      );
-                    }}
+                  <ShortcutTooltip
+                    label={t("editor.playback.skipBack")}
+                    side="top"
                   >
-                    <IconPlayerTrackPrevFilled className="w-3.5 h-3.5" />
-                  </Button>
-                  <Button
-                    variant={"ghost"}
-                    size={"icon"}
-                    className={
-                      "bg-primary hover:bg-app-700! shadow-soft-md transition-colors duration-500"
-                    }
-                    onClick={togglePlayPause}
-                    title={isPlaying ? "Pause" : "Play"}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        // Read live time: React state is frozen during playback.
+                        const currentMs =
+                          playbackTimeStore.get()?.timelineMs ??
+                          timelinePlayheadTime * 1000;
+                        const kfs = timelineRef.current?.keyframes ?? [];
+                        const prev = [...kfs]
+                          .reverse()
+                          .find((k) => k.time < currentMs - 50);
+                        handleSeek(
+                          prev
+                            ? prev.time / 1000
+                            : Math.max(0, currentMs / 1000 - 5),
+                        );
+                      }}
+                    >
+                      <IconPlayerTrackPrevFilled className="w-3.5 h-3.5" />
+                    </Button>
+                  </ShortcutTooltip>
+                  <ShortcutTooltip
+                    label={isPlaying ? t("editor.playback.pause", "Pause") : t("editor.playback.play", "Play")}
+                    action="playPause"
+                    side="top"
                   >
-                    {isPlaying ? (
-                      <IconPlayerPauseFilled className="w-3.5 h-3.5" />
-                    ) : (
-                      <IconPlayerPlayFilled className="w-3.5 h-3.5" />
-                    )}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    title={t("editor.playback.skipForward")}
-                    onClick={() => {
-                      const currentMs = timelinePlayheadTime * 1000;
-                      const kfs = timelineRef.current?.keyframes ?? [];
-                      const next = kfs.find((k) => k.time > currentMs + 50);
-                      handleSeek(
-                        next
-                          ? next.time / 1000
-                          : Math.min(duration, timelinePlayheadTime + 5),
-                      );
-                    }}
+                    <Button
+                      variant={"ghost"}
+                      size={"icon"}
+                      className={
+                        "bg-primary hover:bg-app-700! shadow-soft-md transition-colors duration-500"
+                      }
+                      onClick={togglePlayPause}
+                    >
+                      {isPlaying ? (
+                        <IconPlayerPauseFilled className="w-3.5 h-3.5" />
+                      ) : (
+                        <IconPlayerPlayFilled className="w-3.5 h-3.5" />
+                      )}
+                    </Button>
+                  </ShortcutTooltip>
+                  <ShortcutTooltip
+                    label={t("editor.playback.skipForward")}
+                    side="top"
                   >
-                    <IconPlayerTrackNextFilled className="w-3.5 h-3.5" />
-                  </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        // Read live time: React state is frozen during playback.
+                        const currentMs =
+                          playbackTimeStore.get()?.timelineMs ??
+                          timelinePlayheadTime * 1000;
+                        const kfs = timelineRef.current?.keyframes ?? [];
+                        const next = kfs.find((k) => k.time > currentMs + 50);
+                        handleSeek(
+                          next
+                            ? next.time / 1000
+                            : Math.min(duration, currentMs / 1000 + 5),
+                        );
+                      }}
+                    >
+                      <IconPlayerTrackNextFilled className="w-3.5 h-3.5" />
+                    </Button>
+                  </ShortcutTooltip>
                   <span className="text-xs font-medium text-muted-foreground/70 tabular-nums ml-1">
                     {formatTime(duration)}
                   </span>
@@ -6664,16 +6683,11 @@ export default function EditorWindow() {
               {/* Right: collapse + volume */}
               <div className="z-10 ml-auto flex items-center gap-2">
                 <DropdownMenu>
-                  <DropdownMenuTrigger>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      title="Timeline density"
-                      className="h-7 w-7 rounded-full text-muted-foreground transition-all hover:bg-foreground/10 hover:text-foreground"
-                    >
-                      <TimelineListIcon className="w-3.5 h-3.5" />
-                    </Button>
+                  <DropdownMenuTrigger
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-all hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none"
+                    title="Timeline density"
+                  >
+                    <TimelineListIcon className="w-3.5 h-3.5" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent
                     align="end"
@@ -6780,15 +6794,16 @@ export default function EditorWindow() {
           </div>
         </div>
         <motion.div
-          initial={{
-            height: timelineCollapsed ? "0%" : "15%",
-            minHeight: timelineCollapsed ? 0 : 160,
-          }}
+          initial={false}
           animate={{
-            height: timelineCollapsed ? "0%" : "15%",
-            minHeight: timelineCollapsed ? 0 : 160,
+            height: timelineCollapsed
+              ? "0%"
+              : `${getTimelinePanelSizing(timelineDensityMode).heightPercent}%`,
+            minHeight: timelineCollapsed
+              ? 0
+              : getTimelinePanelSizing(timelineDensityMode).minHeightPx,
           }}
-          // snappy spring for collapsing/expanding timeline
+          // snappy spring for collapsing/expanding timeline + density changes
           transition={{
             type: "spring",
             stiffness: 550,
@@ -6796,11 +6811,8 @@ export default function EditorWindow() {
             mass: 0.5,
           }}
           className="flex shrink-0 flex-col"
-          // style={{
-          //   height: timelineCollapsed ? "0%" : "15%",
-          //   minHeight: timelineCollapsed ? 0 : 160,
-          // }}
         >
+          <Profiler id="timeline" onRender={handleProfilerRender}>
           <TimelineEditor
             key={`${videoPath || "no-video"}:${workspaceReloadVersion}`}
             ref={timelineRef}
@@ -6841,6 +6853,7 @@ export default function EditorWindow() {
             onSelectAnnotation={handleSelectAnnotation}
             aspectRatio={aspectRatio}
           />
+          </Profiler>
         </motion.div>
       </div>
 
@@ -6859,5 +6872,6 @@ export default function EditorWindow() {
 
       <Toaster  className="pointer-events-auto" />
     </div>
+    </Profiler>
   );
 }

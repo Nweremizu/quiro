@@ -2,6 +2,7 @@ import { fixWebmDuration } from "@fix-webm-duration/fix";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { getEffectiveRecordingDurationMs } from "@/lib/mediaTiming";
+import { showSystemHealthWarnings } from "@/hooks/useSystemHealthWarning";
 import {
   getVideoExtensionForMimeType,
   isWebmMimeType,
@@ -294,6 +295,12 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
   const webcamStream = useRef<MediaStream | null>(null);
   const mixingContext = useRef<AudioContext | null>(null);
   const chunks = useRef<Blob[]>([]);
+  // Disk-backed recording stream session: chunks are appended to disk as they
+  // arrive so renderer memory stays flat for long recordings. Null when the
+  // session could not be opened, in which case chunks buffer in memory.
+  const streamSessionId = useRef<string | null>(null);
+  const streamAppendQueue = useRef<Promise<void>>(Promise.resolve());
+  const streamFailed = useRef(false);
   const webcamChunks = useRef<Blob[]>([]);
   const startTime = useRef<number>(0);
   const webcamStartTime = useRef<number | null>(null);
@@ -1786,6 +1793,25 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
       );
 
       chunks.current = [];
+      streamFailed.current = false;
+      streamAppendQueue.current = Promise.resolve();
+      streamSessionId.current = null;
+
+      const sessionTimestamp = recordingSessionTimestamp.current ?? Date.now();
+      const streamFileName = `${RECORDING_FILE_PREFIX}${sessionTimestamp}${VIDEO_FILE_EXTENSION}`;
+      try {
+        const beginResult =
+          await window.electronAPI.recordingStreamBegin(streamFileName);
+        if (beginResult?.success && beginResult.sessionId) {
+          streamSessionId.current = beginResult.sessionId;
+        }
+      } catch (error) {
+        console.warn(
+          "Recording stream unavailable, falling back to in-memory buffering:",
+          error,
+        );
+      }
+
       const hasAudio = stream.current.getAudioTracks().length > 0;
       const recorder = new MediaRecorder(stream.current, {
         videoBitsPerSecond,
@@ -1800,11 +1826,41 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
       });
       mediaRecorder.current = recorder;
       recorder.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) chunks.current.push(event.data);
+        if (!event.data || event.data.size === 0) return;
+        const sessionId = streamSessionId.current;
+        if (!sessionId) {
+          chunks.current.push(event.data);
+          return;
+        }
+        if (streamFailed.current) return;
+        const data = event.data;
+        // Chain appends so chunks reach disk in arrival order.
+        streamAppendQueue.current = streamAppendQueue.current.then(
+          async () => {
+            if (streamFailed.current) return;
+            try {
+              const buffer = await data.arrayBuffer();
+              const appendResult =
+                await window.electronAPI.recordingStreamAppend(
+                  sessionId,
+                  buffer,
+                );
+              if (!appendResult?.success) {
+                throw new Error(appendResult?.message ?? "append rejected");
+              }
+            } catch (error) {
+              streamFailed.current = true;
+              console.error("Recording stream append failed:", error);
+            }
+          },
+        );
       };
       recorder.onstop = async () => {
         cleanupCapturedMedia();
-        if (chunks.current.length === 0) {
+        const sessionId = streamSessionId.current;
+        streamSessionId.current = null;
+
+        if (!sessionId && chunks.current.length === 0) {
           setFinalizing(false);
           return;
         }
@@ -1812,39 +1868,61 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
         const duration = getRecordingDurationMs(Date.now());
         const recordedChunks = chunks.current;
         const recordingBlobType = recorder.mimeType || mimeType;
-        const buggyBlob = new Blob(
-          recordedChunks,
-          recordingBlobType ? { type: recordingBlobType } : undefined,
-        );
         chunks.current = [];
         const timestamp = recordingSessionTimestamp.current ?? Date.now();
         const videoFileName = `${RECORDING_FILE_PREFIX}${timestamp}${VIDEO_FILE_EXTENSION}`;
 
         try {
-          const videoBlob = await fixWebmDuration(buggyBlob, duration);
-          const arrayBuffer = await videoBlob.arrayBuffer();
-          const videoResult = await window.electronAPI.storeRecordedVideo(
-            arrayBuffer,
-            videoFileName,
-          );
-          if (!videoResult.success) {
-            console.error("Failed to store video:", videoResult.message);
-            await notifyRecordingFinalizationFailure(
-              videoResult.message || "Failed to store the recording.",
+          let videoPath: string | undefined;
+
+          if (sessionId) {
+            // Streamed path: chunks are already on disk. Wait for in-flight
+            // appends, then the main process remuxes the file (fixing the
+            // missing WebM duration header) and finalizes it.
+            await streamAppendQueue.current;
+            if (streamFailed.current) {
+              await window.electronAPI.recordingStreamAbort(sessionId);
+              await notifyRecordingFinalizationFailure(
+                "Failed to write the recording to disk.",
+              );
+              return;
+            }
+            const streamResult =
+              await window.electronAPI.recordingStreamFinalize(sessionId);
+            if (!streamResult.success || !streamResult.path) {
+              console.error("Failed to store video:", streamResult.message);
+              await notifyRecordingFinalizationFailure(
+                streamResult.message || "Failed to store the recording.",
+              );
+              return;
+            }
+            videoPath = streamResult.path;
+          } else {
+            // Fallback path: no stream session, chunks buffered in memory.
+            const buggyBlob = new Blob(
+              recordedChunks,
+              recordingBlobType ? { type: recordingBlobType } : undefined,
             );
-            return;
+            const videoBlob = await fixWebmDuration(buggyBlob, duration);
+            const arrayBuffer = await videoBlob.arrayBuffer();
+            const videoResult = await window.electronAPI.storeRecordedVideo(
+              arrayBuffer,
+              videoFileName,
+            );
+            if (!videoResult.success || !videoResult.path) {
+              console.error("Failed to store video:", videoResult.message);
+              await notifyRecordingFinalizationFailure(
+                videoResult.message || "Failed to store the recording.",
+              );
+              return;
+            }
+            videoPath = videoResult.path;
           }
 
-          if (videoResult.path) {
-            const webcamPath = pendingWebcamPathPromise.current
-              ? await pendingWebcamPathPromise.current
-              : resolvedWebcamPath.current;
-            await finalizeRecordingSession(videoResult.path, webcamPath);
-          } else {
-            await notifyRecordingFinalizationFailure(
-              "Failed to save the recording.",
-            );
-          }
+          const webcamPath = pendingWebcamPathPromise.current
+            ? await pendingWebcamPathPromise.current
+            : resolvedWebcamPath.current;
+          await finalizeRecordingSession(videoPath, webcamPath);
         } catch (error) {
           console.error("Error saving recording:", error);
           const message =
@@ -2022,6 +2100,13 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 
     if (mediaRecorder.current) {
       chunks.current = [];
+      // Drop the stream session before stop() so onstop treats this as a
+      // cancel (no session, no chunks) instead of finalizing the file.
+      const sessionId = streamSessionId.current;
+      streamSessionId.current = null;
+      if (sessionId) {
+        void window.electronAPI.recordingStreamAbort(sessionId);
+      }
       cleanupCapturedMedia();
       if (mediaRecorder.current.state !== "inactive") {
         mediaRecorder.current.stop();
@@ -2040,6 +2125,10 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
       stopRecording.current();
       return;
     }
+
+    // Non-blocking: surface GPU-fallback / high-CPU warnings as the
+    // recording starts so the user knows why it might stutter.
+    void showSystemHealthWarnings();
 
     // Start recording with optional countdown
     if (countdownDelay > 0) {

@@ -245,7 +245,8 @@ export function BackgroundSection({
           max={8}
           step={0.25}
           onValueChange={(v) => onBackgroundBlurChange?.(v)}
-          valueFormatter={(v) => `${v.toFixed(1)}px`}
+          decimals={1}
+          suffix="px"
         />
       </section>
 

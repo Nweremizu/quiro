@@ -19,12 +19,20 @@ import { showCursor } from "@electron/utils/cursor";
 import { registerExtensionIpcHandlers } from "@electron/extensions/ipc-extensions";
 import { getGpuSwitches } from "@electron/utils/gpu-switcher";
 import {
+  analyzeGpuAdapters,
+  type GpuAdapter,
+  readWindowsGpuPreference,
+  setWindowsGpuPreferenceHighPerformance,
+} from "@electron/utils/gpu-preference";
+import {
   cleanupAllExportStreamSessions,
   cleanupNativeVideoExportSessions,
+  cleanupRecordingStreamSessions,
   getSelectedSourceId,
   killWindowsCaptureProcess,
   registerIpcHandlers,
 } from "./ipc/handlers";
+import { installIpcPerfInterceptor } from "./ipc/perf";
 import { ensureMediaServer } from "@electron/utils/mediaServer";
 import { ensurePackagedRendererServer } from "./renderer-server";
 import type { UpdateToastPayload } from "./updater";
@@ -68,9 +76,18 @@ function ignoreBrokenConsolePipe(stream: NodeJS.WritableStream | undefined) {
 ignoreBrokenConsolePipe(process.stdout);
 ignoreBrokenConsolePipe(process.stderr);
 
+// Safety net: a detached promise that rejects (e.g. a background update check
+// hitting a 404) must never take the whole app down. Log it instead of letting
+// Node's default handler terminate the main process.
+process.on("unhandledRejection", (reason) => {
+  console.error("[main] Unhandled promise rejection:", reason);
+});
+
 app.commandLine.appendSwitch("ignore-gpu-blocklist");
 app.commandLine.appendSwitch("enable-unsafe-webgpu");
 app.commandLine.appendSwitch("enable-gpu-rasterization");
+app.commandLine.appendSwitch("enable-accelerated-video-decode");
+app.commandLine.appendSwitch("enable-accelerated-video-encode");
 
 function configureGpuAccelerationSwitches() {
   const { useAngle, useGl, disableFeatures } = getGpuSwitches(
@@ -108,6 +125,57 @@ async function logSmokeExportGpuDiagnostics() {
 }
 
 configureGpuAccelerationSwitches();
+// Install before app.whenReady() so every ipcMain.handle() call is timed.
+installIpcPerfInterceptor();
+
+/**
+ * Windows assigns dual-GPU laptops the integrated GPU by default. When a
+ * dedicated GPU exists but the integrated one is active, register this exe
+ * for the high-performance GPU (the same registry entry Windows Settings →
+ * Display → Graphics writes) and relaunch once so the app comes back on the
+ * dedicated card. The relaunch can't loop: once the preference is written we
+ * never take the relaunch branch again.
+ */
+async function ensureDedicatedGpu(): Promise<void> {
+  if (
+    process.platform !== "win32" ||
+    IS_SMOKE_EXPORT ||
+    process.env.QUIRO_SKIP_GPU_RELAUNCH === "1"
+  ) {
+    return;
+  }
+
+  try {
+    const info = (await app.getGPUInfo("basic")) as {
+      gpuDevice?: GpuAdapter[];
+    };
+    const analysis = analyzeGpuAdapters(info.gpuDevice ?? []);
+    if (!analysis.hasDiscreteGpu || !analysis.activeIsIntegrated) {
+      return;
+    }
+
+    const existing = await readWindowsGpuPreference(process.execPath);
+    if (existing?.includes("GpuPreference=2")) {
+      // Already requested high performance but Windows still chose the
+      // integrated GPU (driver/OEM policy). The renderer-side system health
+      // warning tells the user how to override it manually.
+      console.warn(
+        "[gpu] High-performance GPU preference is set but the integrated GPU is still active.",
+      );
+      return;
+    }
+
+    console.log(
+      "[gpu] Integrated GPU active with a dedicated GPU available — registering high-performance preference and relaunching.",
+    );
+    if (await setWindowsGpuPreferenceHighPerformance(process.execPath)) {
+      app.relaunch();
+      app.quit();
+    }
+  } catch (error) {
+    console.warn("[gpu] Dedicated GPU check failed:", error);
+  }
+}
 
 async function ensureRecordingsDir() {
   try {
@@ -473,7 +541,11 @@ function setupApplicationMenu() {
         {
           label: "Check for Updates...",
           click: () => {
-            void checkForAppUpdates(getUpdateDialogWindow, { manual: true });
+            checkForAppUpdates(getUpdateDialogWindow, { manual: true }).catch(
+              (error) => {
+                console.error("[updater] manual check failed", error);
+              },
+            );
           },
         },
       ],
@@ -785,6 +857,7 @@ app.on("before-quit", () => {
   killWindowsCaptureProcess();
   showCursor();
   cleanupNativeVideoExportSessions();
+  cleanupRecordingStreamSessions();
   void cleanupAllExportStreamSessions();
 });
 
@@ -809,6 +882,10 @@ app.whenReady().then(async () => {
   if (process.platform === "win32") {
     app.setAppUserModelId("dev.quiro.app");
   }
+
+  // Fire-and-forget: may relaunch the app once on dual-GPU machines where
+  // Windows assigned the integrated GPU.
+  void ensureDedicatedGpu();
 
   session.defaultSession.setPermissionCheckHandler(
     (_webContents, permission) => {

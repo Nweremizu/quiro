@@ -83,7 +83,8 @@ export function FrameSection({
           max={200}
           step={0.5}
           onValueChange={(v) => onBorderRadiusChange?.(v)}
-          valueFormatter={(v) => `${v}px`}
+          decimals={1}
+          suffix="px"
         />
         <div className="flex flex-col gap-1.5 pt-0.5">
           <div className="flex items-center justify-between">
@@ -120,7 +121,8 @@ export function FrameSection({
               max={100}
               step={1}
               onValueChange={(v) => handlePaddingSideChange("top", v)}
-              valueFormatter={(v) => `${v}%`}
+              decimals={0}
+              suffix="%"
             />
           ) : (
             <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
@@ -132,7 +134,8 @@ export function FrameSection({
                 max={100}
                 step={1}
                 onValueChange={(v) => handlePaddingSideChange("top", v)}
-                valueFormatter={(v) => `${v}%`}
+                decimals={0}
+              suffix="%"
               />
               <Scrubber
                 label={tSettings("effects.paddingBottom", "Bottom")}
@@ -142,7 +145,8 @@ export function FrameSection({
                 max={100}
                 step={1}
                 onValueChange={(v) => handlePaddingSideChange("bottom", v)}
-                valueFormatter={(v) => `${v}%`}
+                decimals={0}
+              suffix="%"
               />
               <Scrubber
                 label={tSettings("effects.paddingLeft", "Left")}
@@ -152,7 +156,8 @@ export function FrameSection({
                 max={100}
                 step={1}
                 onValueChange={(v) => handlePaddingSideChange("left", v)}
-                valueFormatter={(v) => `${v}%`}
+                decimals={0}
+              suffix="%"
               />
               <Scrubber
                 label={tSettings("effects.paddingRight", "Right")}
@@ -162,7 +167,8 @@ export function FrameSection({
                 max={100}
                 step={1}
                 onValueChange={(v) => handlePaddingSideChange("right", v)}
-                valueFormatter={(v) => `${v}%`}
+                decimals={0}
+              suffix="%"
               />
             </div>
           )}

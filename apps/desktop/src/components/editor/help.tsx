@@ -9,9 +9,9 @@ import {
   NewTwitterIcon,
   GithubIcon,
 } from "@/components/icons/generated";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Kbd } from "@/components/ui/kbd";
+import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import {
   Dialog,
   DialogContent,
@@ -23,7 +23,8 @@ import {
 import { useScopedT } from "@/contexts/I18nContext";
 import { useShortcuts } from "@/contexts/shortcut-context";
 import {
-  formatBinding,
+  FIXED_SHORTCUTS,
+  formatBindingParts,
   SHORTCUT_ACTIONS,
   SHORTCUT_LABELS,
 } from "@/lib/shortcuts";
@@ -42,10 +43,48 @@ export const APP_HEADER_ICON_BUTTON_CLASS =
   "h-7 w-7 p-0 text-muted-foreground hover:bg-foreground/10 hover:text-foreground transition-all";
 const COMPACT_DIALOG_CONTENT_CLASS =
   "max-w-md bg-card shadow-lg border-(--border-default) text-foreground [&>button]:text-muted-foreground [&>button:hover]:text-foreground";
-const SHORTCUT_ROW_CLASS =
-  "flex min-h-8 items-center justify-between gap-3 rounded-md px-1.5 py-1 text-xs";
-const SHORTCUT_KEY_CLASS =
-  "shrink-0 border border-foreground/10 bg-foreground/[0.04] px-2 font-mono text-[11px] text-foreground";
+const KEY_CHIP_CLASS =
+  "border border-foreground/10 bg-foreground/[0.04] px-1.5 font-mono text-[11px] text-foreground";
+
+function Keys({ parts }: { parts: string[] }) {
+  return (
+    <KbdGroup>
+      {parts.map((part, i) => (
+        <Fragment key={i}>
+          {i > 0 && (
+            <span className="select-none text-[10px] text-muted-foreground/30">
+              +
+            </span>
+          )}
+          <Kbd className={KEY_CHIP_CLASS}>{part}</Kbd>
+        </Fragment>
+      ))}
+    </KbdGroup>
+  );
+}
+
+function ShortcutRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 px-3 py-2">
+      <span className="text-[12px] text-foreground/70">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mb-1.5 px-1 text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/40">
+      {children}
+    </p>
+  );
+}
 
 interface KeyboardShortcutsDialogProps {
   triggerLabel?: string;
@@ -235,82 +274,102 @@ export function KeyboardShortcutsDialog({
     ]).then(([pan, zoom]) => setScrollLabels({ pan, zoom }));
   }, []);
 
+  // Fixed shortcuts by index for quick access
+  const [cycleForward, cycleBackward, deleteAlt] = FIXED_SHORTCUTS;
+
   return (
     <Dialog>
-      <DialogTrigger>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={triggerClassName ?? APP_HEADER_ICON_BUTTON_CLASS}
-          title={t("keyboardShortcuts.trigger", "Shortcuts")}
-          aria-label={t("keyboardShortcuts.trigger", "Shortcuts")}
-        >
-          <KeyboardIcon className="h-3.5 w-3.5" />
-          {triggerLabel ? (
-            <span className="font-medium">{triggerLabel}</span>
-          ) : null}
-        </Button>
+      <DialogTrigger
+        className={triggerClassName ?? APP_HEADER_ICON_BUTTON_CLASS}
+        title={t("keyboardShortcuts.trigger", "Shortcuts")}
+        aria-label={t("keyboardShortcuts.trigger", "Shortcuts")}
+      >
+        <KeyboardIcon className="h-3.5 w-3.5" />
+        {triggerLabel ? (
+          <span className="font-medium">{triggerLabel}</span>
+        ) : null}
       </DialogTrigger>
       <DialogContent className={COMPACT_DIALOG_CONTENT_CLASS}>
         <DialogHeader>
           <DialogTitle className="text-[15px] font-semibold tracking-[-0.02em] text-foreground">
-            {t("keyboardShortcuts.title")}
+            {t("keyboardShortcuts.title", "Keyboard Shortcuts")}
           </DialogTitle>
-          <DialogDescription className="text-muted-foreground leading-relaxed text-[13px]">
+          <DialogDescription className="text-[13px] leading-relaxed text-muted-foreground">
             {t(
               "keyboardShortcuts.description",
               "Quick reference for the timeline and editor controls.",
             )}
           </DialogDescription>
         </DialogHeader>
-        <div className="mt-1 space-y-4">
-          <div className="space-y-1">
-            {SHORTCUT_ACTIONS.map((action) => (
-              <div key={action} className={SHORTCUT_ROW_CLASS}>
-                <span className="text-muted-foreground">
-                  {SHORTCUT_LABELS[action]}
-                </span>
-                <Kbd className={SHORTCUT_KEY_CLASS}>
-                  {formatBinding(shortcuts[action], isMac)}
-                </Kbd>
-              </div>
-            ))}
-            <div className="mt-2 grid grid-cols-1 gap-2 pt-3 sm:grid-cols-3">
-              <div className="space-y-2">
-                <p className="text-[11px] font-medium text-muted-foreground">
-                  {t("keyboardShortcuts.panTimeline")}
-                </p>
-                <Kbd className={SHORTCUT_KEY_CLASS}>
-                  {scrollLabels.pan}
-                </Kbd>
-              </div>
-              <div className="space-y-2">
-                <p className="text-[11px] font-medium text-muted-foreground">
-                  {t("keyboardShortcuts.zoomTimeline")}
-                </p>
-                <Kbd className={SHORTCUT_KEY_CLASS}>
-                  {scrollLabels.zoom}
-                </Kbd>
-              </div>
-              <div className="space-y-2">
-                <p className="text-[11px] font-medium text-muted-foreground">
-                  {t("keyboardShortcuts.cycleAnnotations")}
-                </p>
-                <Kbd className={SHORTCUT_KEY_CLASS}>
-                  {t("keyboardShortcuts.tab")}
-                </Kbd>
-              </div>
+
+        <div className="mt-3 space-y-4">
+          {/* Configurable actions */}
+          <div>
+            <SectionLabel>Actions</SectionLabel>
+            <div className="overflow-hidden rounded-lg border border-foreground/[0.06] divide-y divide-foreground/[0.04]">
+              {SHORTCUT_ACTIONS.map((action) => (
+                <ShortcutRow key={action} label={SHORTCUT_LABELS[action]}>
+                  <Keys parts={formatBindingParts(shortcuts[action], isMac)} />
+                </ShortcutRow>
+              ))}
             </div>
           </div>
-          <div className="flex justify-end">
+
+          {/* Fixed / navigation shortcuts */}
+          <div>
+            <SectionLabel>Navigation</SectionLabel>
+            <div className="overflow-hidden rounded-lg border border-foreground/[0.06] divide-y divide-foreground/[0.04]">
+              <ShortcutRow label="Pan Timeline">
+                <Keys parts={scrollLabels.pan.split(" + ")} />
+              </ShortcutRow>
+              <ShortcutRow label="Zoom Timeline">
+                <Keys parts={scrollLabels.zoom.split(" + ")} />
+              </ShortcutRow>
+              {cycleForward && cycleBackward && (
+                <ShortcutRow label="Cycle Annotations">
+                  <div className="flex items-center gap-2">
+                    <Keys
+                      parts={formatBindingParts(
+                        cycleForward.bindings[0]!,
+                        isMac,
+                      )}
+                    />
+                    <span className="select-none text-[10px] text-muted-foreground/30">
+                      /
+                    </span>
+                    <Keys
+                      parts={formatBindingParts(
+                        cycleBackward.bindings[0]!,
+                        isMac,
+                      )}
+                    />
+                  </div>
+                </ShortcutRow>
+              )}
+              {deleteAlt && (
+                <ShortcutRow label="Delete (alternative)">
+                  <div className="flex items-center gap-2">
+                    <Keys parts={["Del"]} />
+                    <span className="select-none text-[10px] text-muted-foreground/30">
+                      /
+                    </span>
+                    <Keys parts={["⌫"]} />
+                  </div>
+                </ShortcutRow>
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-1">
             <Button
               type="button"
               variant="outline"
+              size="sm"
               onClick={openConfig}
-              className="border-foreground/10 bg-foreground/5 text-foreground hover:bg-foreground/10 hover:text-foreground"
+              className="h-7 gap-1.5 border-foreground/10 bg-foreground/5 text-[11px] text-foreground hover:bg-foreground/10 hover:text-foreground"
             >
-              <Settings02Icon className="h-4 w-4" />
-              {t("keyboardShortcuts.customize")}
+              <Settings02Icon className="h-3 w-3" />
+              {t("keyboardShortcuts.customize", "Customize")}
             </Button>
           </div>
         </div>

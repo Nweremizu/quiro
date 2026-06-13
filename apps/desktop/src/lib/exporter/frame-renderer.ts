@@ -240,6 +240,12 @@ interface LayoutCache {
     height: number;
     sourceCrop: CropRegion;
   };
+  webcamPanel?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null;
 }
 
 interface RenderSnapshot {
@@ -1921,6 +1927,11 @@ export class FrameRenderer {
       cropRegion,
       videoWidth,
       videoHeight,
+      sideBySide:
+        this.config.webcam?.enabled &&
+        this.config.webcam?.layoutMode === "side-by-side"
+          ? { side: "right" }
+          : null,
     });
 
     this.videoSprite.scale.set(layout.scale);
@@ -1961,6 +1972,7 @@ export class FrameRenderer {
         height: layout.croppedDisplayHeight,
         sourceCrop: cropRegion,
       },
+      webcamPanel: layout.webcamPanel,
     };
   }
 
@@ -2440,28 +2452,38 @@ export class FrameRenderer {
     }
 
     const margin = webcam.margin ?? 24;
-    const overlaySize = getWebcamOverlaySizeRect({
-      containerWidth: width,
-      containerHeight: height,
-      sizePercent: webcam.size ?? 50,
-      margin,
-      zoomScale: this.animationState.appliedScale || 1,
-      reactToZoom: webcam.reactToZoom ?? true,
-      aspectRatio: webcam.aspectRatio ?? 1,
-      layoutMode: webcam.layoutMode ?? "overlay",
-    });
-    const { x, y } = getWebcamOverlayPosition({
-      containerWidth: width,
-      containerHeight: height,
-      size: overlaySize.height,
-      width: overlaySize.width,
-      height: overlaySize.height,
-      margin,
-      positionPreset: webcam.positionPreset ?? webcam.corner,
-      positionX: webcam.positionX ?? 1,
-      positionY: webcam.positionY ?? 1,
-      legacyCorner: webcam.corner,
-    });
+    // In side-by-side layout the webcam fills the column reserved by the video
+    // layout pass; otherwise it floats as an overlay at its configured position.
+    const sideBySidePanel =
+      webcam.layoutMode === "side-by-side"
+        ? (this.layoutCache?.webcamPanel ?? null)
+        : null;
+    const overlaySize = sideBySidePanel
+      ? { width: sideBySidePanel.width, height: sideBySidePanel.height }
+      : getWebcamOverlaySizeRect({
+          containerWidth: width,
+          containerHeight: height,
+          sizePercent: webcam.size ?? 50,
+          margin,
+          zoomScale: this.animationState.appliedScale || 1,
+          reactToZoom: webcam.reactToZoom ?? true,
+          aspectRatio: webcam.aspectRatio ?? 1,
+          layoutMode: webcam.layoutMode ?? "overlay",
+        });
+    const { x, y } = sideBySidePanel
+      ? { x: sideBySidePanel.x, y: sideBySidePanel.y }
+      : getWebcamOverlayPosition({
+          containerWidth: width,
+          containerHeight: height,
+          size: overlaySize.height,
+          width: overlaySize.width,
+          height: overlaySize.height,
+          margin,
+          positionPreset: webcam.positionPreset ?? webcam.corner,
+          positionX: webcam.positionX ?? 1,
+          positionY: webcam.positionY ?? 1,
+          legacyCorner: webcam.corner,
+        });
     const radius = Math.max(0, webcam.cornerRadius ?? 18);
 
     const bubbleCanvas =

@@ -26,10 +26,26 @@ export function SourcePopover({
   const [loading, setLoading] = useState(false);
   const open = isOpen(POPOVER_ID);
 
+  // Two-phase fetch: a thumbnail-less list renders the picker instantly, then
+  // the full call streams in thumbnails/icons. See SourceSelector for details —
+  // `desktopCapturer.getSources` otherwise blocks ~1s capturing thumbnails.
   const fetchSources = useCallback(async () => {
     if (!window.electronAPI) return;
     setLoading(true);
     try {
+      try {
+        const fastSources = await window.electronAPI.getSources({
+          types: ["screen", "window"],
+          thumbnailSize: { width: 1, height: 1 },
+          fetchWindowIcons: false,
+        });
+        setSources(fastSources.map((s) => mapRawSource(s as DesktopSource)));
+      } catch (fastError) {
+        console.warn("Fast source prefetch failed:", fastError);
+      } finally {
+        setLoading(false);
+      }
+
       const rawSources = await window.electronAPI.getSources({
         types: ["screen", "window"],
         thumbnailSize: { width: 160, height: 100 },
@@ -38,7 +54,6 @@ export function SourcePopover({
       setSources(rawSources.map((s) => mapRawSource(s as DesktopSource)));
     } catch (error) {
       console.error("Failed to fetch sources:", error);
-    } finally {
       setLoading(false);
     }
   }, []);

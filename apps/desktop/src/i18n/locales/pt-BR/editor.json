@@ -100,11 +100,7 @@
 		"title": "Atalhos de teclado",
 		"description": "Referência rápida para os controles da linha do tempo e do editor.",
 		"customizeTooltip": "Personalizar atalhos",
-		"customize": "Personalizar",
-		"panTimeline": "Mover linha do tempo",
-		"zoomTimeline": "Zoom da linha do tempo",
-		"cycleAnnotations": "Alternar anotações",
-		"tab": "Tab"
+		"customize": "Personalizar"
 	},
 	"actions": {
 		"saveAgain": "Salvar novamente",

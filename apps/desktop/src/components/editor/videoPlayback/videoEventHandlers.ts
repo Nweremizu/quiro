@@ -1,6 +1,7 @@
 import type React from "react";
 import { extensionHost } from "@/lib/extensions";
 import { enablePitchPreservingPlayback } from "@/lib/mediaTiming";
+import { playbackSessionDebug } from "@/lib/playbackSessionDebug";
 import type { SpeedRegion, TrimRegion } from "@/types/editor";
 
 const TRIM_BOUNDARY_EPSILON_MS = 2;
@@ -9,6 +10,9 @@ const STALE_FRAME_SEEK_TOLERANCE_MS = 40;
 
 interface PresentedFrameMetadata {
   mediaTime?: number;
+  presentedFrames?: number;
+  processingDuration?: number;
+  expectedDisplayTime?: number;
 }
 
 type PresentedFrameVideoElement = HTMLVideoElement & {
@@ -131,8 +135,9 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
     // polling `currentTime` on a generic animation frame.
     if (typeof presentedFrameVideo.requestVideoFrameCallback === "function") {
       videoFrameRequestId = presentedFrameVideo.requestVideoFrameCallback(
-        (_now, metadata) => {
+        (now, metadata) => {
           videoFrameRequestId = null;
+          playbackSessionDebug.recordPresentedFrame(now, metadata);
           updateTime(metadata);
         },
       );
@@ -203,6 +208,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 
     onPlayStateChange(true);
 
+    playbackSessionDebug.beginSession(video);
     cancelScheduledUpdate();
     scheduleNextUpdate();
   };
@@ -210,6 +216,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
   const handlePause = () => {
     isPlayingRef.current = false;
     onPlayStateChange(false);
+    playbackSessionDebug.endSession(video.ended ? "ended" : "pause");
     cancelScheduledUpdate();
     emitTime(video.currentTime);
   };
@@ -237,12 +244,18 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 
   const handleSeeking = () => {
     isSeekingRef.current = true;
+    playbackSessionDebug.markSeek();
     cancelScheduledUpdate();
     emitTime(video.currentTime);
   };
 
+  const dispose = () => {
+    playbackSessionDebug.endSession("dispose");
+    cancelScheduledUpdate();
+  };
+
   return {
-    dispose: cancelScheduledUpdate,
+    dispose,
     handlePlay,
     handlePause,
     handleSeeked,

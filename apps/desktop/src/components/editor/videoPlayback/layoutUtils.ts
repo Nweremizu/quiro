@@ -1,8 +1,26 @@
 import { Application, Graphics, Sprite } from "pixi.js";
 import { drawSquircleOnGraphics } from "@/lib/geometry/squircle";
 import type { CropRegion, Padding } from "@/types/editor";
+import {
+  SIDE_BY_SIDE_GAP_FRACTION,
+  SIDE_BY_SIDE_WEBCAM_ASPECT,
+} from "@/components/editor/utils/webcam-overlay";
 
 export const PADDING_SCALE_FACTOR = 0.2;
+
+/** Rect (in stage pixels) reserved for the webcam in side-by-side layout. */
+export interface WebcamPanelRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Configuration for reflowing the screen video beside a webcam column. */
+export interface SideBySideLayout {
+  /** Which edge the webcam column is pinned to. */
+  side: "left" | "right";
+}
 
 export function isZeroPadding(padding: Padding | number): boolean {
   if (typeof padding === "number") {
@@ -30,6 +48,8 @@ export interface PaddedLayoutResult {
   croppedDisplayHeight: number;
   cropStartX: number;
   cropStartY: number;
+  /** Rect reserved for the webcam when laying out side-by-side, else null. */
+  webcamPanel: WebcamPanelRect | null;
 }
 
 export function computePaddedLayout(params: {
@@ -45,6 +65,7 @@ export function computePaddedLayout(params: {
   cropRegion: CropRegion;
   videoWidth: number;
   videoHeight: number;
+  sideBySide?: SideBySideLayout | null;
 }): PaddedLayoutResult {
   const {
     width,
@@ -54,6 +75,7 @@ export function computePaddedLayout(params: {
     cropRegion,
     videoWidth,
     videoHeight,
+    sideBySide,
   } = params;
 
   // Apply asymmetrical padding
@@ -73,6 +95,8 @@ export function computePaddedLayout(params: {
   const availableFracW = Math.max(0, 1.0 - leftPadFrac - rightPadFrac);
   const availableFracH = Math.max(0, 1.0 - topPadFrac - bottomPadFrac);
 
+  const contentLeft = leftPadFrac * width;
+  const contentTop = topPadFrac * height;
   const maxDisplayWidth = width * availableFracW;
   const maxDisplayHeight = height * availableFracH;
 
@@ -87,10 +111,59 @@ export function computePaddedLayout(params: {
   const fullFrameVideoW = croppedVideoWidth / screenFracW;
   const fullFrameVideoH = croppedVideoHeight / screenFracH;
 
-  const scale = Math.min(
-    fullFrameVideoW > 0 ? maxDisplayWidth / fullFrameVideoW : 0,
-    fullFrameVideoH > 0 ? maxDisplayHeight / fullFrameVideoH : 0,
-  );
+  // Resolve the video scale and the point the full frame is centered on. In
+  // side-by-side layout the video and webcam are sized to the SAME height and
+  // centered together as a pair: the video fills its rounded box at its natural
+  // aspect (no letterboxing) and the webcam sits beside it as an equal-height
+  // portrait panel. Otherwise the frame is contained within the padded area.
+  let scale: number;
+  let availableCenterX: number;
+  let availableCenterY: number;
+  let webcamPanel: WebcamPanelRect | null = null;
+  if (sideBySide) {
+    const fullFrameAspect =
+      fullFrameVideoH > 0 ? fullFrameVideoW / fullFrameVideoH : 1;
+    const gapWidth = maxDisplayWidth * SIDE_BY_SIDE_GAP_FRACTION;
+    // Largest height at which video + gap + webcam fit across the width while
+    // also fitting within the available height.
+    const sharedHeight = Math.max(
+      0,
+      Math.min(
+        maxDisplayHeight,
+        (maxDisplayWidth - gapWidth) /
+          (fullFrameAspect + SIDE_BY_SIDE_WEBCAM_ASPECT),
+      ),
+    );
+    scale = fullFrameVideoH > 0 ? sharedHeight / fullFrameVideoH : 0;
+    const videoDisplayWidth = fullFrameVideoW * scale;
+    const webcamWidth = sharedHeight * SIDE_BY_SIDE_WEBCAM_ASPECT;
+    const pairWidth = videoDisplayWidth + gapWidth + webcamWidth;
+    const pairLeft =
+      contentLeft + Math.max(0, (maxDisplayWidth - pairWidth) / 2);
+    const pairTop =
+      contentTop + Math.max(0, (maxDisplayHeight - sharedHeight) / 2);
+    const videoLeft =
+      sideBySide.side === "left" ? pairLeft + webcamWidth + gapWidth : pairLeft;
+    const webcamLeft =
+      sideBySide.side === "left"
+        ? pairLeft
+        : pairLeft + videoDisplayWidth + gapWidth;
+    availableCenterX = videoLeft + videoDisplayWidth / 2;
+    availableCenterY = pairTop + sharedHeight / 2;
+    webcamPanel = {
+      x: webcamLeft,
+      y: pairTop,
+      width: webcamWidth,
+      height: sharedHeight,
+    };
+  } else {
+    scale = Math.min(
+      fullFrameVideoW > 0 ? maxDisplayWidth / fullFrameVideoW : 0,
+      fullFrameVideoH > 0 ? maxDisplayHeight / fullFrameVideoH : 0,
+    );
+    availableCenterX = contentLeft + maxDisplayWidth / 2;
+    availableCenterY = contentTop + maxDisplayHeight / 2;
+  }
 
   const fullVideoDisplayWidth = videoWidth * scale;
   const fullVideoDisplayHeight = videoHeight * scale;
@@ -99,9 +172,6 @@ export function computePaddedLayout(params: {
 
   const fullFrameDisplayW = fullFrameVideoW * scale;
   const fullFrameDisplayH = fullFrameVideoH * scale;
-
-  const availableCenterX = leftPadFrac * width + maxDisplayWidth / 2;
-  const availableCenterY = topPadFrac * height + maxDisplayHeight / 2;
 
   const frameCenterX = availableCenterX - fullFrameDisplayW / 2;
   const frameCenterY = availableCenterY - fullFrameDisplayH / 2;
@@ -130,6 +200,7 @@ export function computePaddedLayout(params: {
     croppedDisplayHeight,
     cropStartX: crop.x * videoWidth,
     cropStartY: crop.y * videoHeight,
+    webcamPanel,
   };
 }
 
@@ -150,6 +221,7 @@ interface LayoutParams {
     bottom: number;
     left: number;
   } | null;
+  sideBySide?: SideBySideLayout | null;
 }
 
 interface LayoutResult {
@@ -165,6 +237,7 @@ interface LayoutResult {
     sourceCrop?: CropRegion;
   };
   cropBounds: { startX: number; endX: number; startY: number; endY: number };
+  webcamPanel: WebcamPanelRect | null;
 }
 
 export function layoutVideoContent(params: LayoutParams): LayoutResult | null {
@@ -179,6 +252,7 @@ export function layoutVideoContent(params: LayoutParams): LayoutResult | null {
     borderRadius = 0,
     padding = 0,
     frameInsets,
+    sideBySide,
   } = params;
 
   const videoWidth = lockedVideoDimensions?.width || videoElement.videoWidth;
@@ -208,6 +282,7 @@ export function layoutVideoContent(params: LayoutParams): LayoutResult | null {
     cropRegion: crop,
     videoWidth,
     videoHeight,
+    sideBySide,
   });
 
   videoSprite.scale.set(layout.scale);
@@ -244,5 +319,6 @@ export function layoutVideoContent(params: LayoutParams): LayoutResult | null {
       startY: layout.cropStartY,
       endY: layout.cropStartY + videoHeight * crop.height,
     },
+    webcamPanel: layout.webcamPanel,
   };
 }

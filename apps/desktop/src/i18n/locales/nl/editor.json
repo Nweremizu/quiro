@@ -101,11 +101,7 @@
 		"title": "Sneltoetsen",
 		"description": "Snelreferentie voor de tijdlijn- en editorbesturing.",
 		"customizeTooltip": "Sneltoetsen aanpassen",
-		"customize": "Aanpassen",
-		"panTimeline": "Tijdlijn verschuiven",
-		"zoomTimeline": "Tijdlijn zoomen",
-		"cycleAnnotations": "Annotaties doorlopen",
-		"tab": "Tab"
+		"customize": "Aanpassen"
 	},
 	"actions": {
 		"saveAgain": "Opnieuw opslaan",

@@ -5,6 +5,7 @@ import Scrubber from "@/components/ui/scrubber";
 import {
   Upload01Icon as Upload,
   Delete02Icon as Trash2,
+  Camera01Icon,
 } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { WebcamCropControl } from "../../WebcamCropControl";
@@ -12,6 +13,7 @@ import type {
   WebcamOverlaySettings,
   CropRegion,
   WebcamPositionPreset,
+  WebcamLayoutMode,
 } from "@/types/editor";
 import {
   DEFAULT_CROP_REGION,
@@ -20,6 +22,7 @@ import {
   DEFAULT_WEBCAM_SHADOW,
   DEFAULT_WEBCAM_SIZE,
   DEFAULT_WEBCAM_REACT_TO_ZOOM,
+  DEFAULT_WEBCAM_LAYOUT_MODE,
 } from "@/types/editor";
 
 interface WebcamSectionProps {
@@ -66,6 +69,56 @@ export function WebcamSection({
   WEBCAM_POSITION_PRESETS,
   renderExtensionPanelsForSections,
 }: WebcamSectionProps) {
+  const webcamLayoutMode: WebcamLayoutMode =
+    webcam?.layoutMode ?? DEFAULT_WEBCAM_LAYOUT_MODE;
+  const isSideBySide = webcamLayoutMode === "side-by-side";
+  const WEBCAM_LAYOUT_MODES: Array<{ mode: WebcamLayoutMode; label: string }> = [
+    { mode: "overlay", label: tSettings("effects.webcamLayoutOverlay", "Overlay") },
+    {
+      mode: "side-by-side",
+      label: tSettings("effects.webcamLayoutSideBySide", "Side by side"),
+    },
+  ];
+
+  if (!webcam?.sourcePath) {
+    return (
+      <section className="flex flex-col gap-2">
+        <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          {tSettings("sections.webcam", "Webcam")}
+        </div>
+        <div className="flex flex-col items-center gap-3 rounded-xl bg-foreground/3 px-4 py-8 text-center">
+          <div className="flex size-10 items-center justify-center rounded-full bg-foreground/6 text-muted-foreground/60">
+            <Camera01Icon className="size-5" />
+          </div>
+          <div className="flex flex-col gap-1 font-heading">
+            <p className="text-sm font-medium text-foreground/80">
+              No webcam in this recording
+            </p>
+            <p className="max-w-52 text-sm leading-normal text-muted-foreground/60 font-sans">
+              This clip was captured without a webcam. Start a new recording
+              with your camera on, or add footage manually.
+            </p>
+          </div>
+          {onUploadWebcam && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onUploadWebcam}
+              className="mt-1 h-7 gap-1.5 border-foreground/10 bg-foreground/5 px-3 text-[10px] text-foreground hover:bg-foreground/10 hover:text-foreground"
+            >
+              <Upload className="h-3 w-3" />
+              Add webcam footage
+            </Button>
+          )}
+
+          <p className="mt-4 max-w-52 text-xs leading-normal text-primary/80">
+            P.S. Don't forget to say cheese! 📸
+          </p>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-3">
@@ -94,16 +147,44 @@ export function WebcamSection({
           />
         </div>
 
-        <div className="flex items-center justify-between rounded-lg bg-foreground/[0.03] px-2.5 py-1.5">
-          <span className="text-[10px] text-muted-foreground">
-            {tSettings("effects.webcamReactToZoom")}
-          </span>
-          <Switch
-            checked={webcam?.reactToZoom ?? DEFAULT_WEBCAM_REACT_TO_ZOOM}
-            onCheckedChange={(reactToZoom) => updateWebcam({ reactToZoom })}
-            className="data-[state=checked]:bg-primary scale-75"
-          />
+        <div className="rounded-lg bg-foreground/[0.03] px-2.5 py-2">
+          <div className="mb-2 text-[10px] text-muted-foreground">
+            {tSettings("effects.webcamLayout", "Layout")}
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {WEBCAM_LAYOUT_MODES.map((option) => {
+              const isActive = webcamLayoutMode === option.mode;
+              return (
+                <Button
+                  key={option.mode}
+                  type="button"
+                  onClick={() => updateWebcam({ layoutMode: option.mode })}
+                  className={cn(
+                    "h-8 rounded-lg border px-0 text-[11px] font-semibold transition-all",
+                    isActive
+                      ? "border-primary bg-primary text-white"
+                      : "border-foreground/10 bg-foreground/5 text-muted-foreground hover:border-foreground/20 hover:bg-foreground/10",
+                  )}
+                >
+                  {option.label}
+                </Button>
+              );
+            })}
+          </div>
         </div>
+
+        {!isSideBySide ? (
+          <div className="flex items-center justify-between rounded-lg bg-foreground/[0.03] px-2.5 py-1.5">
+            <span className="text-[10px] text-muted-foreground">
+              {tSettings("effects.webcamReactToZoom")}
+            </span>
+            <Switch
+              checked={webcam?.reactToZoom ?? DEFAULT_WEBCAM_REACT_TO_ZOOM}
+              onCheckedChange={(reactToZoom) => updateWebcam({ reactToZoom })}
+              className="data-[state=checked]:bg-primary scale-75"
+            />
+          </div>
+        ) : null}
 
         <div className="flex items-center justify-between rounded-lg bg-foreground/[0.03] px-2.5 py-1.5">
           <span className="text-[10px] text-muted-foreground">
@@ -116,17 +197,20 @@ export function WebcamSection({
           />
         </div>
 
-        <Scrubber
-          size="sm"
-          label={tSettings("effects.webcamSize")}
-          value={webcam?.size ?? DEFAULT_WEBCAM_SIZE}
-          defaultValue={DEFAULT_WEBCAM_SIZE}
-          min={10}
-          max={100}
-          step={1}
-          onValueChange={(v) => updateWebcam({ size: v })}
-          valueFormatter={(v) => `${Math.round(v)}%`}
-        />
+        {!isSideBySide ? (
+          <Scrubber
+            size="sm"
+            label={tSettings("effects.webcamSize")}
+            value={webcam?.size ?? DEFAULT_WEBCAM_SIZE}
+            defaultValue={DEFAULT_WEBCAM_SIZE}
+            min={10}
+            max={100}
+            step={1}
+            onValueChange={(v) => updateWebcam({ size: v })}
+            decimals={0}
+            suffix="%"
+          />
+        ) : null}
 
         <div className="rounded-lg bg-foreground/[0.03] px-2.5 py-2">
           <div className="mb-2 flex items-center justify-between gap-2">
@@ -152,6 +236,8 @@ export function WebcamSection({
           />
         </div>
 
+        {!isSideBySide ? (
+        <>
         <div className="rounded-lg bg-foreground/[0.03] px-2.5 py-2">
           <div className="mb-2 text-[10px] text-muted-foreground">
             {tSettings("effects.webcamPosition", "Position")}
@@ -208,7 +294,8 @@ export function WebcamSection({
               onValueChange={(v) =>
                 updateWebcam({ positionPreset: "custom", positionX: v / 100 })
               }
-              valueFormatter={(v) => `${Math.round(v)}%`}
+              decimals={0}
+              suffix="%"
             />
             <Scrubber
               size="sm"
@@ -221,7 +308,8 @@ export function WebcamSection({
               onValueChange={(v) =>
                 updateWebcam({ positionPreset: "custom", positionY: v / 100 })
               }
-              valueFormatter={(v) => `${Math.round(v)}%`}
+              decimals={0}
+              suffix="%"
             />
           </>
         ) : null}
@@ -235,8 +323,11 @@ export function WebcamSection({
           max={96}
           step={1}
           onValueChange={(v) => updateWebcam({ margin: v })}
-          valueFormatter={(v) => `${Math.round(v)}px`}
+          decimals={0}
+          suffix="px"
         />
+        </>
+        ) : null}
 
         <Scrubber
           size="sm"
@@ -247,7 +338,8 @@ export function WebcamSection({
           max={160}
           step={1}
           onValueChange={(v) => updateWebcam({ cornerRadius: v })}
-          valueFormatter={(v) => `${Math.round(v)}px`}
+          decimals={0}
+          suffix="px"
         />
 
         <Scrubber

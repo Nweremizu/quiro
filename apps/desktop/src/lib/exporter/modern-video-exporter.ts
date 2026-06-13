@@ -1530,6 +1530,15 @@ export class ModernVideoExporter {
     if (this.config.webcam?.enabled && !this.getNativeWebcamSourcePath()) {
       reasons.push("unsupported-webcam-source");
     }
+    // The native FFmpeg fast-path only composites a square corner overlay; the
+    // side-by-side layout reflows the video and uses a tall panel, so fall back
+    // to the renderer-based pipeline which handles it correctly.
+    if (
+      this.config.webcam?.enabled &&
+      this.config.webcam?.layoutMode === "side-by-side"
+    ) {
+      reasons.push("unsupported-webcam-side-by-side");
+    }
 
     if (this.config.frame) {
       reasons.push("unsupported-frame-overlay");

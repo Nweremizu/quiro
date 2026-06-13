@@ -2,6 +2,9 @@
 {
   $schema: "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
   appId: "app.quiro.app",
+  // Pinned so electron-builder can resolve the version even when electron is
+  // hoisted to the monorepo root node_modules instead of apps/desktop.
+  electronVersion: "42.2.0",
   asar: true,
   asarUnpack: [
     "node_modules/ffmpeg-static/**",

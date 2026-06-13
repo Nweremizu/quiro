@@ -1,5 +1,6 @@
 "use client";
 
+import NumberFlow from "@number-flow/react";
 import { cn } from "@/lib/utils";
 import { motion, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -45,7 +46,13 @@ export interface ScrubberProps {
   /** Show value */
   showValue?: boolean;
 
-  /** Custom value formatter */
+  /** Suffix appended after the animated number (e.g. "px", "%", "×") */
+  suffix?: string;
+
+  /** Prefix prepended before the animated number */
+  prefix?: string;
+
+  /** Custom value formatter — use only when suffix/prefix aren't enough (e.g. conditional text) */
   valueFormatter?: (value: number) => React.ReactNode;
 }
 
@@ -66,7 +73,7 @@ const SIZE_STYLES = {
     thumbWidth: 3,
     thumbHeight: 18,
     labelSize: 11,
-    valueSize: 10,
+    valueSize: 11,
     paddingX: 10,
   },
 
@@ -76,7 +83,7 @@ const SIZE_STYLES = {
     thumbWidth: 4,
     thumbHeight: 24,
     labelSize: 13,
-    valueSize: 12,
+    valueSize: 13,
     paddingX: 12,
   },
 
@@ -86,7 +93,7 @@ const SIZE_STYLES = {
     thumbWidth: 5,
     thumbHeight: 34,
     labelSize: 17,
-    valueSize: 15,
+    valueSize: 17,
     paddingX: 14,
   },
 
@@ -106,7 +113,7 @@ const SIZE_STYLES = {
     thumbWidth: 7,
     thumbHeight: 52,
     labelSize: 22,
-    valueSize: 20,
+    valueSize: 22,
     paddingX: 22,
   },
 } as const;
@@ -134,6 +141,8 @@ const Scrubber = ({
   showLabel = true,
   showValue = true,
 
+  suffix,
+  prefix,
   valueFormatter,
 }: ScrubberProps) => {
   const shouldReduceMotion = useReducedMotion();
@@ -219,20 +228,57 @@ const Scrubber = ({
     [getValueFromPointer, setValue],
   );
 
+  // Coalesce drag updates to one per frame: each onValueChange commit can
+  // re-render a large consumer tree (the editor), and pointermove events can
+  // outpace the display refresh on high-rate input devices.
+  const pendingDragClientXRef = useRef<number | null>(null);
+  const dragRafRef = useRef<number | null>(null);
+
+  const flushPendingDragValue = useCallback(() => {
+    if (dragRafRef.current !== null) {
+      cancelAnimationFrame(dragRafRef.current);
+      dragRafRef.current = null;
+    }
+    const clientX = pendingDragClientXRef.current;
+    pendingDragClientXRef.current = null;
+    if (clientX !== null) {
+      setValue(getValueFromPointer(clientX));
+    }
+  }, [getValueFromPointer, setValue]);
+
+  useEffect(() => {
+    return () => {
+      if (dragRafRef.current !== null) {
+        cancelAnimationFrame(dragRafRef.current);
+      }
+    };
+  }, []);
+
   const handlePointerMove = useCallback(
     (e: React.PointerEvent) => {
       if (!isDragging) {
         return;
       }
 
-      setValue(getValueFromPointer(e.clientX));
+      pendingDragClientXRef.current = e.clientX;
+      if (dragRafRef.current === null) {
+        dragRafRef.current = requestAnimationFrame(() => {
+          dragRafRef.current = null;
+          const clientX = pendingDragClientXRef.current;
+          pendingDragClientXRef.current = null;
+          if (clientX !== null) {
+            setValue(getValueFromPointer(clientX));
+          }
+        });
+      }
     },
     [isDragging, getValueFromPointer, setValue],
   );
 
   const handlePointerUp = useCallback(() => {
+    flushPendingDragValue();
     setIsDragging(false);
-  }, []);
+  }, [flushPendingDragValue]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -383,19 +429,39 @@ const Scrubber = ({
         {/* Value */}
         {showValue && (
           <div
-            className="pointer-events-none absolute top-1/2 -translate-y-1/2 text-foreground"
+            className="pointer-events-none absolute top-1/2 -translate-y-1/2 text-foreground font-mono"
             style={{
               right: rightPadding,
               zIndex: 4,
 
-              fontFamily: "ui-monospace, monospace",
               fontVariantNumeric: "tabular-nums",
-
+              fontFamily: "var(--font-mono)",
               fontSize: styles.valueSize,
               fontWeight: 500,
             }}
           >
-            {valueFormatter ? valueFormatter(value) : value.toFixed(decimals)}
+            {valueFormatter ? (
+              // valueFormatter(value)
+              <NumberFlow
+                value={value}
+                format={{
+                  minimumFractionDigits: decimals,
+                  maximumFractionDigits: decimals,
+                }}
+                prefix={prefix}
+                suffix={suffix}
+              />
+            ) : (
+              <NumberFlow
+                value={value}
+                format={{
+                  minimumFractionDigits: decimals,
+                  maximumFractionDigits: decimals,
+                }}
+                prefix={prefix}
+                suffix={suffix}
+              />
+            )}
           </div>
         )}
       </div>

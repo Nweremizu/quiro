@@ -11,10 +11,14 @@ concurrency:
   group: test-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:

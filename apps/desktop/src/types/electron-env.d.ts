@@ -309,6 +309,17 @@ interface Window {
       videoData: ArrayBuffer,
       fileName: string
     ) => Promise<{ success: boolean; path?: string; message?: string }>;
+    recordingStreamBegin: (
+      fileName: string
+    ) => Promise<{ success: boolean; sessionId?: string; message?: string }>;
+    recordingStreamAppend: (
+      sessionId: string,
+      chunk: ArrayBuffer
+    ) => Promise<{ success: boolean; message?: string }>;
+    recordingStreamFinalize: (
+      sessionId: string
+    ) => Promise<{ success: boolean; path?: string; message?: string }>;
+    recordingStreamAbort: (sessionId: string) => Promise<{ success: boolean }>;
     storeMicrophoneSidecar: (
       audioData: ArrayBuffer,
       videoPath: string,
@@ -1005,6 +1016,28 @@ interface Window {
       status: RendererMarketplaceReviewStatus,
       notes?: string
     ) => Promise<{ success: boolean; error?: string }>;
+
+    // ── Performance profiling ──────────────────────────────────────────
+    perfSnapshot?: () => Promise<{
+      processes: Array<{ pid: number; type: string; cpu: number; memMb: number }>;
+      ipc: Array<{ channel: string; calls: number; avgMs: number; maxMs: number; slowCount: number }>;
+    }>;
+    systemHealth?: () => Promise<{
+      gpu: {
+        videoDecode: string;
+        webgl: string;
+        gpuCompositing: string;
+        rasterization: string;
+        hardwareAccelerated: boolean;
+        discreteGpuAvailable: boolean;
+        activeIsIntegrated: boolean;
+        activeVendor: "intel" | "nvidia" | "amd" | "unknown";
+      };
+      cpu: {
+        systemLoadPercent: number;
+        coreCount: number;
+      };
+    }>;
   };
 }
 

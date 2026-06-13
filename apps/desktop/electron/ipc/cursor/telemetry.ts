@@ -29,6 +29,9 @@ import {
   setCursorCapturePauseStartedAtMs,
 } from "../state";
 
+/** How far the sample buffer may overshoot MAX_CURSOR_SAMPLES before a trim. */
+const CURSOR_TRIM_BLOCK = 4096;
+
 export function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
@@ -45,13 +48,14 @@ export async function writeCursorTelemetry(
     return normalizedSamples;
   }
 
+  // Compact JSON: at 30Hz a long recording produces 100k+ samples and
+  // pretty-printing roughly doubles file size and write/parse time.
   await fs.writeFile(
     telemetryPath,
-    JSON.stringify(
-      { version: CURSOR_TELEMETRY_VERSION, samples: normalizedSamples },
-      null,
-      2,
-    ),
+    JSON.stringify({
+      version: CURSOR_TELEMETRY_VERSION,
+      samples: normalizedSamples,
+    }),
     "utf-8",
   );
 
@@ -217,8 +221,14 @@ export function pushCursorSample(
     cursorType: cursorType ?? currentCursorVisualType,
   } as CursorTelemetryPoint);
 
-  if (activeCursorSamples.length > MAX_CURSOR_SAMPLES) {
-    activeCursorSamples.shift();
+  // Trim in blocks instead of shift()-per-push: once the cap is reached,
+  // shift() moves the whole 100k+ element array on every 33ms tick. Letting
+  // the buffer overshoot by a block and splicing once amortizes the cost.
+  if (activeCursorSamples.length > MAX_CURSOR_SAMPLES + CURSOR_TRIM_BLOCK) {
+    activeCursorSamples.splice(
+      0,
+      activeCursorSamples.length - MAX_CURSOR_SAMPLES,
+    );
   }
 }
 
@@ -232,11 +242,10 @@ export async function persistPendingCursorTelemetry(videoPath: string) {
   if (pendingCursorSamples.length > 0) {
     await fs.writeFile(
       telemetryPath,
-      JSON.stringify(
-        { version: CURSOR_TELEMETRY_VERSION, samples: pendingCursorSamples },
-        null,
-        2,
-      ),
+      JSON.stringify({
+        version: CURSOR_TELEMETRY_VERSION,
+        samples: pendingCursorSamples,
+      }),
       "utf-8",
     );
   }

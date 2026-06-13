@@ -1,4 +1,5 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { promisify } from "node:util";
 import type {
   NativeMacWindowSource,
@@ -250,11 +251,157 @@ export function stopInteractionCapture() {
   }
 }
 
+/**
+ * Long-lived PowerShell process that streams the selected window's bounds as
+ * compact JSON lines. Spawning powershell.exe per poll (the previous approach)
+ * paid process start-up plus an Add-Type C# compilation plus a Get-Process
+ * scan every 250ms for the whole recording; the persistent process pays those
+ * costs once and then only calls GetWindowRect per tick.
+ */
+let windowsBoundsStreamProcess: ChildProcess | null = null;
+
+function stopWindowsBoundsStream() {
+  const child = windowsBoundsStreamProcess;
+  if (!child) {
+    return;
+  }
+  // Clear the reference first so the exit handler treats this as intentional.
+  windowsBoundsStreamProcess = null;
+  try {
+    child.kill();
+  } catch {
+    // process already gone
+  }
+}
+
+function startWindowsBoundsStream(source: SelectedSource): boolean {
+  const windowId = parseWindowId(source?.id);
+  const windowTitle =
+    typeof source.windowTitle === "string"
+      ? source.windowTitle.trim()
+      : source.name.trim();
+
+  if (!windowId && !windowTitle) {
+    return false;
+  }
+
+  const script = [
+    "param([string]$windowId, [string]$windowTitle, [int]$intervalMs)",
+    'Add-Type -TypeDefinition @"',
+    "using System;",
+    "using System.Runtime.InteropServices;",
+    "public static class QuiroWindowBounds {",
+    "  [StructLayout(LayoutKind.Sequential)]",
+    "  public struct RECT {",
+    "    public int Left;",
+    "    public int Top;",
+    "    public int Right;",
+    "    public int Bottom;",
+    "  }",
+    '  [DllImport("user32.dll")]',
+    "  [return: MarshalAs(UnmanagedType.Bool)]",
+    "  public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);",
+    "}",
+    '"@',
+    "$escapedWindowTitle = if ($windowTitle) { [WildcardPattern]::Escape($windowTitle) } else { $null }",
+    "function Resolve-QuiroHandle {",
+    "  if ($windowId) {",
+    "    try { return [Int64]$windowId } catch { }",
+    "  }",
+    "  if ($windowTitle) {",
+    '    $matchingProcess = Get-Process | Where-Object { $_.MainWindowTitle -eq $windowTitle -or ($escapedWindowTitle -and $_.MainWindowTitle -like "*$escapedWindowTitle*") } | Select-Object -First 1',
+    "    if ($matchingProcess) {",
+    "      return $matchingProcess.MainWindowHandle.ToInt64()",
+    "    }",
+    "  }",
+    "  return [Int64]0",
+    "}",
+    "$handle = Resolve-QuiroHandle",
+    "while ($true) {",
+    "  if ($handle -le 0) {",
+    "    $handle = Resolve-QuiroHandle",
+    "    if ($handle -le 0) {",
+    "      Start-Sleep -Milliseconds ($intervalMs * 2)",
+    "      continue",
+    "    }",
+    "  }",
+    "  $rect = New-Object QuiroWindowBounds+RECT",
+    "  if ([QuiroWindowBounds]::GetWindowRect([IntPtr]$handle, [ref]$rect)) {",
+    "    $line = @{ x = $rect.Left; y = $rect.Top; width = $rect.Right - $rect.Left; height = $rect.Bottom - $rect.Top } | ConvertTo-Json -Compress",
+    "    [Console]::Out.WriteLine($line)",
+    "    [Console]::Out.Flush()",
+    "  } else {",
+    "    $handle = [Int64]0",
+    "  }",
+    "  Start-Sleep -Milliseconds $intervalMs",
+    "}",
+  ].join("\n");
+
+  let child: ChildProcess;
+  try {
+    child = spawn(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-Command",
+        script,
+        String(windowId ?? ""),
+        windowTitle,
+        String(WINDOW_BOUNDS_POLL_INTERVAL_MS),
+      ],
+      { stdio: ["ignore", "pipe", "ignore"], windowsHide: true },
+    );
+  } catch {
+    return false;
+  }
+
+  windowsBoundsStreamProcess = child;
+
+  let buffered = "";
+  child.stdout?.setEncoding("utf-8");
+  child.stdout?.on("data", (chunk: string) => {
+    buffered += chunk;
+    let newlineIndex = buffered.indexOf("\n");
+    while (newlineIndex >= 0) {
+      const line = buffered.slice(0, newlineIndex).trim();
+      buffered = buffered.slice(newlineIndex + 1);
+      newlineIndex = buffered.indexOf("\n");
+      if (!line) {
+        continue;
+      }
+      try {
+        const bounds = JSON.parse(line) as WindowBounds;
+        if (bounds && bounds.width > 0 && bounds.height > 0) {
+          setSelectedWindowBounds(bounds);
+        }
+      } catch {
+        // ignore malformed lines
+      }
+    }
+  });
+
+  const onGone = () => {
+    if (windowsBoundsStreamProcess !== child) {
+      return; // intentional stop
+    }
+    windowsBoundsStreamProcess = null;
+    // Unexpected death mid-capture: fall back to interval polling.
+    if (selectedSource?.id?.startsWith("window:")) {
+      startWindowBoundsPolling();
+    }
+  };
+  child.on("exit", onGone);
+  child.on("error", onGone);
+
+  return true;
+}
+
 export function stopWindowBoundsCapture() {
   if (windowBoundsCaptureInterval) {
     clearInterval(windowBoundsCaptureInterval);
     setWindowBoundsCaptureInterval(null);
   }
+  stopWindowsBoundsStream();
   setSelectedWindowBounds(null);
 }
 
@@ -277,6 +424,19 @@ async function refreshSelectedWindowBounds() {
   setSelectedWindowBounds(bounds);
 }
 
+const WINDOW_BOUNDS_POLL_INTERVAL_MS = 250;
+
+function startWindowBoundsPolling() {
+  if (windowBoundsCaptureInterval) {
+    return;
+  }
+  setWindowBoundsCaptureInterval(
+    setInterval(() => {
+      void refreshSelectedWindowBounds();
+    }, WINDOW_BOUNDS_POLL_INTERVAL_MS),
+  );
+}
+
 export function startWindowBoundsCapture() {
   stopWindowBoundsCapture();
 
@@ -287,10 +447,15 @@ export function startWindowBoundsCapture() {
     return;
   }
 
+  // One-shot resolve so bounds are available before the stream warms up.
   void refreshSelectedWindowBounds();
-  setWindowBoundsCaptureInterval(
-    setInterval(() => {
-      void refreshSelectedWindowBounds();
-    }, 250),
-  );
+
+  if (
+    process.platform === "win32" &&
+    startWindowsBoundsStream(selectedSource)
+  ) {
+    return;
+  }
+
+  startWindowBoundsPolling();
 }

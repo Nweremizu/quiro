@@ -100,11 +100,7 @@
 		"title": "键盘快捷键",
 		"description": "时间线和编辑器控制的快速参考。",
 		"customizeTooltip": "自定义快捷键",
-		"customize": "自定义",
-		"panTimeline": "平移时间线",
-		"zoomTimeline": "缩放时间线",
-		"cycleAnnotations": "循环切换注释",
-		"tab": "Tab"
+		"customize": "自定义"
 	},
 	"actions": {
 		"saveAgain": "再次保存",

@@ -351,11 +351,36 @@ export const SourceSelector = React.memo(function SourceSelector({
   const loading = propsLoading ?? internalLoading;
   const selectedSource = propsSelectedSource ?? internalSelectedSource;
 
-  // Default fetching logic
+  // Default fetching logic.
+  //
+  // `desktopCapturer.getSources` spends ~1s capturing a thumbnail bitmap for
+  // every screen/window, which blocks the picker from appearing. To keep the
+  // UI responsive we fetch in two phases: first a thumbnail-less list so the
+  // sources render instantly (with icon placeholders), then the full call to
+  // fill in thumbnails/icons. Source ids are stable across the two calls, so
+  // the second result simply replaces the first once it arrives.
   const defaultFetchSources = useCallback(async () => {
     if (!window.electronAPI) return;
     setInternalLoading(true);
     try {
+      try {
+        const fastSources = await window.electronAPI.getSources({
+          types: ["screen", "window"],
+          thumbnailSize: { width: 1, height: 1 },
+          fetchWindowIcons: false,
+        });
+        setInternalSources(
+          fastSources.map((s) => mapRawSource(s as DesktopSource)),
+        );
+      } catch (fastError) {
+        // Non-fatal: fall through to the full fetch below.
+        console.warn("Fast source prefetch failed:", fastError);
+      } finally {
+        // List (or placeholders) is usable now — drop the blocking spinner
+        // and let thumbnails stream in via the full fetch.
+        setInternalLoading(false);
+      }
+
       const rawSources = await window.electronAPI.getSources({
         types: ["screen", "window"],
         thumbnailSize: { width: 160, height: 90 },
@@ -366,7 +391,6 @@ export const SourceSelector = React.memo(function SourceSelector({
       );
     } catch (error) {
       console.error("Failed to fetch sources:", error);
-    } finally {
       setInternalLoading(false);
     }
   }, []);

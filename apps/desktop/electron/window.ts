@@ -253,7 +253,12 @@ function positionUpdateToastWindow() {
   updateToastWindow.moveTop();
 }
 
+// Tracks whether the HUD renderer has requested interactive mode (mouse over HUD).
+// Used by the focus handler to avoid resetting passthrough while the user hovers.
+let hudRendererInteractive = false;
+
 ipcMain.on("hud-overlay-set-ignore-mouse", (_event, ignore: boolean) => {
+  hudRendererInteractive = !ignore;
   if (hudOverlayWindow && !hudOverlayWindow.isDestroyed()) {
     if (!isHudOverlayMousePassthroughSupported()) {
       hudOverlayWindow.setIgnoreMouseEvents(false);
@@ -441,13 +446,50 @@ export function createHudOverlayWindow(): BrowserWindow {
       if (!win.isDestroyed()) {
         win.setIgnoreMouseEvents(false);
         setTimeout(() => {
-          if (!win.isDestroyed()) {
+          // Don't restore passthrough while the renderer has signalled the
+          // mouse is over the HUD (interactive mode). The renderer will
+          // re-enable passthrough itself once the mouse leaves.
+          if (!win.isDestroyed() && !hudRendererInteractive) {
             win.setIgnoreMouseEvents(true, { forward: true });
           }
         }, 50);
       }
     });
   }
+
+  // Forward renderer console.error/warn to the main-process log so they
+  // survive in packaged builds where Chromium's DevTools is not open.
+  win.webContents.on(
+    "console-message",
+    (_event, level, message, line, sourceId) => {
+      // level: 0=verbose, 1=info, 2=warning, 3=error
+      if (level === 3) {
+        console.error(`[hud-renderer] ${message} (${sourceId}:${line})`);
+      } else if (level === 2) {
+        console.warn(`[hud-renderer] ${message}`);
+      }
+    },
+  );
+
+  let hudCrashReloads = 0;
+  win.webContents.on("render-process-gone", (_event, details) => {
+    console.error("[hud-overlay] render-process-gone", details);
+    if (win.isDestroyed()) return;
+    // Reload up to 2 times on crash so the HUD recovers without the user
+    // having to restart the app. After that, leave the blank window up (it
+    // is still better than quitting via window-all-closed).
+    if (hudCrashReloads < 2) {
+      hudCrashReloads++;
+      hasShownHudWindow = false;
+      if (VITE_DEV_SERVER_URL) {
+        void win.loadURL(VITE_DEV_SERVER_URL + "?windowType=hud-overlay");
+      } else {
+        void win.loadFile(path.join(RENDERER_DIST, "index.html"), {
+          query: { windowType: "hud-overlay" },
+        });
+      }
+    }
+  });
 
   win.webContents.on("did-finish-load", () => {
     win?.webContents.send("main-process-message", new Date().toLocaleString());
@@ -589,6 +631,35 @@ export function createUpdateToastWindow(): BrowserWindow {
 
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   updateToastWindow = win;
+
+  // Forward renderer console.error/warn to the main-process log. Without this
+  // the toast renders in a packaged build where DevTools is unavailable, so a
+  // crash here is otherwise an invisible blank/black window.
+  win.webContents.on(
+    "console-message",
+    (_event, level, message, line, sourceId) => {
+      if (level === 3) {
+        console.error(`[update-toast-renderer] ${message} (${sourceId}:${line})`);
+      } else if (level === 2) {
+        console.warn(`[update-toast-renderer] ${message}`);
+      }
+    },
+  );
+
+  win.webContents.on("render-process-gone", (_event, details) => {
+    console.error("[update-toast] render-process-gone", details);
+  });
+
+  win.webContents.on(
+    "did-fail-load",
+    (_event, errorCode, errorDescription, validatedURL) => {
+      console.error("[update-toast] did-fail-load", {
+        errorCode,
+        errorDescription,
+        validatedURL,
+      });
+    },
+  );
 
   win.on("closed", () => {
     if (updateToastWindow === win) {
