@@ -115,17 +115,8 @@ jobs:
           Add-Content -Path $env:GITHUB_ENV -Value "WIN_CSC_LINK=$certPath"
           Add-Content -Path $env:GITHUB_ENV -Value "WIN_CSC_KEY_PASSWORD=$env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD"
 
-      # The committed package-lock.json is generated on Windows and, per
-      # npm/cli#4828, omits package nodes for non-host-platform optional native
-      # bindings (rolldown/esbuild). With it present, install silently skips
-      # the darwin/linux binding, so we drop the lockfile and let each runner
-      # resolve its platform's binaries fresh. `shell: bash` makes `rm` work on
-      # the Windows runner too.
       - name: Install dependencies
-        shell: bash
-        run: |
-          rm -f package-lock.json
-          npm install --ignore-scripts --no-audit --no-fund
+        run: npm ci --ignore-scripts
 
       - name: Copy WASM assets
         run: npm run copy:wasm -w @quiro/desktop
@@ -254,17 +245,8 @@ jobs:
             echo "::warning::Apple notarization secrets are missing. The app will be signed but NOT notarized — Gatekeeper will warn users on first launch."
           fi
 
-      # The committed package-lock.json is generated on Windows and, per
-      # npm/cli#4828, omits package nodes for non-host-platform optional native
-      # bindings (rolldown/esbuild). With it present, install silently skips
-      # the darwin/linux binding, so we drop the lockfile and let each runner
-      # resolve its platform's binaries fresh. `shell: bash` makes `rm` work on
-      # the Windows runner too.
       - name: Install dependencies
-        shell: bash
-        run: |
-          rm -f package-lock.json
-          npm install --ignore-scripts --no-audit --no-fund
+        run: npm ci --ignore-scripts
 
       - name: Copy WASM assets
         run: npm run copy:wasm -w @quiro/desktop
