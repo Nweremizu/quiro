@@ -356,6 +356,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
   storeRecordedVideo: (videoData: ArrayBuffer, fileName: string) => {
     return ipcRenderer.invoke("store-recorded-video", videoData, fileName);
   },
+  recordingStreamBegin: (fileName: string) => {
+    return ipcRenderer.invoke("recording-stream-begin", fileName);
+  },
+  recordingStreamAppend: (sessionId: string, chunk: ArrayBuffer) => {
+    return ipcRenderer.invoke("recording-stream-append", sessionId, chunk);
+  },
+  recordingStreamFinalize: (sessionId: string) => {
+    return ipcRenderer.invoke("recording-stream-finalize", sessionId);
+  },
+  recordingStreamAbort: (sessionId: string) => {
+    return ipcRenderer.invoke("recording-stream-abort", sessionId);
+  },
   storeMicrophoneSidecar: (
     audioData: ArrayBuffer,
     videoPath: string,
@@ -806,4 +818,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   }) => ipcRenderer.invoke("extensions:reviews-list", params),
   extensionsReviewUpdate: (reviewId: string, status: string, notes?: string) =>
     ipcRenderer.invoke("extensions:review-update", reviewId, status, notes),
+
+  // ── Performance profiling ────────────────────────────────────────────
+  perfSnapshot: () => ipcRenderer.invoke("perf:snapshot"),
+  systemHealth: () => ipcRenderer.invoke("perf:system-health"),
 });

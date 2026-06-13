@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   ColorPickerIcon as IconPalette,
@@ -432,7 +432,7 @@ async function createInvertedPreview(url: string) {
   return canvas.toDataURL("image/png");
 }
 
-export function SettingsPanel({
+function SettingsPanelImpl({
   panelMode = "editor",
   activeEffectSection: activeEffectSectionProp,
   selected,
@@ -1532,7 +1532,7 @@ export function SettingsPanel({
   })();
 
   return (
-    <div className="scroll flex-[2] w-[332px] min-w-[280px] max-w-[332px] bg-editor-panel rounded-2xl flex flex-col shadow-xl h-full overflow-hidden">
+    <div className="scroll flex-2 w-83 min-w-70 max-w-83 bg-editor-panel rounded-2xl flex flex-col  h-full overflow-hidden">
       <div
         className="flex-1 min-h-0 overflow-y-auto scroll p-4 pb-0"
         style={{ scrollbarGutter: "stable" }}
@@ -1593,3 +1593,9 @@ export function SettingsPanel({
     </div>
   );
 }
+
+// The editor passes ~100 props but re-renders far more often than they
+// change (selection, undo, region edits all commit the whole window tree).
+// Memoizing skips the ~8ms panel render whenever no prop actually changed —
+// callers must keep callback props referentially stable.
+export const SettingsPanel = memo(SettingsPanelImpl);

@@ -48,7 +48,8 @@ export function CropSection({
           max={50}
           step={1}
           onValueChange={(v) => setCropInset("top", v)}
-          valueFormatter={(v) => `${Math.round(v)}%`}
+          decimals={0}
+          suffix="%"
         />
         <Scrubber
           label={tSettings("crop.bottom", "Bottom")}
@@ -58,7 +59,8 @@ export function CropSection({
           max={50}
           step={1}
           onValueChange={(v) => setCropInset("bottom", v)}
-          valueFormatter={(v) => `${Math.round(v)}%`}
+          decimals={0}
+          suffix="%"
         />
         <Scrubber
           label={tSettings("crop.left", "Left")}
@@ -68,7 +70,8 @@ export function CropSection({
           max={50}
           step={1}
           onValueChange={(v) => setCropInset("left", v)}
-          valueFormatter={(v) => `${Math.round(v)}%`}
+          decimals={0}
+          suffix="%"
         />
         <Scrubber
           label={tSettings("crop.right", "Right")}
@@ -78,7 +81,8 @@ export function CropSection({
           max={50}
           step={1}
           onValueChange={(v) => setCropInset("right", v)}
-          valueFormatter={(v) => `${Math.round(v)}%`}
+          decimals={0}
+          suffix="%"
         />
       </div>
     </section>

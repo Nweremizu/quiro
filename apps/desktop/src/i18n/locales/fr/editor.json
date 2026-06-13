@@ -100,11 +100,7 @@
 		"title": "Raccourcis clavier",
 		"description": "Référence rapide pour la timeline et les contrôles de l’éditeur.",
 		"customizeTooltip": "Personnaliser les raccourcis",
-		"customize": "Personnaliser",
-		"panTimeline": "Déplacer la timeline",
-		"zoomTimeline": "Zoomer la timeline",
-		"cycleAnnotations": "Parcourir les annotations",
-		"tab": "Tab"
+		"customize": "Personnaliser"
 	},
 	"actions": {
 		"saveAgain": "Enregistrer à nouveau",

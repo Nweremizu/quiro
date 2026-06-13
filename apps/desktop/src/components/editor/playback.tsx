@@ -6,6 +6,7 @@ import {
   Rectangle,
   Sprite,
   Texture,
+  UPDATE_PRIORITY,
   VideoSource,
 } from "pixi.js";
 import { MotionBlurFilter } from "pixi-filters/motion-blur";
@@ -19,6 +20,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import {
   getAssetPath,
@@ -30,6 +32,8 @@ import {
   enablePitchPreservingPlayback,
   getMediaSyncPlaybackRate,
 } from "@/lib/mediaTiming";
+import { playbackSessionDebug } from "@/lib/playbackSessionDebug";
+import { playbackTimeStore } from "@/lib/playbackTimeStore";
 import {
   DEFAULT_WALLPAPER_PATH,
   DEFAULT_WALLPAPER_RELATIVE_PATH,
@@ -281,6 +285,18 @@ function getCursorPositionAtTime(
   );
 }
 
+// Caption layout is recomputed per presented frame during playback; reuse one
+// off-screen context instead of allocating a canvas every call.
+let captionMeasurementContext: CanvasRenderingContext2D | null = null;
+function getCaptionMeasurementContext(): CanvasRenderingContext2D | null {
+  if (!captionMeasurementContext) {
+    captionMeasurementContext = document
+      .createElement("canvas")
+      .getContext("2d");
+  }
+  return captionMeasurementContext;
+}
+
 function getEffectiveNativeAspectRatio(
   dimensions: { width: number; height: number } | null | undefined,
   cropRegion?: import("@/types/editor").CropRegion,
@@ -489,6 +505,10 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
       createPlaybackAnimationState(),
     );
     const isDraggingFocusRef = useRef(false);
+    const pendingFocusDragRef = useRef<{
+      regionId: string;
+      focus: ZoomFocus;
+    } | null>(null);
     const stageSizeRef = useRef({ width: 0, height: 0 });
     const videoSizeRef = useRef({ width: 0, height: 0 });
     const baseScaleRef = useRef(1);
@@ -506,6 +526,13 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
       };
     }>({ x: 0, y: 0, width: 0, height: 0 });
     const cropBoundsRef = useRef({ startX: 0, endX: 0, startY: 0, endY: 0 });
+    // Rect reserved for the webcam in side-by-side layout (null otherwise).
+    const webcamPanelRectRef = useRef<{
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    } | null>(null);
     const maskGraphicsRef = useRef<Graphics | null>(null);
     const frameSpriteRef = useRef<Sprite | null>(null);
     const frameContainerRef = useRef<Container | null>(null);
@@ -536,6 +563,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
     const videoReadyRafRef = useRef<number | null>(null);
     const cursorOverlayRef = useRef<PixiCursorOverlay | null>(null);
     const cursorEffectsCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    const effectsCtx2dRef = useRef<CanvasRenderingContext2D | null>(null);
     const cursorTelemetryRef = useRef<CursorTelemetryPoint[]>([]);
     const showCursorRef = useRef(showCursor);
     const cursorSizeRef = useRef(cursorSize);
@@ -569,6 +597,17 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
     const springXRef = useRef<SpringState>(createSpringState(0));
     const springYRef = useRef<SpringState>(createSpringState(0));
     const lastTickTimeRef = useRef<number | null>(null);
+    const prevZoomStateRef = useRef<{
+      scale: number;
+      focusX: number;
+      focusY: number;
+      progress: number;
+    } | null>(null);
+    const prevSmoothedCursorRef = useRef<{
+      rawCx: number;
+      rawCy: number;
+      mapped: ReturnType<typeof mapSmoothedCursorToCanvasNormalized>;
+    } | null>(null);
     const zoomSmoothnessRef = useRef(zoomSmoothness);
     const zoomClassicModeRef = useRef(zoomClassicMode);
     const cursorFollowCameraRef = useRef<CursorFollowCameraState>(
@@ -611,6 +650,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
                 failIfMajorPerformanceCaveat: false,
                 resolution: window.devicePixelRatio || 1,
                 autoDensity: true,
+                powerPreference: "high-performance",
                 preference: backend,
                 autoStart: true,
                 sharedTicker: false,
@@ -654,6 +694,17 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
       [],
     );
 
+    // While playing, the parent freezes the React `currentTime` prop —
+    // committing it per frame re-renders the whole editor and stalls video
+    // presentation. Subscribe to the live frame time here (this component's
+    // own render is sub-millisecond) so captions, media drift sync and
+    // annotations keep tracking playback.
+    const livePlaybackTime = useSyncExternalStore(
+      playbackTimeStore.subscribe,
+      playbackTimeStore.get,
+    );
+    const effectiveCurrentTime = livePlaybackTime?.sourceSec ?? currentTime;
+
     const activeCaptionLayout = useMemo(() => {
       if (
         !autoCaptionSettings?.enabled ||
@@ -674,8 +725,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
         autoCaptionSettings.maxWidth,
         fontSize,
       );
-      const measurementCanvas = document.createElement("canvas");
-      const measurementContext = measurementCanvas.getContext("2d");
+      const measurementContext = getCaptionMeasurementContext();
       if (!measurementContext) {
         return null;
       }
@@ -684,12 +734,12 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 
       return buildActiveCaptionLayout({
         cues: autoCaptions,
-        timeMs: Math.round(currentTime * 1000),
+        timeMs: Math.round(effectiveCurrentTime * 1000),
         settings: autoCaptionSettings,
         maxWidthPx: maxTextWidthPx,
         measureText: (text) => measurementContext.measureText(text).width,
       });
-    }, [autoCaptionSettings, autoCaptions, currentTime]);
+    }, [autoCaptionSettings, autoCaptions, effectiveCurrentTime]);
 
     useEffect(() => {
       const captionBox = captionBoxRef.current;
@@ -796,28 +846,38 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
           return;
         }
 
-        const scaledSize = getWebcamOverlaySizeRect({
-          containerWidth: overlay.clientWidth,
-          containerHeight: overlay.clientHeight,
-          sizePercent: webcamSize,
-          margin: webcamMargin,
-          zoomScale,
-          reactToZoom: webcamReactToZoom,
-          aspectRatio: webcamAspectRatio,
-          layoutMode: webcamLayoutMode,
-        });
-        const { x, y } = getWebcamOverlayPosition({
-          containerWidth: overlay.clientWidth,
-          containerHeight: overlay.clientHeight,
-          size: scaledSize.height,
-          width: scaledSize.width,
-          height: scaledSize.height,
-          margin: webcamMargin,
-          positionPreset: webcamPositionPreset,
-          positionX: webcamPositionX,
-          positionY: webcamPositionY,
-          legacyCorner: webcamCorner,
-        });
+        // In side-by-side layout the webcam fills the column reserved by the
+        // video layout pass; it stays put regardless of zoom.
+        const sideBySidePanel =
+          webcamLayoutMode === "side-by-side"
+            ? webcamPanelRectRef.current
+            : null;
+        const scaledSize = sideBySidePanel
+          ? { width: sideBySidePanel.width, height: sideBySidePanel.height }
+          : getWebcamOverlaySizeRect({
+              containerWidth: overlay.clientWidth,
+              containerHeight: overlay.clientHeight,
+              sizePercent: webcamSize,
+              margin: webcamMargin,
+              zoomScale,
+              reactToZoom: webcamReactToZoom,
+              aspectRatio: webcamAspectRatio,
+              layoutMode: webcamLayoutMode,
+            });
+        const { x, y } = sideBySidePanel
+          ? { x: sideBySidePanel.x, y: sideBySidePanel.y }
+          : getWebcamOverlayPosition({
+              containerWidth: overlay.clientWidth,
+              containerHeight: overlay.clientHeight,
+              size: scaledSize.height,
+              width: scaledSize.width,
+              height: scaledSize.height,
+              margin: webcamMargin,
+              positionPreset: webcamPositionPreset,
+              positionX: webcamPositionX,
+              positionY: webcamPositionY,
+              legacyCorner: webcamCorner,
+            });
 
         bubble.style.display = "block";
         bubble.style.left = `${x}px`;
@@ -994,6 +1054,8 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
         borderRadius,
         padding,
         frameInsets,
+        sideBySide:
+          webcamLayoutMode === "side-by-side" ? { side: "right" } : null,
       });
 
       if (result) {
@@ -1004,6 +1066,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
         baseOffsetRef.current = result.baseOffset;
         baseMaskRef.current = result.maskRect;
         cropBoundsRef.current = result.cropBounds;
+        webcamPanelRectRef.current = result.webcamPanel;
 
         // Sync extension cursor effects canvas resolution with renderer
         const effectsCanvas = cursorEffectsCanvasRef.current;
@@ -1013,6 +1076,17 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
           if (effectsCanvas.width !== w || effectsCanvas.height !== h) {
             effectsCanvas.width = w;
             effectsCanvas.height = h;
+            // Re-acquire after resize — canvas resize invalidates context state.
+            // willReadFrequently keeps the backing store CPU-accessible so
+            // getImageData() in extension render hooks avoids a GPU→CPU stall.
+            effectsCtx2dRef.current = effectsCanvas.getContext("2d", {
+              willReadFrequently: true,
+            });
+          }
+          if (!effectsCtx2dRef.current) {
+            effectsCtx2dRef.current = effectsCanvas.getContext("2d", {
+              willReadFrequently: true,
+            });
           }
         }
 
@@ -1085,6 +1159,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
       shadowIntensity,
       applyWebcamBubbleLayout,
       syncPreviewMotionBlurQuality,
+      webcamLayoutMode,
     ]);
 
     useEffect(() => {
@@ -1286,7 +1361,10 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
       };
       const clampedFocus = clampFocusToStage(unclampedFocus, region.depth);
 
-      onZoomFocusChange(region.id, clampedFocus);
+      // Defer the parent state commit to drag end: committing zoomRegions
+      // re-renders the whole editor (~30ms+), which would run on every
+      // pointermove. The overlay indicator below gives live visual feedback.
+      pendingFocusDragRef.current = { regionId: region.id, focus: clampedFocus };
       updateOverlayForRegion({ ...region, focus: clampedFocus }, clampedFocus);
     };
 
@@ -1316,6 +1394,11 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
     const endFocusDrag = (event: React.PointerEvent<HTMLDivElement>) => {
       if (!isDraggingFocusRef.current) return;
       isDraggingFocusRef.current = false;
+      const pendingFocus = pendingFocusDragRef.current;
+      pendingFocusDragRef.current = null;
+      if (pendingFocus) {
+        onZoomFocusChange(pendingFocus.regionId, pendingFocus.focus);
+      }
       try {
         event.currentTarget.releasePointerCapture(event.pointerId);
       } catch {
@@ -1421,7 +1504,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
       const bgVideo = bgVideoRef.current;
       if (!bgVideo) return;
 
-      const clipTimelineTime = currentTime;
+      const clipTimelineTime = effectiveCurrentTime;
       const videoDuration =
         Number.isFinite(bgVideo.duration) && bgVideo.duration > 0
           ? bgVideo.duration
@@ -1432,8 +1515,8 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 
       const activeSpeedRegion = speedRegionsRef.current.find(
         (region) =>
-          currentTime * 1000 >= region.startMs &&
-          currentTime * 1000 < region.endMs,
+          clipTimelineTime * 1000 >= region.startMs &&
+          clipTimelineTime * 1000 < region.endMs,
       );
       const targetPlaybackRate = activeSpeedRegion
         ? activeSpeedRegion.speed
@@ -1477,7 +1560,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
       }
 
       lastBackgroundSyncTimeRef.current = clipTimelineTime;
-    }, [currentTime, isPlaying]);
+    }, [effectiveCurrentTime, isPlaying]);
 
     useEffect(() => {
       trimRegionsRef.current = trimRegions;
@@ -1650,7 +1733,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
     }, [cursorSway]);
 
     useEffect(() => {
-      const timeMs = currentTime * 1000;
+      const timeMs = effectiveCurrentTime * 1000;
       currentTimeRef.current = timeMs;
       const videoInfo = extensionHost.getVideoInfoSnapshot();
       extensionHost.setPlaybackState({
@@ -1658,7 +1741,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
         durationMs: videoInfo?.durationMs ?? 0,
         isPlaying,
       });
-    }, [currentTime, isPlaying]);
+    }, [effectiveCurrentTime, isPlaying]);
 
     useEffect(() => {
       if (!pixiReady || !videoReady) return;
@@ -1766,7 +1849,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
         ? webcamVideo.duration
         : null;
       const targetTime = getWebcamMediaTargetTimeSeconds({
-        currentTime,
+        currentTime: effectiveCurrentTime,
         webcamDuration,
         timeOffsetMs: webcamTimeOffsetMs,
       });
@@ -1775,7 +1858,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
           ? Math.min(1 / 60, webcamDuration)
           : targetTime;
 
-      const timelineTimeMs = currentTime * 1000;
+      const timelineTimeMs = effectiveCurrentTime * 1000;
       const activeSpeedRegion = speedRegionsRef.current.find(
         (region) =>
           timelineTimeMs >= region.startMs && timelineTimeMs < region.endMs,
@@ -1815,7 +1898,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 
       lastWebcamSyncTimeRef.current = targetTime;
     }, [
-      currentTime,
+      effectiveCurrentTime,
       isPlaying,
       webcamEnabled,
       webcamTimeOffsetMs,
@@ -2159,10 +2242,15 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
         state.appliedScale = appliedTransform.scale;
       };
 
+      let tickerWorkEndedAt: number | null = null;
+
       const ticker = () => {
         if (suspendRenderingRef.current) {
           return;
         }
+
+        const tickStart = performance.now();
+        playbackSessionDebug.recordRenderTick(tickStart);
 
         const { region, strength, blendedScale, transition } =
           findDominantRegion(zoomRegionsRef.current, currentTimeRef.current, {
@@ -2257,13 +2345,28 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
         state.focusY = targetFocus.cy;
         state.progress = targetProgress;
 
-        // Push zoom state to extension host for query APIs
-        extensionHost.setZoomState({
-          scale: targetScaleFactor,
-          focusX: targetFocus.cx,
-          focusY: targetFocus.cy,
-          progress: targetProgress,
-        });
+        // Push zoom state to extension host only when values change
+        const prevZoom = prevZoomStateRef.current;
+        if (
+          !prevZoom ||
+          prevZoom.scale !== targetScaleFactor ||
+          prevZoom.focusX !== targetFocus.cx ||
+          prevZoom.focusY !== targetFocus.cy ||
+          prevZoom.progress !== targetProgress
+        ) {
+          extensionHost.setZoomState({
+            scale: targetScaleFactor,
+            focusX: targetFocus.cx,
+            focusY: targetFocus.cy,
+            progress: targetProgress,
+          });
+          prevZoomStateRef.current = {
+            scale: targetScaleFactor,
+            focusX: targetFocus.cx,
+            focusY: targetFocus.cy,
+            progress: targetProgress,
+          };
+        }
 
         const projectedTransform = computeZoomTransform({
           stageSize: stageSizeRef.current,
@@ -2335,6 +2438,12 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 
         applyWebcamBubbleLayout(animationStateRef.current.appliedScale || 1);
 
+        const afterZoomTransform = performance.now();
+        playbackSessionDebug.recordPhase(
+          "zoom+transform",
+          afterZoomTransform - tickStart,
+        );
+
         const timeMs = currentTimeRef.current;
         const effectsCanvas = cursorEffectsCanvasRef.current;
         const extensionCanvasWidth =
@@ -2359,14 +2468,29 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
             !isPlayingRef.current || isSeekingRef.current,
           );
 
-          smoothedCursorForHooks = mapSmoothedCursorToCanvasNormalized(
-            cursorOverlay.getSmoothedCursorSnapshot(),
-            {
-              maskRect: baseMaskRef.current,
-              canvasWidth: extensionCanvasWidth,
-              canvasHeight: extensionCanvasHeight,
-            },
-          );
+          const rawSnapshot = cursorOverlay.getSmoothedCursorSnapshot();
+          const prevCursor = prevSmoothedCursorRef.current;
+          if (
+            !prevCursor ||
+            prevCursor.rawCx !== (rawSnapshot?.cx ?? -1) ||
+            prevCursor.rawCy !== (rawSnapshot?.cy ?? -1)
+          ) {
+            smoothedCursorForHooks = mapSmoothedCursorToCanvasNormalized(
+              rawSnapshot,
+              {
+                maskRect: baseMaskRef.current,
+                canvasWidth: extensionCanvasWidth,
+                canvasHeight: extensionCanvasHeight,
+              },
+            );
+            prevSmoothedCursorRef.current = {
+              rawCx: rawSnapshot?.cx ?? -1,
+              rawCy: rawSnapshot?.cy ?? -1,
+              mapped: smoothedCursorForHooks,
+            };
+          } else {
+            smoothedCursorForHooks = prevCursor.mapped;
+          }
           extensionHost.setSmoothedCursor(
             smoothedCursorForHooks
               ? {
@@ -2425,12 +2549,18 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
           extensionHost.setSmoothedCursor(null);
         }
 
+        const afterCursor = performance.now();
+        playbackSessionDebug.recordPhase(
+          "cursor-overlay",
+          afterCursor - afterZoomTransform,
+        );
+
         if (
           effectsCanvas &&
           effectsCanvas.width > 0 &&
           effectsCanvas.height > 0
         ) {
-          const ctx2d = effectsCanvas.getContext("2d");
+          const ctx2d = effectsCtx2dRef.current ?? effectsCanvas.getContext("2d");
           if (ctx2d) {
             ctx2d.clearRect(0, 0, effectsCanvas.width, effectsCanvas.height);
 
@@ -2522,12 +2652,34 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
             executeExtensionRenderHooks("final", ctx2d, hookParams);
           }
         }
+
+        const tickEnd = performance.now();
+        playbackSessionDebug.recordPhase(
+          "ext-render-hooks",
+          tickEnd - afterCursor,
+        );
+        tickerWorkEndedAt = tickEnd;
+      };
+
+      // Runs after Pixi's own render pass (which Application registers at
+      // UPDATE_PRIORITY.LOW), so the delta is the cost of scene render +
+      // video texture upload on this frame.
+      const postRenderProbe = () => {
+        if (tickerWorkEndedAt !== null) {
+          playbackSessionDebug.recordPhase(
+            "pixi-render+texture-upload",
+            performance.now() - tickerWorkEndedAt,
+          );
+          tickerWorkEndedAt = null;
+        }
       };
 
       app.ticker.add(ticker);
+      app.ticker.add(postRenderProbe, undefined, UPDATE_PRIORITY.UTILITY);
       return () => {
         if (app && app.ticker) {
           app.ticker.remove(ticker);
+          app.ticker.remove(postRenderProbe);
         }
       };
     }, [
@@ -3022,7 +3174,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
               </div>
             ) : null}
             {(() => {
-              const timeMs = Math.round(currentTime * 1000);
+              const timeMs = Math.round(effectiveCurrentTime * 1000);
               const filtered = (annotationRegions || [])
                 .filter((annotation) => {
                   if (

@@ -166,6 +166,7 @@ function CursorStyleButton({
             fallbackUrl="/"
             imageOverrideClassName="drop-shadow-none"
             macosClassName="drop-shadow-none"
+            size={30}
           />
         </div>
         <div className="flex items-center justify-between gap-2">
@@ -321,7 +322,8 @@ export function CursorSection({
             onValueChange={(durationMs) =>
               onCursorClickEffectChange?.({ ...cursorClickEffect, durationMs })
             }
-            valueFormatter={(v) => `${Math.round(v)} ms`}
+            decimals={0}
+            suffix=" ms"
           />
           <Scrubber
             size="sm"
@@ -334,7 +336,7 @@ export function CursorSection({
             onValueChange={(intensity) =>
               onCursorClickEffectChange?.({ ...cursorClickEffect, intensity })
             }
-            valueFormatter={(v) => `${v.toFixed(2)}×`}
+            suffix="×"
           />
         </div>
       </SettingsGroup>
@@ -356,7 +358,7 @@ export function CursorSection({
             max={2}
             step={0.05}
             onValueChange={(v) => onCursorMotionBlurChange?.(v)}
-            valueFormatter={(v) => `${v.toFixed(2)}×`}
+            suffix="×"
           />
 
           <Scrubber
@@ -368,7 +370,7 @@ export function CursorSection({
             max={5}
             step={0.05}
             onValueChange={(v) => onCursorClickBounceChange?.(v)}
-            valueFormatter={(v) => `${v.toFixed(2)}×`}
+            suffix="×"
           />
 
           <Scrubber
@@ -383,7 +385,8 @@ export function CursorSection({
             max={500}
             step={5}
             onValueChange={(v) => onCursorClickBounceDurationChange?.(v)}
-            valueFormatter={(v) => `${Math.round(v)} ms`}
+            decimals={0}
+            suffix=" ms"
           />
 
           <Scrubber

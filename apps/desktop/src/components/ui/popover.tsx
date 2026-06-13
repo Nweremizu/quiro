@@ -18,7 +18,7 @@ const TRANSITION: Transition = {
   type: "spring",
   stiffness: 380,
   damping: 30,
-  duration: 0.2,
+  duration: 0.1,
 };
 
 const CONTENT_VARIANTS: Variants = {

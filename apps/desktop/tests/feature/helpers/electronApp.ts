@@ -16,7 +16,7 @@ const execFileAsync = promisify(execFile);
 export const rootDir = path.resolve(__dirname, "..", "..", "..");
 export const distIndexPath = path.join(rootDir, "dist", "index.html");
 export const preloadPath = path.join(rootDir, "dist-electron", "preload.mjs");
-export const mainPath = path.join(rootDir, "dist-electron", "main.cjs");
+export const mainPath = path.join(rootDir, "dist-electron", "main.mjs");
 export const fixtureVideoPath = path.join(
   rootDir,
   "tests",

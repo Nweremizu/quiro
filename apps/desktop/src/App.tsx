@@ -1,22 +1,45 @@
-import { useEffect, useState } from "react";
-import { CountdownOverlay } from "./components/countdown/CountdownOverlay";
-import { LaunchWindow } from "@/components/launch/window";
-import { SourceSelector } from "./components/launch/source-selector";
-import { UpdateToastWindow } from "./components/launch/UpdateToastWindow";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Toaster } from "./components/ui/sonner";
-// import { ShortcutsConfigDialog } from "./components/editor/ShortcutsConfigDialog";
-// import VideoEditor from "./components/editor/VideoEditor";
 import { useI18n } from "./contexts/I18nContext";
-// import { ShortcutsProvider } from "@/contexts/shortcut-context";
 import { loadAllCustomFonts } from "./lib/customFonts";
 import "./App.css";
 import { ShortcutsProvider } from "@/contexts/shortcut-context";
-import EditorWindow from "@/components/editor/window";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
+import { PerfOverlay } from "@/components/dev/PerfOverlay";
+
+// Each window type is lazy-loaded so a given BrowserWindow only parses the
+// code it renders. The editor chunk in particular carries pixi.js and the
+// exporters; without lazy() every window (HUD overlay, countdown, toast)
+// loads it at startup.
+const LaunchWindow = lazy(() =>
+  import("@/components/launch/window").then((m) => ({
+    default: m.LaunchWindow,
+  })),
+);
+const SourceSelector = lazy(() =>
+  import("./components/launch/source-selector").then((m) => ({
+    default: m.SourceSelector,
+  })),
+);
+const CountdownOverlay = lazy(() =>
+  import("./components/countdown/CountdownOverlay").then((m) => ({
+    default: m.CountdownOverlay,
+  })),
+);
+const UpdateToastWindow = lazy(() =>
+  import("./components/launch/UpdateToastWindow").then((m) => ({
+    default: m.UpdateToastWindow,
+  })),
+);
+const EditorWindow = lazy(() => import("@/components/editor/window"));
 
 export default function App() {
-  const [windowType, setWindowType] = useState("");
+  // Resolve synchronously so the correct window renders (and its lazy chunk
+  // starts loading) on first paint instead of after a mount effect.
+  const [windowType, setWindowType] = useState(
+    () => new URLSearchParams(window.location.search).get("windowType") || "",
+  );
   const { t } = useI18n();
 
   useEffect(() => {
@@ -62,50 +85,86 @@ export default function App() {
         : t("app.name", "Quiro");
   }, [windowType, t]);
 
-  switch (windowType) {
-    case "hud-overlay":
-      return (
-        <ErrorBoundary>
-          <LaunchWindow />
-          <Toaster className="pointer-events-auto" />
-        </ErrorBoundary>
-      );
-    case "source-selector":
-      return <ErrorBoundary><SourceSelector /></ErrorBoundary>;
-    case "countdown":
-      return <ErrorBoundary><CountdownOverlay /></ErrorBoundary>;
-    case "update-toast":
-      return <UpdateToastWindow />;
-    case "editor":
-      return (
-        <ErrorBoundary>
-          <ShortcutsProvider>
-            <TooltipProvider>
-              <EditorWindow />
-            </TooltipProvider>
-            {/* <ShortcutsConfigDialog /> */}
-          </ShortcutsProvider>
-        </ErrorBoundary>
-      );
-    default:
-      return (
-        <div className="flex font-sans! h-full w-full items-center justify-center bg- background text-foreground">
-          <div className="flex items-center gap-4 rounded-2xl border border-foreground/10 bg-foreground/5 px-6 py-5 shadow-2xl shadow-black/30 backdrop-blur-xl">
-            <img
-              src="/app-icons/quiro-128.png"
-              alt={t("app.name", "Quiro")}
-              className="h-12 w-12 rounded-xl"
-            />
-            <div>
-              <h1 className="text-xl font-semibold tracking-tight">
-                {t("app.name", "Quiro")}
-              </h1>
-              <p className="text-sm text-foreground/65">
-                {t("app.subtitle", "Screen recording and editing")}
-              </p>
+  // Render the correct window, then overlay PerfOverlay (toggled via Ctrl+Shift+P).
+  // The HUD overlay and countdown are excluded — they run in borderless pass-through
+  // windows where a debug panel would interfere.
+  const skipPerf = windowType === "hud-overlay" || windowType === "countdown";
+
+  const windowContent = (() => {
+    switch (windowType) {
+      case "hud-overlay":
+        return (
+          <ErrorBoundary>
+            <Suspense fallback={null}>
+              <LaunchWindow />
+            </Suspense>
+            <Toaster className="pointer-events-auto" />
+          </ErrorBoundary>
+        );
+      case "source-selector":
+        return (
+          <ErrorBoundary>
+            <Suspense fallback={null}>
+              <SourceSelector />
+            </Suspense>
+          </ErrorBoundary>
+        );
+      case "countdown":
+        return (
+          <ErrorBoundary>
+            <Suspense fallback={null}>
+              <CountdownOverlay />
+            </Suspense>
+          </ErrorBoundary>
+        );
+      case "update-toast":
+        return (
+          <ErrorBoundary>
+            <Suspense fallback={null}>
+              <UpdateToastWindow />
+            </Suspense>
+          </ErrorBoundary>
+        );
+      case "editor":
+        return (
+          <ErrorBoundary>
+            <ShortcutsProvider>
+              <TooltipProvider>
+                <Suspense fallback={null}>
+                  <EditorWindow />
+                </Suspense>
+              </TooltipProvider>
+              {/* <ShortcutsConfigDialog /> */}
+            </ShortcutsProvider>
+          </ErrorBoundary>
+        );
+      default:
+        return (
+          <div className="flex font-sans! h-full w-full items-center justify-center bg- background text-foreground">
+            <div className="flex items-center gap-4 rounded-2xl border border-foreground/10 bg-foreground/5 px-6 py-5 shadow-2xl shadow-black/30 backdrop-blur-xl">
+              <img
+                src="/app-icons/quiro-128.png"
+                alt={t("app.name", "Quiro")}
+                className="h-12 w-12 rounded-xl"
+              />
+              <div>
+                <h1 className="text-xl font-semibold tracking-tight">
+                  {t("app.name", "Quiro")}
+                </h1>
+                <p className="text-sm text-foreground/65">
+                  {t("app.subtitle", "Screen recording and editing")}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
-      );
-  }
+        );
+    }
+  })();
+
+  return (
+    <>
+      {windowContent}
+      {!skipPerf && <PerfOverlay />}
+    </>
+  );
 }

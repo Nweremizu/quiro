@@ -252,7 +252,8 @@ export function CaptionsSection({
           onValueChange={(value) =>
             updateAutoCaptionSettings({ fontSize: value })
           }
-          valueFormatter={(value) => `${Math.round(value)}px`}
+          decimals={0}
+          suffix="px"
         />
         <Scrubber
           label={tSettings("captions.rowCount", "Rows")}
@@ -264,7 +265,7 @@ export function CaptionsSection({
           onValueChange={(value) =>
             updateAutoCaptionSettings({ maxRows: Math.round(value) })
           }
-          valueFormatter={(value) => `${Math.round(value)}`}
+          decimals={0}
         />
         <Scrubber
           label={tSettings("captions.bottomOffset", "Bottom offset")}
@@ -276,7 +277,8 @@ export function CaptionsSection({
           onValueChange={(value) =>
             updateAutoCaptionSettings({ bottomOffset: value })
           }
-          valueFormatter={(value) => `${Math.round(value)}%`}
+          decimals={0}
+          suffix="%"
         />
         <Scrubber
           label={tSettings("captions.maxWidth", "Max width")}
@@ -288,7 +290,8 @@ export function CaptionsSection({
           onValueChange={(value) =>
             updateAutoCaptionSettings({ maxWidth: value })
           }
-          valueFormatter={(value) => `${Math.round(value)}%`}
+          decimals={0}
+          suffix="%"
         />
         <Scrubber
           label={tSettings("captions.boxRadius", "Box radius")}
@@ -300,9 +303,8 @@ export function CaptionsSection({
           onValueChange={(value) =>
             updateAutoCaptionSettings({ boxRadius: value })
           }
-          valueFormatter={(value) =>
-            `${Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1)}px`
-          }
+          decimals={1}
+          suffix="px"
         />
         <Scrubber
           label={tSettings("captions.backgroundOpacity", "Background opacity")}

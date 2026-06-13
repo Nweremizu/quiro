@@ -5,12 +5,14 @@ import { useTimelineContext } from "dnd-timeline";
 import {
   forwardRef,
   type KeyboardEvent as ReactKeyboardEvent,
+  memo,
   useCallback,
   useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type WheelEvent,
 } from "react";
 import { toast } from "sonner";
@@ -25,6 +27,7 @@ import {
 import { useScopedT } from "@/contexts/I18nContext";
 import { useShortcuts } from "@/contexts/shortcut-context";
 import { resolveMediaElementSource } from "@/lib/exporter/local-media-source";
+import { playbackTimeStore } from "@/lib/playbackTimeStore";
 import { matchesShortcut } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 import {
@@ -338,14 +341,30 @@ function PlaybackCursor({
   const sideProperty = direction === "rtl" ? "right" : "left";
   const [isDragging, setIsDragging] = useState(false);
 
+  // While playing, the React currentTime state is throttled (re-rendering the
+  // whole editor per frame caps playback FPS). Subscribe to the live per-frame
+  // time so only this small component re-renders at full rate; fall back to
+  // the prop when paused.
+  const liveTime = useSyncExternalStore(
+    playbackTimeStore.subscribe,
+    playbackTimeStore.get,
+  );
+  const effectiveTimeMs = liveTime?.timelineMs ?? currentTimeMs;
+
   useEffect(() => {
     if (!isDragging) return;
 
-    const handleMouseMove = (e: MouseEvent) => {
+    // Coalesce scrub seeks to one per frame: each onSeek commits editor
+    // state (a full-tree render) and seeks the video, and mousemove can
+    // outpace the display refresh on high-rate input devices.
+    let pendingClientX: number | null = null;
+    let seekRafId: number | null = null;
+
+    const performSeek = (clientX: number) => {
       if (!timelineRef.current || !onSeek) return;
 
       const rect = timelineRef.current.getBoundingClientRect();
-      const clickX = e.clientX - rect.left - sidebarWidth;
+      const clickX = clientX - rect.left - sidebarWidth;
 
       // Allow dragging outside to 0 or max, but clamp the value
       const relativeMs = pixelsToValue(clickX);
@@ -370,7 +389,25 @@ function PlaybackCursor({
       onSeek(absoluteMs / 1000);
     };
 
+    const handleMouseMove = (e: MouseEvent) => {
+      pendingClientX = e.clientX;
+      if (seekRafId !== null) return;
+      seekRafId = requestAnimationFrame(() => {
+        seekRafId = null;
+        if (pendingClientX !== null) {
+          const clientX = pendingClientX;
+          pendingClientX = null;
+          performSeek(clientX);
+        }
+      });
+    };
+
     const handleMouseUp = () => {
+      if (pendingClientX !== null) {
+        const clientX = pendingClientX;
+        pendingClientX = null;
+        performSeek(clientX);
+      }
       setIsDragging(false);
       document.body.style.cursor = "";
     };
@@ -380,6 +417,9 @@ function PlaybackCursor({
     document.body.style.cursor = "ew-resize";
 
     return () => {
+      if (seekRafId !== null) {
+        cancelAnimationFrame(seekRafId);
+      }
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
       document.body.style.cursor = "";
@@ -396,11 +436,11 @@ function PlaybackCursor({
     keyframes,
   ]);
 
-  if (videoDurationMs <= 0 || currentTimeMs < 0) {
+  if (videoDurationMs <= 0 || effectiveTimeMs < 0) {
     return null;
   }
 
-  const clampedTime = Math.min(currentTimeMs, videoDurationMs);
+  const clampedTime = Math.min(effectiveTimeMs, videoDurationMs);
 
   if (clampedTime < range.start || clampedTime > range.end) {
     return null;
@@ -1223,6 +1263,13 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
       () => Math.round((playheadTime ?? currentTime) * 1000),
       [currentTime, playheadTime],
     );
+    // The React time props above are frozen during playback (committing them
+    // re-renders the whole editor per frame). Interactions that place items
+    // at "the playhead" must read the live frame time at call time.
+    const getPlayheadMs = useCallback(
+      () => Math.round(playbackTimeStore.get()?.timelineMs ?? currentTimeMs),
+      [currentTimeMs],
+    );
     const timelineScale = useMemo(
       () => calculateTimelineScale(videoDuration),
       [videoDuration],
@@ -1321,10 +1368,10 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
     // Add keyframe at current playhead position
     const addKeyframe = useCallback(() => {
       if (totalMs === 0) return;
-      const time = Math.max(0, Math.min(currentTimeMs, totalMs));
+      const time = Math.max(0, Math.min(getPlayheadMs(), totalMs));
       if (keyframes.some((kf) => Math.abs(kf.time - time) < 1)) return;
       setKeyframes((prev) => [...prev, { id: uuidv4(), time }]);
-    }, [currentTimeMs, totalMs, keyframes]);
+    }, [getPlayheadMs, totalMs, keyframes]);
 
     // Delete selected keyframe
     const deleteSelectedKeyframe = useCallback(() => {
@@ -1725,8 +1772,8 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
         return;
       }
 
-      addZoomAtMs(currentTimeMs);
-    }, [addZoomAtMs, currentTimeMs, totalMs, videoDuration]);
+      addZoomAtMs(getPlayheadMs());
+    }, [addZoomAtMs, getPlayheadMs, totalMs, videoDuration]);
 
     const handleSuggestZooms = useCallback(() => {
       if (!videoDuration || videoDuration === 0 || totalMs === 0) {
@@ -1830,8 +1877,8 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
       ) {
         return;
       }
-      onClipSplit(currentTimeMs);
-    }, [videoDuration, totalMs, currentTimeMs, onClipSplit]);
+      onClipSplit(getPlayheadMs());
+    }, [videoDuration, totalMs, getPlayheadMs, onClipSplit]);
 
     const handleAddAudio = useCallback(
       async (preferredTrackIndex?: number) => {
@@ -1890,7 +1937,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
           return;
         }
 
-        const startPos = Math.max(0, Math.min(currentTimeMs, totalMs));
+        const startPos = Math.max(0, Math.min(getPlayheadMs(), totalMs));
         const maxRemainingDuration = totalMs - startPos;
         if (maxRemainingDuration <= 0) {
           toast.error("Cannot place audio here", {
@@ -1987,7 +2034,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
           selectedTrackIndex,
         );
       },
-      [videoDuration, totalMs, currentTimeMs, audioRegions, onAudioAdded],
+      [videoDuration, totalMs, getPlayheadMs, audioRegions, onAudioAdded],
     );
 
     const handleAddAnnotation = useCallback(
@@ -2007,7 +2054,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
         }
 
         // Multiple annotations can exist at the same timestamp
-        const startPos = Math.max(0, Math.min(currentTimeMs, totalMs));
+        const startPos = Math.max(0, Math.min(getPlayheadMs(), totalMs));
         const endPos = Math.min(startPos + defaultDuration, totalMs);
 
         onAnnotationAdded({ start: startPos, end: endPos }, trackIndex);
@@ -2015,7 +2062,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
       [
         videoDuration,
         totalMs,
-        currentTimeMs,
+        getPlayheadMs,
         onAnnotationAdded,
         defaultRegionDurationMs,
       ],
@@ -2056,10 +2103,9 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 
         // Tab: Cycle through overlapping annotations at current time
         if (e.key === "Tab" && annotationRegions.length > 0) {
+          const playheadMs = getPlayheadMs();
           const overlapping = annotationRegions
-            .filter(
-              (a) => currentTimeMs >= a.startMs && currentTimeMs <= a.endMs,
-            )
+            .filter((a) => playheadMs >= a.startMs && playheadMs <= a.endMs)
             .sort((a, b) => a.zIndex - b.zIndex); // Sort by z-index
 
           if (overlapping.length > 0) {
@@ -2123,7 +2169,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
       selectedAnnotationId,
       selectedAudioId,
       annotationRegions,
-      currentTimeMs,
+      getPlayheadMs,
       hasAnyTimelineBlocks,
       onSelectAnnotation,
       keyShortcuts,
@@ -2633,4 +2679,8 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 
 TimelineEditor.displayName = "TimelineEditor";
 
-export default TimelineEditor;
+// The editor window commits state for selection/undo/region edits far more
+// often than timeline inputs change; memo skips those re-renders. The
+// playhead tracks playback through playbackTimeStore internally, so it stays
+// live regardless. Callers must keep callback props referentially stable.
+export default memo(TimelineEditor);

@@ -13,13 +13,17 @@ export function CursorStylePreview({
   fallbackUrl,
   imageOverrideClassName,
   macosClassName,
+  size = BUILTIN_CURSOR_PREVIEW_SIZE,
 }: {
   style: CursorStyle;
   previewUrls: Partial<Record<string, string>>;
   fallbackUrl: string;
   imageOverrideClassName?: string;
   macosClassName?: string;
+  /** Override the rendered size (px). Scales frame + image proportionally. Defaults to BUILTIN_CURSOR_PREVIEW_SIZE. */
+  size?: number;
 }) {
+  const scale = size / BUILTIN_CURSOR_PREVIEW_SIZE;
   const previewSrc =
     style === "macos"
       ? (previewUrls.macos ?? fallbackUrl)
@@ -32,15 +36,13 @@ export function CursorStylePreview({
             : previewUrls[style];
 
   if (style === "macos" || style === "tahoe" || style === "tahoe-inverted") {
-    const previewSize =
-      BUILTIN_CURSOR_PREVIEW_SIZE * getCursorStyleSizeMultiplier(style);
+    const frameSize = BUILTIN_CURSOR_PREVIEW_FRAME_SIZE * scale;
+    const imgSize =
+      BUILTIN_CURSOR_PREVIEW_SIZE * getCursorStyleSizeMultiplier(style) * scale;
     return (
       <div
         className="flex items-center justify-center"
-        style={{
-          width: `${BUILTIN_CURSOR_PREVIEW_FRAME_SIZE}px`,
-          height: `${BUILTIN_CURSOR_PREVIEW_FRAME_SIZE}px`,
-        }}
+        style={{ width: `${frameSize}px`, height: `${frameSize}px` }}
       >
         <img
           src={previewSrc ?? fallbackUrl}
@@ -52,29 +54,36 @@ export function CursorStylePreview({
               : imageOverrideClassName,
           )}
           draggable={false}
-          style={{
-            width: `${previewSize}px`,
-            height: `${previewSize}px`,
-          }}
+          style={{ width: `${imgSize}px`, height: `${imgSize}px` }}
         />
       </div>
     );
   }
+
+  // figma/dot/custom use size directly so they match the visual weight of the
+  // arrow cursors at any given size value, instead of scaling from their
+  // original small base sizes (which produced tiny icons at size=30).
+  const smallSize = Math.round(size * 0.86);
+  const dotSize = Math.round(size * 0.56);
 
   if (style === "figma") {
     return (
       <img
         src={previewSrc}
         alt=""
-        className="h-7 w-7 object-contain"
+        className="object-contain"
         draggable={false}
+        style={{ width: smallSize, height: smallSize }}
       />
     );
   }
 
   if (style === "dot") {
     return (
-      <span className="size-5 rounded-full border-[2.5px] border-neutral-800 bg-white shadow-[0_8px_12px_rgba(15,23,42,0.16)]" />
+      <span
+        className="rounded-full border-[2.5px] border-neutral-800 bg-white shadow-[0_8px_12px_rgba(15,23,42,0.16)]"
+        style={{ width: dotSize, height: dotSize, display: "block" }}
+      />
     );
   }
 
@@ -82,8 +91,9 @@ export function CursorStylePreview({
     <img
       src={previewSrc ?? fallbackUrl}
       alt=""
-      className="h-7 w-7 object-contain"
+      className="object-contain"
       draggable={false}
+      style={{ width: smallSize, height: smallSize }}
     />
   );
 }

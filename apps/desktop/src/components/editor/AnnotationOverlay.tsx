@@ -178,7 +178,9 @@ export function AnnotationOverlay({
       }}
       bounds="parent"
       className={cn(
-        "cursor-move transition-all",
+        // No transition on transform/size: react-draggable writes transform
+        // per mousemove and any transition makes the drag lag behind the cursor
+        "cursor-move transition-shadow duration-150",
         isSelected &&
           "ring-2 ring-primary ring-offset-2 ring-offset-transparent",
       )}

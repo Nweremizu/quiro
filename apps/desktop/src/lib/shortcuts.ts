@@ -125,6 +125,16 @@ export function formatBinding(binding: ShortcutBinding, isMac: boolean): string 
 	return parts.join(" + ");
 }
 
+/** Returns individual key tokens for rendering each in its own Kbd chip */
+export function formatBindingParts(binding: ShortcutBinding, isMac: boolean): string[] {
+	const parts: string[] = [];
+	if (binding.ctrl) parts.push(isMac ? "⌘" : "Ctrl");
+	if (binding.shift) parts.push(isMac ? "⇧" : "Shift");
+	if (binding.alt) parts.push(isMac ? "⌥" : "Alt");
+	parts.push(KEY_LABELS[binding.key] ?? binding.key.toUpperCase());
+	return parts;
+}
+
 export function mergeWithDefaults(partial: Partial<ShortcutsConfig>): ShortcutsConfig {
 	const merged = { ...DEFAULT_SHORTCUTS };
 	for (const action of SHORTCUT_ACTIONS) {

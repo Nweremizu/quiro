@@ -1,7 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { app, BrowserWindow, dialog } from "electron";
-import { autoUpdater } from "electron-updater";
+import electronUpdater from "electron-updater";
+const { autoUpdater } = electronUpdater;
 import type { ProgressInfo, UpdateInfo } from "builder-util-runtime";
 
 export type UpdateToastPayload = {
@@ -54,6 +55,11 @@ let skippedVersion: string | null = null;
 let checkTimer: NodeJS.Timeout | null = null;
 let reminderTimer: NodeJS.Timeout | null = null;
 let installAfterDownload = false;
+// Tracks whether the most recent check was triggered by the user. Background
+// checks must never pop an error toast (a 404/network blip is not actionable
+// and the toast would otherwise appear on every launch — see updater error
+// handler below).
+let lastCheckWasManual = false;
 
 const logger = {
   info: (...args: unknown[]) => console.info("[updater]", ...args),
@@ -302,7 +308,25 @@ export async function setupAutoUpdates(
     handleUpdateDownloaded(sendUpdateToast);
   });
   autoUpdater.on("error", (error) => {
-    setError(sendUpdateToast, error);
+    // Only surface an error toast when the user is actively engaged with the
+    // updater: a manual check, an in-progress download, or an update already
+    // being advertised. A failed *background* check (e.g. the release feed has
+    // no latest.yml yet, or the network is down) must stay silent — otherwise
+    // it pops a window on every launch and, before this guard, leaked an
+    // unhandled rejection that took the whole app down.
+    const shouldSurface =
+      lastCheckWasManual ||
+      status === "downloading" ||
+      currentToastPayload !== null;
+
+    if (shouldSurface) {
+      setError(sendUpdateToast, error);
+      return;
+    }
+
+    status = "error";
+    latestDetail = getFriendlyError(error);
+    logger.warn("Background update check failed:", latestDetail);
   });
 
   if (!getUpdaterEnabled()) {
@@ -310,11 +334,15 @@ export async function setupAutoUpdates(
     return;
   }
 
+  const runBackgroundCheck = () => {
+    checkForAppUpdates(getDialogWindow, { manual: false }).catch((error) => {
+      logger.warn("Background update check rejected:", getFriendlyError(error));
+    });
+  };
+
   checkTimer = setTimeout(() => {
-    void checkForAppUpdates(getDialogWindow, { manual: false });
-    checkTimer = setInterval(() => {
-      void checkForAppUpdates(getDialogWindow, { manual: false });
-    }, UPDATE_CHECK_INTERVAL_MS);
+    runBackgroundCheck();
+    checkTimer = setInterval(runBackgroundCheck, UPDATE_CHECK_INTERVAL_MS);
   }, INITIAL_UPDATE_CHECK_DELAY_MS);
 }
 
@@ -322,6 +350,8 @@ export async function checkForAppUpdates(
   getDialogWindow: GetDialogWindow,
   options: { manual?: boolean } = {},
 ) {
+  lastCheckWasManual = Boolean(options.manual);
+
   if (!getUpdaterEnabled()) {
     status = "idle";
     latestDetail = "Updates are only available in packaged builds.";
@@ -337,6 +367,10 @@ export async function checkForAppUpdates(
       showNoUpdateDialog(getDialogWindow);
     }
   } catch (error) {
+    // The "error" event handler above already records status/detail and (for
+    // manual checks) surfaces a toast. Manual checks additionally get a modal
+    // here. We intentionally do NOT re-throw: callers fire this as a detached
+    // promise, so a throw would become an unhandled rejection and crash main.
     status = "error";
     latestDetail = getFriendlyError(error);
     if (options.manual) {
@@ -350,7 +384,6 @@ export async function checkForAppUpdates(
         detail: latestDetail,
       });
     }
-    throw error;
   }
 }
 

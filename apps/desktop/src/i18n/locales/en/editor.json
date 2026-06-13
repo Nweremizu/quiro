@@ -100,11 +100,7 @@
     "title": "Keyboard Shortcuts",
     "description": "Quick reference for the timeline and editor controls.",
     "customizeTooltip": "Customize shortcuts",
-    "customize": "Customize",
-    "panTimeline": "Pan Timeline",
-    "zoomTimeline": "Zoom Timeline",
-    "cycleAnnotations": "Cycle Annotations",
-    "tab": "Tab"
+    "customize": "Customize"
   },
   "actions": {
     "saveAgain": "Save Again",

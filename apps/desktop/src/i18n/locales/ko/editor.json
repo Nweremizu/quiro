@@ -101,11 +101,7 @@
 		"title": "키보드 단축키",
 		"description": "타임라인과 편집기 컨트롤에 대한 빠른 참고입니다.",
 		"customizeTooltip": "단축키 사용자 지정",
-		"customize": "사용자 지정",
-		"panTimeline": "타임라인 이동",
-		"zoomTimeline": "타임라인 확대/축소",
-		"cycleAnnotations": "주석 순환",
-		"tab": "Tab"
+		"customize": "사용자 지정"
 	},
 	"actions": {
 		"saveAgain": "다시 저장",

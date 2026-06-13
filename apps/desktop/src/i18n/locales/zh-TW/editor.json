@@ -100,11 +100,7 @@
 		"title": "鍵盤快速鍵",
 		"description": "時間線和編輯器控制的快速參考。",
 		"customizeTooltip": "自訂快速鍵",
-		"customize": "自訂",
-		"panTimeline": "平移時間線",
-		"zoomTimeline": "縮放時間線",
-		"cycleAnnotations": "循環切換註釋",
-		"tab": "Tab"
+		"customize": "自訂"
 	},
 	"actions": {
 		"saveAgain": "再次保存",

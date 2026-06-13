@@ -1,5 +1,6 @@
 /* eslint-disable no-undef */
 import { spawnSync } from "node:child_process";
+import path from "node:path";
 
 const validReleaseTypes = new Set(["patch", "minor", "major"]);
 const args = process.argv.slice(2);
@@ -187,10 +188,22 @@ function main() {
     run("npm", ["run", "test:ci"]);
   }
 
-  run("npm", ["version", releaseType, "-m", "chore(release): v%s"]);
+  // npm only creates the release commit/tag when package.json is at the git
+  // root. In the monorepo this package lives in apps/desktop, so bump the
+  // version without git side effects and do the git work explicitly.
+  run("npm", ["version", releaseType, "--no-git-tag-version"]);
 
   const version = read("node", ["-p", "require('./package.json').version"]);
   const tag = `v${version}`;
+  const repoRoot = read("git", ["rev-parse", "--show-toplevel"]);
+
+  // Sync the root lockfile, which records workspace package versions.
+  run("npm", ["install", "--package-lock-only"], { cwd: repoRoot });
+
+  run("git", ["add", "package.json"]);
+  run("git", ["add", path.join(repoRoot, "package-lock.json")]);
+  run("git", ["commit", "-m", `chore(release): ${tag}`]);
+  run("git", ["tag", "-a", tag, "-m", tag]);
 
   console.log(`Created release commit and tag ${tag}.`);
 

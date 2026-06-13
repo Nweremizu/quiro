@@ -51,14 +51,14 @@ export default defineConfig({
           build: {
             lib: {
               entry: "electron/main.ts",
-              formats: ["cjs"],
+              formats: ["es"],
             },
             rollupOptions: {
               external: ["electron-updater", "ffmpeg-static", "uiohook-napi"],
               output: {
-                format: "cjs",
-                entryFileNames: "[name].cjs",
-                chunkFileNames: "[name].cjs",
+                format: "es",
+                entryFileNames: "[name].mjs",
+                chunkFileNames: "[name].mjs",
               },
             },
           },
@@ -95,14 +95,26 @@ export default defineConfig({
       "@electron": path.resolve(__dirname, "electron"),
     },
   },
+  // react-draggable (inside react-rnd) references process.env.DRAGGABLE_DEBUG
+  // at render time; only NODE_ENV is replaced by default, so `process` throws
+  // in the renderer. Replace it in both dev prebundling and prod build.
+  define: {
+    "process.env.DRAGGABLE_DEBUG": "undefined",
+  },
+  optimizeDeps: {
+    rolldownOptions: {
+      define: {
+        "process.env.DRAGGABLE_DEBUG": "undefined",
+      },
+    },
+  },
   build: {
     target: "esnext",
     minify: "terser",
     terserOptions: {
       compress: {
-        drop_console: true,
         drop_debugger: true,
-        pure_funcs: ["console.log", "console.debug"],
+        pure_funcs: ["console.log", "console.debug", "console.info"],
       },
     },
     rollupOptions: {

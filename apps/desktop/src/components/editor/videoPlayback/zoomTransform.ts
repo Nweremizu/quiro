@@ -99,12 +99,16 @@ function resetMotionEffects(
     motionBlurFilter.velocity = { x: 0, y: 0 };
     motionBlurFilter.kernelSize = 5;
     motionBlurFilter.offset = 0;
+    // Disabled filters skip their render-to-texture pass entirely; an
+    // attached filter with zero strength still costs a full-screen pass.
+    motionBlurFilter.enabled = false;
   }
 
   if (zoomBlurFilter) {
     zoomBlurFilter.strength = 0;
     zoomBlurFilter.innerRadius = 0;
     zoomBlurFilter.radius = -1;
+    zoomBlurFilter.enabled = false;
   }
 
   if (motionBlurState) {
@@ -407,12 +411,18 @@ function applyCameraStepBlur({
   motionBlurFilter.velocity = analysis.moveBlurVelocity;
   motionBlurFilter.kernelSize = DIRECTIONAL_BLUR_KERNEL_SIZE;
   motionBlurFilter.offset = analysis.moveBlurOffset;
+  // Only pay the filter pass when the blur is visible. A sub-pixel velocity
+  // produces no perceptible blur but still costs a full-screen GPU pass.
+  motionBlurFilter.enabled =
+    Math.hypot(analysis.moveBlurVelocity.x, analysis.moveBlurVelocity.y) >=
+    0.5;
 
   if (zoomBlurFilter) {
     zoomBlurFilter.center = analysis.zoomCenter;
     zoomBlurFilter.strength = analysis.zoomStrength;
     zoomBlurFilter.innerRadius = 0;
     zoomBlurFilter.radius = -1;
+    zoomBlurFilter.enabled = analysis.zoomStrength > 0.001;
   }
 }
 
@@ -539,8 +549,10 @@ export function applyZoomTransform({
       motionBlurFilter.velocity = { x: 0, y: 0 };
       motionBlurFilter.kernelSize = DIRECTIONAL_BLUR_KERNEL_SIZE;
       motionBlurFilter.offset = 0;
+      motionBlurFilter.enabled = false;
       if (zoomBlurFilter) {
         zoomBlurFilter.strength = 0;
+        zoomBlurFilter.enabled = false;
       }
     } else {
       const dtMs = Math.min(

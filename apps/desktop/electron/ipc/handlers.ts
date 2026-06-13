@@ -5,8 +5,10 @@ import { registerExportHandlers } from "./register/export";
 import { registerPermissionHandlers } from "./register/permission";
 import { registerProjectHandlers } from "./register/project";
 import { registerRecordingHandlers } from "./register/recording";
+import { registerRecordingStreamHandlers } from "./register/recording-stream";
 import { registerSettingsHandlers } from "./register/settings";
 import { registerSourceHandlers } from "./register/sources";
+import { registerPerfHandlers } from "../ipc/perf";
 import {
   selectedSource,
   setNativeScreenRecordingActive,
@@ -24,6 +26,7 @@ import {
 
 export { cleanupAllExportStreamSessions } from "@electron/ipc/export/export-stream";
 export { cleanupNativeVideoExportSessions } from "@electron/ipc/export/native";
+export { cleanupRecordingStreamSessions } from "./register/recording-stream";
 
 /** Returns the currently selected source ID for setDisplayMediaRequestHandler */
 export function getSelectedSourceId(): string | null {
@@ -63,10 +66,12 @@ export function registerIpcHandlers(
     getSourceSelectorWindow,
   });
   registerRecordingHandlers(onRecordingStateChange);
+  registerRecordingStreamHandlers();
   registerPermissionHandlers();
   registerAssetHandlers();
   registerExportHandlers();
   registerCaptionHandlers();
   registerProjectHandlers();
   registerSettingsHandlers();
+  registerPerfHandlers();
 }

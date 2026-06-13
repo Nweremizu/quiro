@@ -153,7 +153,7 @@ export default function Item({
           display: "flex",
           alignItems: "center",
           overflow: "hidden",
-          borderRadius: "12px",
+          borderRadius: densityMode === "compact" ? "8px" : "10px",
         }}
       >
         <motion.div
@@ -278,7 +278,9 @@ export default function Item({
                 </>
               ) : isSpeed ? (
                 <>
-                  <IconGauge className={cn(density.iconClassName, "shrink-0")} />
+                  <IconGauge
+                    className={cn(density.iconClassName, "shrink-0")}
+                  />
                   <span
                     className={cn(
                       density.primaryLabelClassName,

@@ -347,7 +347,8 @@ export function SettingsSection({
                   panVelocityThreshold: value,
                 })
               }
-              valueFormatter={(value) => `${Math.round(value)} px/s`}
+              decimals={0}
+              suffix=" px/s"
             />
             <Scrubber
               label={tSettings("effects.motionBlurPanStrength", "Pan max blur")}
@@ -362,7 +363,8 @@ export function SettingsSection({
                   maxDirectionalBlurPx: value,
                 })
               }
-              valueFormatter={(value) => `${value.toFixed(1)} px`}
+              decimals={1}
+              suffix=" px"
             />
             <Scrubber
               label={tSettings(
@@ -380,7 +382,7 @@ export function SettingsSection({
                   zoomVelocityThreshold: value,
                 })
               }
-              valueFormatter={(value) => value.toFixed(3)}
+              decimals={3}
             />
             <Scrubber
               label={tSettings(
@@ -398,7 +400,7 @@ export function SettingsSection({
                   maxRadialBlurStrength: value,
                 })
               }
-              valueFormatter={(value) => value.toFixed(3)}
+              decimals={3}
             />
           </ScrubberStack>
 
@@ -427,7 +429,7 @@ export function SettingsSection({
               onValueChange={(value) =>
                 onCameraSpringStiffnessMultiplierChange?.(value)
               }
-              valueFormatter={(value) => `${value.toFixed(2)}×`}
+              suffix="×"
             />
             <Scrubber
               label={tSettings(
@@ -442,7 +444,7 @@ export function SettingsSection({
               onValueChange={(value) =>
                 onCameraSpringDampingMultiplierChange?.(value)
               }
-              valueFormatter={(value) => `${value.toFixed(2)}×`}
+              suffix="×"
             />
             <Scrubber
               label={tSettings(
@@ -457,7 +459,7 @@ export function SettingsSection({
               onValueChange={(value) =>
                 onCameraSpringMassMultiplierChange?.(value)
               }
-              valueFormatter={(value) => `${value.toFixed(2)}×`}
+              suffix="×"
             />
           </ScrubberStack>
 
@@ -486,7 +488,7 @@ export function SettingsSection({
               onValueChange={(value) =>
                 onCursorSpringStiffnessMultiplierChange?.(value)
               }
-              valueFormatter={(value) => `${value.toFixed(2)}×`}
+              suffix="×"
             />
             <Scrubber
               label={tSettings(
@@ -501,7 +503,7 @@ export function SettingsSection({
               onValueChange={(value) =>
                 onCursorSpringDampingMultiplierChange?.(value)
               }
-              valueFormatter={(value) => `${value.toFixed(2)}×`}
+              suffix="×"
             />
             <Scrubber
               label={tSettings(
@@ -516,7 +518,7 @@ export function SettingsSection({
               onValueChange={(value) =>
                 onCursorSpringMassMultiplierChange?.(value)
               }
-              valueFormatter={(value) => `${value.toFixed(2)}×`}
+              suffix="×"
             />
           </ScrubberStack>
         </SettingsGroup>

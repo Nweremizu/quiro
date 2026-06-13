@@ -277,6 +277,19 @@ interface Window {
 			videoData: ArrayBuffer,
 			fileName: string,
 		) => Promise<{ success: boolean; path?: string; message?: string }>;
+		recordingStreamBegin: (
+			fileName: string,
+		) => Promise<{ success: boolean; sessionId?: string; message?: string }>;
+		recordingStreamAppend: (
+			sessionId: string,
+			chunk: ArrayBuffer,
+		) => Promise<{ success: boolean; message?: string }>;
+		recordingStreamFinalize: (
+			sessionId: string,
+		) => Promise<{ success: boolean; path?: string; message?: string }>;
+		recordingStreamAbort: (
+			sessionId: string,
+		) => Promise<{ success: boolean }>;
 		storeMicrophoneSidecar: (
 			audioData: ArrayBuffer,
 			videoPath: string,

@@ -21,7 +21,10 @@ const exportsCode = iconEntries
   .map(([name]) => {
     const exportName = name;
 
-    return `export const ${exportName} = createIcon(_${name});`;
+    // The @__PURE__ annotation lets Rollup tree-shake unused icons; without it
+    // the createIcon() call (forwardRef + displayName assignment) is treated as
+    // a side effect and every icon ships in the bundle.
+    return `export const ${exportName} = /* @__PURE__ */ createIcon(_${name});`;
   })
   .join("\n\n");
 

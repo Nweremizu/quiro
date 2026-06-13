@@ -179,7 +179,8 @@ export function CursorSection({
           max={16}
           step={0.1}
           onValueChange={(v) => onCursorSizeChange?.(v)}
-          valueFormatter={(v) => `${v.toFixed(1)}×`}
+          decimals={1}
+          suffix="×"
         />
         <Scrubber
           label={tSettings("effects.cursorMotionBlur")}
@@ -190,7 +191,7 @@ export function CursorSection({
           max={2}
           step={0.05}
           onValueChange={(v) => onCursorMotionBlurChange?.(v)}
-          valueFormatter={(v) => `${v.toFixed(2)}×`}
+          suffix="×"
         />
         <Scrubber
           label={tSettings("effects.cursorClickBounce")}
@@ -201,7 +202,7 @@ export function CursorSection({
           max={5}
           step={0.05}
           onValueChange={(v) => onCursorClickBounceChange?.(v)}
-          valueFormatter={(v) => `${v.toFixed(2)}×`}
+          suffix="×"
         />
         <Scrubber
           label={tSettings("effects.cursorClickBounceDuration", "Bounce Speed")}
@@ -212,7 +213,8 @@ export function CursorSection({
           max={500}
           step={5}
           onValueChange={(v) => onCursorClickBounceDurationChange?.(v)}
-          valueFormatter={(v) => `${Math.round(v)} ms`}
+          decimals={0}
+          suffix=" ms"
         />
         <Scrubber
           label={tSettings("effects.cursorSway")}
