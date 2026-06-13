@@ -31,7 +31,29 @@
       "Bash(node -e ' *)",
       "Bash(node -e \"const p = require\\('C:/Development/Desktop Apps/quiro/node_modules/electron'\\); console.log\\(p\\)\")",
       "PowerShell($env:ELECTRON_MIRROR = \"\"; cd \"C:\\\\Development\\\\Desktop Apps\\\\quiro\"; node node_modules/electron/install.js 2>&1)",
-      "PowerShell(Get-ChildItem \"$env:LOCALAPPDATA\\\\electron\\\\Cache\" -ErrorAction SilentlyContinue | Select-Object -First 5 -ExpandProperty Name)"
+      "PowerShell(Get-ChildItem \"$env:LOCALAPPDATA\\\\electron\\\\Cache\" -ErrorAction SilentlyContinue | Select-Object -First 5 -ExpandProperty Name)",
+      "Bash(npx --yes @electron/asar list app.asar)",
+      "Bash(grep -E '^\\\\\\\\[^\\\\\\\\]+$|^/[^/]+$')",
+      "Bash(gh release *)",
+      "Read(//tmp/**)",
+      "Bash(break)",
+      "Bash(grep -rnE \"process.on\\\\\\\\\\(['\\\\\"]\\(unhandledRejection|uncaughtException\\)\" apps/desktop/electron/)",
+      "Bash(powershell -NoProfile -Command \"Stop-Process -Name Quiro -Force -ErrorAction SilentlyContinue; \\(Get-Process Quiro -ErrorAction SilentlyContinue|Measure-Object\\).Count\")",
+      "Bash(gh run *)",
+      "Bash(powershell -NoProfile -Command \"Stop-Process -Name Quiro -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2; \\(Get-Process Quiro -ErrorAction SilentlyContinue|Measure-Object\\).Count\")",
+      "Bash(npx electron-builder *)",
+      "Bash(powershell -NoProfile -Command \"Stop-Process -Name Quiro -Force -ErrorAction SilentlyContinue\")",
+      "Bash(powershell -NoProfile -Command 'Get-Process Quiro -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Seconds 3; $n=\\(Get-Process Quiro -ErrorAction SilentlyContinue|Measure-Object\\).Count; Write-Output \"remaining=$n\"')",
+      "Bash(rm -f apps/desktop/release/1.0.5/win-unpacked/resources/app.asar)",
+      "Bash(echo \"rm exit=$? \\(0=removed/absent\\)\")",
+      "Bash(powershell -NoProfile -Command ' *)",
+      "Bash(powershell -NoProfile -Command \"\\(Get-Process Quiro -ErrorAction SilentlyContinue|Measure-Object\\).Count\")",
+      "Bash(powershell -NoProfile -Command \"Get-Process Quiro -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Seconds 2\")",
+      "Bash(rm -rf apps/desktop/release-verify)",
+      "Bash(npx eslint *)",
+      "Bash(git stash *)",
+      "Bash(git add *)",
+      "Bash(xargs -0 -I{} sh -c 'test -f \"{}\" && find \"{}\" -size +5M -printf \"%s\\\\t%p\\\\n\"')"
     ]
   }
 }

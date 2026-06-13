@@ -1,0 +1,97 @@
+// @see - https://www.electron.build/configuration/configuration
+{
+  $schema: "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  appId: "app.quiro.app",
+  // Pinned so electron-builder can resolve the version even when electron is
+  // hoisted to the monorepo root node_modules instead of apps/desktop.
+  electronVersion: "42.2.0",
+  asar: true,
+  asarUnpack: [
+    "node_modules/ffmpeg-static/**",
+    "node_modules/ffprobe-static/**",
+    "node_modules/uiohook-napi/**",
+    "electron/native/**",
+  ],
+  productName: "Quiro",
+  npmRebuild: true,
+  buildDependenciesFromSource: true,
+  compression: "normal",
+  directories: {
+    output: "release/${version}",
+  },
+  publish: [
+    {
+      provider: "github",
+      owner: "Nweremizu",
+      repo: "quiro",
+    },
+  ],
+  files: [
+    "dist",
+    "dist-electron",
+    "electron/native",
+    "!electron/native/**/build/**",
+    "!*.png",
+    "!preview*.png",
+    "!*.md",
+    "!README.md",
+    "!CONTRIBUTING.md",
+    "!LICENSE",
+  ],
+  extraResources: [
+    {
+      from: "public/wallpapers",
+      to: "assets/wallpapers",
+    },
+  ],
+
+  mac: {
+    files: [
+      "!node_modules/ffprobe-static/bin/win32/**",
+      "!node_modules/ffprobe-static/bin/linux/**",
+    ],
+    hardenedRuntime: true,
+    entitlements: "build/entitlements.mac.plist",
+    entitlementsInherit: "build/entitlements.mac.inherit.plist",
+    target: [
+      {
+        target: "dmg",
+        arch: ["x64", "arm64"],
+      },
+      {
+        target: "zip",
+        arch: ["x64", "arm64"],
+      },
+    ],
+    icon: "icons/icons/mac/icon.icns",
+    artifactName: "${productName}-${arch}.${ext}",
+    extendInfo: {
+      NSAudioCaptureUsageDescription: "Quiro needs audio capture permission to record system audio.",
+      NSCameraUsageDescription: "Quiro needs camera access to record webcam video.",
+      NSMicrophoneUsageDescription: "Quiro needs microphone access to record voice audio.",
+      NSCameraUseContinuityCameraDeviceType: true,
+      "com.apple.security.device.audio-input": true,
+    },
+  },
+  win: {
+    files: [
+      "!node_modules/ffprobe-static/bin/darwin/**",
+      "!node_modules/ffprobe-static/bin/linux/**",
+      "!node_modules/ffprobe-static/bin/win32/ia32/**",
+    ],
+    target: ["nsis"],
+    icon: "icons/icons/win/icon.ico",
+    executableName: "Quiro",
+    artifactName: "${productName}-windows-${arch}.${ext}",
+  },
+  linux: {
+    files: [
+      "!node_modules/ffprobe-static/bin/darwin/**",
+      "!node_modules/ffprobe-static/bin/win32/**",
+    ],
+    target: ["AppImage"],
+    icon: "icons/icons/png",
+    artifactName: "${productName}-linux-x64.${ext}",
+    category: "AudioVideo",
+  },
+}
