@@ -11,10 +11,14 @@ concurrency:
   group: test-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
@@ -61,7 +65,10 @@ jobs:
             libx11-dev libxt-dev libxtst-dev libxinerama-dev libxrandr-dev
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
-      - name: Run CI tests
-        run: npm run test:ci
+      - name: Run desktop CI tests
+        run: npm run test:ci -w @quiro/desktop
+
+      - name: Typecheck web
+        run: npm run typecheck -w @quiro/web

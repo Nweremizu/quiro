@@ -23,7 +23,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+apps/desktop/release/**
 release/**
+apps/desktop/release-verify/**
+release-verify/**
 *.kiro/
 # npx electron-builder --mac --win
 .tmp/
@@ -35,17 +39,18 @@ vite.config.d.ts
 coverage/
 playwright-report/
 test-results/
-tests/fixtures/generated/
+apps/desktop/tests/fixtures/generated/
 
 # Native capture build artifacts
-electron/native/wgc-capture/build/
-electron/native/cursor-monitor/build/
-electron/native/gpu-export-probe/build/
-electron/native/nvidia-cuda-compositor/build/
-electron/native/bin/*/whisper-*
-electron/native/bin/*/whisper-runtime.json
+apps/desktop/electron/native/wgc-capture/build/
+apps/desktop/electron/native/cursor-monitor/build/
+apps/desktop/electron/native/gpu-export-probe/build/
+apps/desktop/electron/native/nvidia-cuda-compositor/build/
+apps/desktop/electron/native/bin/*/whisper-*
+apps/desktop/electron/native/bin/*/whisper-runtime.json
 
 # Local debug helpers
 tmp-*.ps1
 .tmp-*.ps1
 gpu-export-probe.mp4
+.turbo/

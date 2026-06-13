@@ -1,0 +1,417 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/figtree";
+@import "@fontsource/jetbrains-mono";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ==========================================================================
+   FONTS
+========================================================================== */
+
+@font-face {
+  font-family: "Satoshi";
+  src: url("./assets/fonts/Satoshi-Variable.woff2") format("woff2");
+  font-weight: 300 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ==========================================================================
+   THEME TOKENS
+========================================================================== */
+
+@theme inline {
+  /* =========================
+     TYPOGRAPHY
+  ========================= */
+
+  --font-sans: "Satoshi", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Satoshi", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+
+  /* =========================
+     RADII
+  ========================= */
+
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-2xl: 12px;
+  --radius-3xl: 16px;
+  --radius-full: 9999px;
+
+  /* =========================
+     SEMANTIC COLORS
+  ========================= */
+
+  --color-background: var(--bg-page);
+  --color-foreground: var(--text-primary);
+
+  --color-card: var(--bg-surface);
+  --color-card-foreground: var(--text-primary);
+
+  --color-popover: var(--bg-surface-elevated);
+  --color-popover-foreground: var(--text-primary);
+
+  --color-primary: var(--bg-brand);
+  --color-primary-foreground: var(--text-inverse);
+
+  --color-secondary: var(--bg-interactive-hover);
+  --color-secondary-foreground: var(--text-primary);
+
+  --color-muted: var(--bg-surface-sunken);
+  --color-muted-foreground: var(--text-secondary);
+
+  --color-accent: var(--bg-interactive-selected);
+  --color-accent-foreground: var(--text-brand);
+
+  --color-border: var(--border-default);
+  --color-input: var(--border-default);
+  --color-ring: var(--border-focus);
+
+  --color-destructive: var(--bg-danger);
+  --color-destructive-foreground: var(--text-inverse);
+
+  /* =========================
+     BRAND SCALE
+  ========================= */
+
+  --color-brand-50: #fff7ee;
+  --color-brand-100: #ffecd4;
+  --color-brand-200: #ffd4a0;
+  --color-brand-300: #ffb460;
+  --color-brand-400: #ff922a;
+  --color-brand-500: #f08030;
+  --color-brand-600: #d4651a;
+  --color-brand-700: #b04c12;
+  --color-brand-800: #8e3a0d;
+  --color-brand-900: #702d0a;
+  --color-brand-950: #3d1504;
+
+  /* =========================
+     STONE SCALE
+  ========================= */
+
+  --color-stone-0: #ffffff;
+  --color-stone-50: #fafaf8;
+  --color-stone-100: #f4f3f0;
+  --color-stone-200: #e8e6e1;
+  --color-stone-300: #d4d0c9;
+  --color-stone-400: #a9a49a;
+  --color-stone-500: #7e786e;
+  --color-stone-600: #5c5650;
+  --color-stone-700: #433f3a;
+  --color-stone-800: #2a2724;
+  --color-stone-900: #1a1714;
+  --color-stone-950: #0d0c0a;
+
+  /* =========================
+     SHADOWS
+  ========================= */
+
+  --shadow-xs: 0 1px 2px rgba(13, 12, 10, 0.06);
+
+  --shadow-sm:
+    0 1px 3px rgba(13, 12, 10, 0.08), 0 1px 2px rgba(13, 12, 10, 0.06);
+
+  --shadow-md:
+    0 4px 8px rgba(13, 12, 10, 0.08), 0 2px 4px rgba(13, 12, 10, 0.05);
+
+  --shadow-lg:
+    0 8px 20px rgba(13, 12, 10, 0.1), 0 4px 8px rgba(13, 12, 10, 0.06);
+
+  --shadow-xl:
+    0 16px 40px rgba(13, 12, 10, 0.12), 0 8px 16px rgba(13, 12, 10, 0.08);
+
+  --shadow-focus: 0 0 0 3px rgba(240, 128, 48, 0.3);
+
+  --shadow-glow-brand: 0 0 24px rgba(240, 128, 48, 0.24);
+
+  /* =========================
+     MOTION
+  ========================= */
+
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-decelerate: cubic-bezier(0, 0, 0.2, 1);
+  --ease-accelerate: cubic-bezier(0.4, 0, 1, 1);
+  --ease-overshoot: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --duration-fast: 80ms;
+  --duration-normal: 150ms;
+  --duration-moderate: 200ms;
+  --duration-slow: 300ms;
+
+  /* =========================
+     Border
+  ========================= */
+  --border-default: 1px solid var(--color-border);
+  --border-subtle: 1px solid var(--border-subtle);
+  --border-focus: 2px solid var(--color-ring);
+}
+
+/* ==========================================================================
+   LIGHT MODE
+========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* BACKGROUNDS */
+
+  --bg-page: #fafaf8;
+  --bg-surface: #ffffff;
+  --bg-surface-elevated: #ffffff;
+  --bg-surface-sunken: #f4f3f0;
+
+  --bg-overlay: rgba(13, 12, 10, 0.5);
+
+  --bg-interactive-hover: #f4f3f0;
+  --bg-interactive-active: #e8e6e1;
+  --bg-interactive-selected: #fff7ee;
+
+  --bg-brand: #d4651a;
+  --bg-brand-hover: #b04c12;
+  --bg-brand-subtle: rgba(240, 128, 48, 0.12);
+
+  --bg-danger: #dc2626;
+
+  /* TEXT */
+
+  --text-primary: #1a1714;
+  --text-secondary: #5c5650;
+  --text-tertiary: #7e786e;
+  --text-disabled: #d4d0c9;
+
+  --text-inverse: #ffffff;
+
+  --text-brand: #b04c12;
+
+  /* BORDERS */
+
+  --border-default: #e8e6e1;
+  --border-strong: #d4d0c9;
+  --border-focus: #f08030;
+  --border-subtle: rgba(13, 12, 10, 0.08);
+}
+
+/* ==========================================================================
+   DARK MODE
+========================================================================== */
+
+.dark {
+  color-scheme: dark;
+
+  /* BACKGROUNDS */
+
+  --bg-page: #0d0c0a;
+  --bg-surface: #1a1714;
+  --bg-surface-elevated: #2a2724;
+  --bg-surface-sunken: #11100f;
+
+  --bg-overlay: rgba(13, 12, 10, 0.72);
+
+  --bg-interactive-hover: #2a2724;
+  --bg-interactive-active: #433f3a;
+
+  --bg-interactive-selected: rgba(240, 128, 48, 0.12);
+
+  --bg-brand: #f08030;
+  --bg-brand-hover: #ff922a;
+  --bg-brand-subtle: rgba(240, 128, 48, 0.12);
+
+  --bg-danger: #ef4444;
+
+  /* TEXT */
+
+  --text-primary: #fafaf8;
+  --text-secondary: #a9a49a;
+  --text-tertiary: #7e786e;
+  --text-disabled: #433f3a;
+
+  --text-inverse: #0d0c0a;
+
+  --text-brand: #ff922a;
+
+  /* BORDERS */
+
+  --border-default: #2a2724;
+  --border-strong: #433f3a;
+  --border-focus: #f08030;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+
+  /* DARK SHADOWS */
+
+  --shadow-xs:
+    0 1px 2px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+
+  --shadow-sm:
+    0 2px 4px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
+
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.7);
+}
+
+/* ==========================================================================
+   BASE LAYER
+========================================================================== */
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  /* Support for WebKit-based browsers */
+  html {
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1,
+      "ss01" 1;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    text-rendering: optimizeLegibility;
+    font-synthesis-weight: none;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background: rgba(240, 128, 48, 0.18);
+    color: var(--text-primary);
+  }
+
+  :focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+}
+
+/* ==========================================================================
+   UTILITIES
+========================================================================== */
+
+/* @layer utilities {
+  .surface {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    box-shadow: var(--shadow-xs);
+  }
+
+  .surface-elevated {
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border-default);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .text-muted {
+    color: var(--text-secondary);
+  }
+
+  .text-tertiary {
+    color: var(--text-tertiary);
+  }
+
+  .glass {
+    backdrop-filter: blur(24px);
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  .dark .glass {
+    background: rgba(26, 23, 20, 0.72);
+  }
+
+  .recording-glow {
+    box-shadow: var(--shadow-glow-brand);
+  }
+
+  .interactive {
+    transition:
+      background-color var(--duration-fast) var(--ease-standard),
+      border-color var(--duration-fast) var(--ease-standard),
+      color var(--duration-fast) var(--ease-standard),
+      transform var(--duration-fast) var(--ease-standard);
+  }
+
+  .interactive:active {
+    transform: scale(0.98);
+  }
+} */
+
+/* ==========================================================================
+   RECORDING PULSE
+========================================================================== */
+
+@keyframes record-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(240, 128, 48, 0.4);
+  }
+
+  50% {
+    box-shadow: 0 0 0 10px rgba(240, 128, 48, 0);
+  }
+}
+
+.recording-active {
+  animation: record-pulse 1.4s ease-in-out infinite;
+}
+
+/* ==========================================================================
+   REDUCED MOTION
+========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .recording-active {
+    animation: none;
+    border: 2px solid var(--border-focus);
+  }
+}
+
+@utility drag {
+  -webkit-app-region: drag;
+}
+
+@utility no-drag {
+  -webkit-app-region: no-drag;
+}
+
+.scroll::-webkit-scrollbar {
+  width: 6px !important;
+  height: 6px !important;
+}
+
+.scroll::-webkit-scrollbar-thumb {
+  background: rgba(83, 83, 94, 0.2);
+  border-radius: 50px;
+  transition: var(--color-background) 0.2s ease;
+}
+
+.scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 107, 120, 0.4);
+}
+
+.scroll::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+.scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(107, 107, 120, 0.2) transparent;
+}

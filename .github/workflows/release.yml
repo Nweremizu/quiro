@@ -1,11 +1,12 @@
 name: Publish Release
 
+# Single trigger per release: pushing a tag (locally or via publishing a
+# GitHub release, which creates the tag ref) fires exactly one run. Keeping a
+# `release: published` trigger as well caused a duplicate full rebuild.
 on:
   push:
     tags:
       - "v*"
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       tag_name:
@@ -15,16 +16,16 @@ on:
 
 permissions:
   contents: write
-  actions: write
 
 concurrency:
-  group: release-${{ github.event.release.tag_name || github.event.inputs.tag_name || github.ref_name || github.run_id }}
+  group: release-${{ github.event.inputs.tag_name || github.ref_name || github.run_id }}
   cancel-in-progress: false
 
 jobs:
   prepare-release:
     name: Prepare release
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       tag_name: ${{ steps.prepare.outputs.tag_name }}
       package_version: ${{ steps.prepare.outputs.package_version }}
@@ -34,7 +35,7 @@ jobs:
       - name: Checkout release source
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.event.inputs.tag_name || github.ref_name }}
+          ref: ${{ github.event.inputs.tag_name || github.ref_name }}
           fetch-depth: 0
 
       - name: Validate release tag
@@ -45,16 +46,12 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ "${{ github.event_name }}" = "release" ]; then
-            TAG_NAME="${{ github.event.release.tag_name }}"
-            IS_PRERELEASE="${{ github.event.release.prerelease }}"
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TAG_NAME="${{ github.event.inputs.tag_name }}"
-            IS_PRERELEASE="$(gh release view "$TAG_NAME" --repo "${{ github.repository }}" --json isPrerelease --jq '.isPrerelease' 2>/dev/null || echo false)"
           else
             TAG_NAME="${GITHUB_REF_NAME}"
-            IS_PRERELEASE="$(gh release view "$TAG_NAME" --repo "${{ github.repository }}" --json isPrerelease --jq '.isPrerelease' 2>/dev/null || echo false)"
           fi
+          IS_PRERELEASE="$(gh release view "$TAG_NAME" --repo "${{ github.repository }}" --json isPrerelease --jq '.isPrerelease' 2>/dev/null || echo false)"
 
           if [ -z "$TAG_NAME" ]; then
             echo "Release tag is required."
@@ -62,17 +59,15 @@ jobs:
           fi
 
           TAG_VERSION="${TAG_NAME#v}"
-          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          PACKAGE_VERSION="$(node -p "require('./apps/desktop/package.json').version")"
 
           if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
             echo "Release tag version ($TAG_VERSION) does not match package.json version ($PACKAGE_VERSION)."
             exit 1
           fi
 
-          if [ "${{ github.event_name }}" != "release" ]; then
-            gh release view "$TAG_NAME" --repo "${{ github.repository }}" >/dev/null 2>&1 || \
-              gh release create "$TAG_NAME" --repo "${{ github.repository }}" --verify-tag --title "$TAG_NAME"
-          fi
+          gh release view "$TAG_NAME" --repo "${{ github.repository }}" >/dev/null 2>&1 || \
+            gh release create "$TAG_NAME" --repo "${{ github.repository }}" --verify-tag --title "$TAG_NAME" --generate-notes
 
           echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
           echo "package_version=$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
@@ -83,6 +78,7 @@ jobs:
     name: Build Windows x64
     needs: prepare-release
     runs-on: windows-latest
+    timeout-minutes: 90
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -123,7 +119,7 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Copy WASM assets
-        run: npm run copy:wasm
+        run: npm run copy:wasm -w @quiro/desktop
 
       - name: Remove stale uiohook build output
         shell: pwsh
@@ -133,13 +129,18 @@ jobs:
           }
 
       - name: Install app dependencies
+        working-directory: apps/desktop
         run: npx electron-builder install-app-deps
 
+      - name: Run unit tests
+        run: npm run test:unit -w @quiro/desktop
+
       - name: Build Windows x64
+        working-directory: apps/desktop
         shell: pwsh
         run: |
-          npm run build:platform-native-helpers
-          npm run build:app
+          npm run build:platform-native-helpers -w @quiro/desktop
+          npm run build:app -w @quiro/desktop
           npx electron-builder --win dir nsis --x64 --publish never
 
       - name: Generate Windows checksums
@@ -151,7 +152,7 @@ jobs:
           }
           New-Item -ItemType Directory -Path $uploadDir | Out-Null
 
-          $files = Get-ChildItem -Path release -Recurse -File -Include *.exe,*.blockmap,latest*.yml |
+          $files = Get-ChildItem -Path apps/desktop/release -Recurse -File -Include *.exe,*.blockmap,latest*.yml |
             Where-Object { $_.FullName -notmatch '[\\/]win-unpacked[\\/]' }
 
           if ($files.Count -eq 0) {
@@ -173,8 +174,9 @@ jobs:
             "$($hash.Hash.ToLowerInvariant())  $($file.Name)"
           }
 
+          # LF endings so `sha256sum -c` works on any platform
           $checksumPath = Join-Path $uploadDir "SHA256SUMS-windows-x64.txt"
-          $lines | Sort-Object | Set-Content -Path $checksumPath -Encoding ascii
+          [IO.File]::WriteAllText($checksumPath, ((($lines | Sort-Object) -join "`n") + "`n"))
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -191,8 +193,8 @@ jobs:
     name: Build macOS (x64 + arm64)
     needs: prepare-release
     runs-on: macos-latest
+    timeout-minutes: 90
     env:
-      CSC_IDENTITY_AUTO_DISCOVERY: "false"
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout code
@@ -206,19 +208,58 @@ jobs:
           node-version: 22
           cache: npm
 
+      # macOS auto-updates REQUIRE a signed build (electron-updater refuses to
+      # install unsigned updates on macOS). Signing happens when the secrets
+      # exist; otherwise we ship an unsigned build and surface a warning.
+      - name: Configure macOS signing and notarization
+        env:
+          MACOS_SIGNING_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_SIGNING_CERTIFICATE_P12_BASE64 }}
+          MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${MACOS_SIGNING_CERTIFICATE_P12_BASE64:-}" ] || [ -z "${MACOS_SIGNING_CERTIFICATE_PASSWORD:-}" ]; then
+            echo "::warning::macOS signing secrets are missing. Building UNSIGNED packages — auto-update will not work on macOS and Gatekeeper will block first launch."
+            echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          CERT_PATH="$RUNNER_TEMP/macos-signing-cert.p12"
+          printf '%s' "$MACOS_SIGNING_CERTIFICATE_P12_BASE64" | base64 -d > "$CERT_PATH"
+          {
+            echo "CSC_LINK=$CERT_PATH"
+            echo "CSC_KEY_PASSWORD=$MACOS_SIGNING_CERTIFICATE_PASSWORD"
+          } >> "$GITHUB_ENV"
+
+          if [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ]; then
+            {
+              echo "APPLE_ID=$APPLE_ID"
+              echo "APPLE_APP_SPECIFIC_PASSWORD=$APPLE_APP_SPECIFIC_PASSWORD"
+              echo "APPLE_TEAM_ID=$APPLE_TEAM_ID"
+              echo "QUIRO_MAC_NOTARIZE=true"
+            } >> "$GITHUB_ENV"
+          else
+            echo "::warning::Apple notarization secrets are missing. The app will be signed but NOT notarized — Gatekeeper will warn users on first launch."
+          fi
+
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
       - name: Copy WASM assets
-        run: npm run copy:wasm
+        run: npm run copy:wasm -w @quiro/desktop
 
       - name: Remove stale uiohook build output
         run: rm -rf node_modules/uiohook-napi/build
 
       - name: Install app dependencies
+        working-directory: apps/desktop
         run: npx electron-builder install-app-deps
 
       - name: Generate macOS icon (ICNS)
+        working-directory: apps/desktop
         run: |
           set -euo pipefail
           ICONSET_DIR="$(mktemp -d)/Quiro.iconset"
@@ -239,13 +280,22 @@ jobs:
           rm -rf "$ICONSET_DIR"
 
       - name: Build macOS native helpers (Swift)
-        run: npm run build:platform-native-helpers
+        working-directory: apps/desktop
+        run: npm run build:platform-native-helpers -w @quiro/desktop
 
       - name: Build app (Vite + TypeScript)
-        run: npm run build:app
+        working-directory: apps/desktop
+        run: npm run build:app -w @quiro/desktop
 
       - name: Build macOS packages (DMG + ZIP, x64 + arm64)
-        run: npx electron-builder --mac dmg zip --x64 --arm64 --publish never
+        working-directory: apps/desktop
+        run: |
+          set -euo pipefail
+          if [ "${QUIRO_MAC_NOTARIZE:-}" = "true" ]; then
+            npx electron-builder --mac dmg zip --x64 --arm64 --publish never -c.mac.notarize=true
+          else
+            npx electron-builder --mac dmg zip --x64 --arm64 --publish never
+          fi
 
       - name: Collect and checksum macOS artifacts
         run: |
@@ -254,9 +304,9 @@ jobs:
           rm -rf "$UPLOAD_DIR"
           mkdir -p "$UPLOAD_DIR"
 
-          # electron-builder outputs to release/${version}/
+          # electron-builder outputs to apps/desktop/release/${version}/
           # -maxdepth 2 avoids descending into mac/ and mac-arm64/ unpacked dirs
-          find release -maxdepth 2 \( \
+          find apps/desktop/release -maxdepth 2 \( \
             -name "*.dmg" -o \
             -name "*.dmg.blockmap" -o \
             -name "*.zip" -o \
@@ -292,6 +342,7 @@ jobs:
       - build-windows-x64
       - build-macos
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Download Windows artifacts
         uses: actions/download-artifact@v4
@@ -337,6 +388,28 @@ jobs:
               exit 1
             fi
             cp "$file" "$target"
+          done
+
+      - name: Verify release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release-assets/upload
+
+          # 1. Checksums must match — catches artifact corruption in transit.
+          sha256sum -c SHA256SUMS-windows-x64.txt
+          sha256sum -c SHA256SUMS-macos.txt
+
+          # 2. The updater metadata must advertise exactly the tagged version,
+          #    otherwise shipped clients would update to the wrong build.
+          EXPECTED_VERSION="${{ needs.prepare-release.outputs.package_version }}"
+          for yml in latest*.yml; do
+            ADVERTISED="$(grep -m1 '^version:' "$yml" | awk '{print $2}' | tr -d '\r')"
+            if [ "$ADVERTISED" != "$EXPECTED_VERSION" ]; then
+              echo "$yml advertises version $ADVERTISED but the release tag is $EXPECTED_VERSION."
+              exit 1
+            fi
+            echo "$yml: version $ADVERTISED OK"
           done
 
       - name: Upload release assets to GitHub

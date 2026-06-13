@@ -1,0 +1,138 @@
+{
+  "playback": {
+    "play": "Play",
+    "pause": "Pause",
+    "skipBack": "Skip Back",
+    "skipForward": "Skip Forward",
+    "muteUnmute": "Mute/Unmute"
+  },
+  "annotations": {
+    "settings": "Annotation Settings",
+    "active": "Active",
+    "text": "Text",
+    "image": "Image",
+    "arrow": "Arrow",
+    "blur": "Blur",
+    "textContent": "Text Content",
+    "textPlaceholder": "Enter your text...",
+    "fontStyle": "Font Style",
+    "selectStyle": "Select style",
+    "size": "Size",
+    "toggleBold": "Toggle bold",
+    "toggleItalic": "Toggle italic",
+    "toggleUnderline": "Toggle underline",
+    "alignLeft": "Align left",
+    "alignCenter": "Align center",
+    "alignRight": "Align right",
+    "textColor": "Text Color",
+    "background": "Background",
+    "none": "None",
+    "clearBackground": "Clear Background",
+    "uploadImage": "Upload Image",
+    "supportedFormats": "Supported formats: JPG, PNG, GIF, WebP",
+    "arrowDirection": "Arrow Direction",
+    "strokeWidth": "Stroke Width: {{width}}px",
+    "arrowColor": "Arrow Color",
+    "deleteAnnotation": "Delete Annotation",
+    "shortcutsAndTips": "Shortcuts & Tips",
+    "tipSelectAnnotation": "Move playhead to overlapping annotation section and select an item.",
+    "tipCycleForward": "Use Tab to cycle through overlapping items.",
+    "tipCycleBackward": "Use Shift+Tab to cycle backwards.",
+    "imageUploadSuccess": "Image uploaded successfully!",
+    "imageUploadError": "Please upload a JPG, PNG, GIF, or WebP image file.",
+    "blurStrength": "Blur Strength: {{strength}}",
+    "solidColor": "Solid Color (Censorship)",
+    "borderRadius": "Border Radius"
+  },
+
+  "fontStyles": {
+    "classic": "Classic",
+    "editor": "Editor",
+    "strong": "Strong",
+    "typewriter": "Typewriter",
+    "deco": "Deco",
+    "simple": "Simple",
+    "modern": "Modern",
+    "clean": "Clean"
+  },
+  "format": {
+    "mp4Video": "MP4 Video",
+    "mp4Description": "High quality video file",
+    "gifAnimation": "GIF Animation",
+    "gifDescription": "Animated image for sharing"
+  },
+  "gifOptions": {
+    "frameRate": "Frame Rate",
+    "outputSize": "Output Size",
+    "outputDimensions": "Output: {{width}} × {{height}}px",
+    "loopAnimation": "Loop Animation",
+    "loopDescription": "GIF will play continuously"
+  },
+  "tutorial": {
+    "howTrimmingWorks": "How trimming works",
+    "title": "How Trimming Works",
+    "understanding": "Understanding how to cut out unwanted parts of your video.",
+    "descriptionP1": "The Trim tool works by defining the segments you want to",
+    "descriptionRemove": "remove",
+    "descriptionP2": "from your video.",
+    "descriptionP3": "Any part of the timeline that is covered by a red trim segment will be cut out when you export.",
+    "visualExample": "Visual Example",
+    "removed": "REMOVED",
+    "kept": "Kept",
+    "finalVideo": "Final Video",
+    "part": "Part {{number}}",
+    "addTrimStep": "1. Add Trim",
+    "addTrimDesc": "Press T or click the scissors icon to mark a section for removal.",
+    "adjustStep": "2. Adjust",
+    "adjustDesc": "Drag the edges of the red region to cover exactly what you want to cut out."
+  },
+  "feedback": {
+    "trigger": "Feedback",
+    "title": "Feedback & contact",
+    "description": "Reach out directly or open an issue if something is broken or missing.",
+    "emailLabel": "Email",
+    "xLabel": "X",
+    "reportIssue": "Report issue / send feedback",
+    "openFailed": "Failed to open link."
+  },
+  "keyboardShortcuts": {
+    "trigger": "Shortcuts",
+    "title": "Keyboard Shortcuts",
+    "description": "Quick reference for the timeline and editor controls.",
+    "customizeTooltip": "Customize shortcuts",
+    "customize": "Customize"
+  },
+  "actions": {
+    "saveAgain": "Save Again",
+    "showInFolder": "Show In Folder"
+  },
+  "project": {
+    "untitled": "Untitled"
+  },
+  "nativeCaptureUnavailable": {
+    "title": "Nothing’s broken, but we won’t be able to render an animated cursor overlay.",
+    "description": "Your device does not support native capture. This could be for a variety of reasons we haven’t figured out yet. This doesn’t break Quiro, but it does make cursor smoothing impossible.",
+    "confirm": "Okay"
+  },
+  "exportStatus": {
+    "exporting": "Exporting",
+    "renderingFile": "Rendering your file.",
+    "preparing": "Preparing export...",
+    "completePercent": "{{percent}}% complete",
+    "issue": "Export issue",
+    "complete": "Export complete",
+    "savedSuccessfully": "Your file was saved successfully."
+  },
+  "export": {
+    "processingAudioEdits": "Processing audio with speed/overlay edits"
+  },
+  "toolbar": {
+    "addLayer": "Add Layer",
+    "splitClip": "Split Clip (C)"
+  },
+  "timeline": {
+    "expand": "Expand Timeline",
+    "collapse": "Collapse Timeline"
+  },
+  "openRecordingsFolder": "Open recordings folder"
+}
