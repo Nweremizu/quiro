@@ -64,8 +64,14 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             libx11-dev libxt-dev libxtst-dev libxinerama-dev libxrandr-dev
 
+      # Use `npm install` (not `npm ci`) so each platform fetches its own
+      # native optional binaries (rolldown/esbuild). npm only records the
+      # host platform's binding package nodes in package-lock.json
+      # (npm/cli#4828), so `npm ci` on a non-Windows runner cannot install the
+      # darwin/linux bindings the lockfile omits. The committed lockfile still
+      # pins all resolutions; install only adds the platform-appropriate ones.
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: npm install --ignore-scripts --no-audit --no-fund
 
       - name: Run desktop CI tests
         run: npm run test:ci -w @quiro/desktop

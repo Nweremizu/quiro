@@ -115,8 +115,13 @@ jobs:
           Add-Content -Path $env:GITHUB_ENV -Value "WIN_CSC_LINK=$certPath"
           Add-Content -Path $env:GITHUB_ENV -Value "WIN_CSC_KEY_PASSWORD=$env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD"
 
+      # `npm install` (not `npm ci`) so each platform fetches its own native
+      # optional binaries (rolldown/esbuild) — npm records only the host
+      # platform's binding nodes in package-lock.json (npm/cli#4828), so
+      # `npm ci` on a non-Windows runner cannot install the bindings the
+      # lockfile omits.
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: npm install --ignore-scripts --no-audit --no-fund
 
       - name: Copy WASM assets
         run: npm run copy:wasm -w @quiro/desktop
@@ -245,8 +250,13 @@ jobs:
             echo "::warning::Apple notarization secrets are missing. The app will be signed but NOT notarized — Gatekeeper will warn users on first launch."
           fi
 
+      # `npm install` (not `npm ci`) so each platform fetches its own native
+      # optional binaries (rolldown/esbuild) — npm records only the host
+      # platform's binding nodes in package-lock.json (npm/cli#4828), so
+      # `npm ci` on a non-Windows runner cannot install the bindings the
+      # lockfile omits.
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: npm install --ignore-scripts --no-audit --no-fund
 
       - name: Copy WASM assets
         run: npm run copy:wasm -w @quiro/desktop
