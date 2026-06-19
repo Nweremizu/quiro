@@ -1,6 +1,6 @@
 import { ipcMain } from "electron";
 import {
-  hasApiKey,
+  getKeyStatus,
   runAiComplete,
   type AiCompleteRequestWire,
 } from "../../ai/client";
@@ -34,6 +34,6 @@ export function registerAiHandlers() {
   );
 
   ipcMain.handle(AI_GET_KEY_STATUS, async () => {
-    return { hasKey: hasApiKey() };
+    return getKeyStatus();
   });
 }

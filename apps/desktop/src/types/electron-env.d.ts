@@ -222,7 +222,10 @@ interface Window {
         content: Array<{ type: string; [key: string]: unknown }>;
         usage?: { inputTokens: number; outputTokens: number };
       }>;
-      getKeyStatus: () => Promise<{ hasKey: boolean }>;
+      getKeyStatus: () => Promise<{
+        hasKey: boolean;
+        providers: { anthropic: boolean; minimax: boolean };
+      }>;
     };
     hudOverlaySetIgnoreMouse: (ignore: boolean) => void;
     hudOverlayDrag: (

@@ -21,8 +21,9 @@
 |---|---|---|---|
 | **S0-1** Shared contract (`contract.ts`) | A+B | ✅ done | Typechecks + lints clean. **Review & confirm, B.** |
 | **S0-2** `ai:complete` IPC stub + both `d.ts` | A | ✅ done | Stub live; `window.electronAPI.ai.complete(...)` round-trips. **@B unblocked.** |
-| **S0-3** API key config + "missing key" state | A | ⬜ next | `hasApiKey()` already reads env; S0-3 formalizes `.env` + UI state. |
+| **S0-3** API key config + "missing key" state | A | ⬜ next | Now covers **both** keys (`ANTHROPIC_API_KEY`, `MINIMAX_API_KEY`); `getKeyStatus()` already reports per-provider. |
 | **S0-4** Empty ChatPanel + stub `EditorActions` | B | ⬜ todo | Implement `EditorActions` against the contract. |
+| **MP** Multi-provider layer (Claude + MiniMax) | A | ✅ done | Provider router + MiniMax↔OpenAI translation (tested). Network calls land in S1-2. |
 
 _Update this board as things move._
 
@@ -36,6 +37,7 @@ _Update this board as things move._
 | **D2** | **Timebase = source-media ms everywhere in the Brain & tool args.** Convert to timeline-time only when touching existing clips, via `mapTimelineTimeToSourceTime` / `mapSourceTimeToTimelineTime` (`editor.ts`). | Transcript + telemetry are in source time; mixing timebases is the #1 bug risk (edge case 2.2). | ✅ agreed (A) · 👀 confirm (B) |
 | **D3** | The agent receives a **`BrainSummary`** (counts + one paragraph), not the full `RecordingBrain`. | Keeps tokens bounded on long recordings. | ✅ agreed (A) · 👀 confirm (B) |
 | **D4** | Models: planner `claude-opus-4-8`, classifier/vision `claude-haiku-4-5` (see `AI_MODELS` in contract). | Per spec §7. Confirm exact IDs at integration time. | ✅ agreed (A) |
+| **D5** | **Multi-provider, selectable.** Claude **and** MiniMax are both available; the main process routes to a provider **by model id** (`MiniMax-*`/`abab*` → MiniMax, else Anthropic). The renderer is unaware — same wire protocol. | User wants MiniMax as a selectable alternative (cost/access). The IPC seam (D1) makes it a main-only change. | ✅ agreed (A) · 👀 confirm (B) |
 
 ---
 
@@ -50,6 +52,27 @@ _Update this board as things move._
 ---
 
 ## 🧾 Handoff log
+
+### 2026-06-19 — Multi-provider layer (Claude + MiniMax) landed ✅  `@B confirm D5`
+**From:** A (paired w/ Claude) · **Re:** `electron/ai/` (now `types.ts`, `client.ts` router, `providers/anthropic.ts`, `providers/minimax.ts`), `contract.ts`, both `d.ts`
+
+Per the call, Quiro is now **multi-provider**: Claude and MiniMax are both selectable (decision **D5**). I refactored the S0-2 stub into a proper provider seam — **renderer/agent loop are completely unaffected** (still one `ai:complete` call, same wire protocol).
+
+**What changed:**
+- `electron/ai/types.ts` — `ModelProvider` interface + `providerIdForModel()` router (routes `MiniMax-*` / `abab*` → MiniMax, else Anthropic).
+- `electron/ai/client.ts` — now a **router**: `runAiComplete()` delegates by model id; `getKeyStatus()` reports **per-provider** key presence.
+- `electron/ai/providers/anthropic.ts` — Claude provider (stub; real call S1-2).
+- `electron/ai/providers/minimax.ts` — MiniMax provider (stub `complete()`; **the wire↔OpenAI translation `toOpenAiRequest` / `fromOpenAiResponse` is fully implemented + unit-tested** — the hard part is de-risked, only the `fetch` is left for S1-2).
+- `contract.ts` — `AiModelId` gains `MiniMax-M3` / `MiniMax-M2.5`; `AI_MODELS.minimaxPlanner`; new `AiProvider` type.
+- both `electron-env.d.ts` — `ai.getKeyStatus()` now returns `{ hasKey, providers: { anthropic, minimax } }`.
+
+**@B — does this touch you? No.** You keep calling `window.electronAPI.ai.complete(request)` exactly as before; whichever model id you put in `request.model` decides the backend. You *can* surface a model picker later using `getKeyStatus().providers` to show only configured providers.
+
+**Config:** add `MINIMAX_API_KEY` (+ optional `MINIMAX_BASE_URL`; default international `https://api.minimax.io/v1`, China `https://api.minimaxi.com/v1`). I'll fold both keys into S0-3.
+
+**Verified:** `tsc --noEmit` ✅ · `eslint --max-warnings 0` ✅ · `vitest` ✅ (7/7 — router + translation).
+
+---
 
 ### 2026-06-19 — S0-2 `ai:complete` IPC stub landed ✅  `@B you're unblocked`
 **From:** A (paired w/ Claude) · **Re:** `electron/ai/`, `electron/ipc/register/ai.ts`, `preload.ts`, both `electron-env.d.ts`
