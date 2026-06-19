@@ -21,8 +21,8 @@
 |---|---|---|---|
 | **S0-1** Shared contract (`contract.ts`) | A+B | ✅ done | Typechecks + lints clean. **Review & confirm, B.** |
 | **S0-2** `ai:complete` IPC stub + both `d.ts` | A | ✅ done | Stub live; `window.electronAPI.ai.complete(...)` round-trips. **@B unblocked.** |
-| **S0-3** API key config + "missing key" state | A | ⬜ next | Now covers **both** keys (`ANTHROPIC_API_KEY`, `MINIMAX_API_KEY`); `getKeyStatus()` already reports per-provider. |
-| **S0-4** Empty ChatPanel + stub `EditorActions` | B | ⬜ todo | Implement `EditorActions` against the contract. |
+| **S0-3** API key config + "missing key" state | A | ✅ done | `.env` loaded in main (`ANTHROPIC_API_KEY`, `MINIMAX_API_KEY`, `MINIMAX_BASE_URL`); `.env.example` + gitignore; renderer `keyStatus` helper for B. |
+| **S0-4** Empty ChatPanel + stub `EditorActions` | B | ⬜ next | Implement `EditorActions` against the contract; use `fetchAiKeyStatus()` / `missingKeyMessage()` for the no-key state. |
 | **MP** Multi-provider layer (Claude + MiniMax) | A | ✅ done | Provider router + MiniMax↔OpenAI translation (tested). Network calls land in S1-2. |
 
 _Update this board as things move._
@@ -52,6 +52,28 @@ _Update this board as things move._
 ---
 
 ## 🧾 Handoff log
+
+### 2026-06-19 — S0-3 API key config + "missing key" state landed ✅  `@B for S0-4`
+**From:** A (paired w/ Claude) · **Re:** `electron/utils/loadEnv.ts`, `electron/main.ts`, `apps/desktop/.env.example`, `.gitignore`, `src/lib/ai/keyStatus.ts`
+
+Both provider keys now load from a local `.env`, and the renderer has a clean way to detect "no key set."
+
+**How to add your keys (do this to actually run the AI):**
+1. `cp apps/desktop/.env.example apps/desktop/.env`
+2. Fill in `ANTHROPIC_API_KEY` and/or `MINIMAX_API_KEY` (either is fine — both optional).
+3. Restart the app. (Real shell env vars override the file; `.env` is gitignored.)
+
+**What landed:**
+- `electron/utils/loadEnv.ts` — zero-dependency `.env` parser/loader (never overrides real env vars). Loaded early in `main.ts` from `APP_ROOT/.env`, the repo root, or `userData/.env`.
+- `apps/desktop/.env.example` — documents all three vars + where to get keys.
+- `.gitignore` — `.env` / `.env.*` ignored (keeps `.env.example`). **No key can be committed.**
+- `src/lib/ai/keyStatus.ts` — `fetchAiKeyStatus()` (wraps `ai:get-key-status`) + `missingKeyMessage(status)`.
+
+**@B — for S0-4 ChatPanel:** call `fetchAiKeyStatus()` on mount; if `!status.hasKey`, render `missingKeyMessage(status)` (and disable send). Use `status.providers` if you add a model picker. That's the entire "missing key" UX contract — no main-process work needed from you.
+
+**Verified:** `tsc --noEmit` ✅ · `eslint --max-warnings 0` ✅ · `vitest` ✅ (loadEnv + keyStatus tests).
+
+---
 
 ### 2026-06-19 — Multi-provider layer (Claude + MiniMax) landed ✅  `@B confirm D5`
 **From:** A (paired w/ Claude) · **Re:** `electron/ai/` (now `types.ts`, `client.ts` router, `providers/anthropic.ts`, `providers/minimax.ts`), `contract.ts`, both `d.ts`

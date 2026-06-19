@@ -16,6 +16,7 @@ import {
 } from "electron";
 import { RECORDINGS_DIR } from "@electron/utils/application-path";
 import { showCursor } from "@electron/utils/cursor";
+import { loadEnvFile } from "@electron/utils/loadEnv";
 import { registerExtensionIpcHandlers } from "@electron/extensions/ipc-extensions";
 import { getGpuSwitches } from "@electron/utils/gpu-switcher";
 import {
@@ -207,6 +208,15 @@ const IS_DEV = Boolean(VITE_DEV_SERVER_URL);
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   ? path.join(process.env.APP_ROOT, "public")
   : RENDERER_DIST;
+
+// Load AI provider keys (ANTHROPIC_API_KEY, MINIMAX_API_KEY, MINIMAX_BASE_URL)
+// from a local .env in dev. Real environment variables always win. The first
+// existing file is used. See apps/desktop/.env.example.
+loadEnvFile([
+  path.join(process.env.APP_ROOT, ".env"),
+  path.join(process.env.APP_ROOT, "..", "..", ".env"),
+  path.join(app.getPath("userData"), ".env"),
+]);
 
 // Window references
 let mainWindow: BrowserWindow | null = null;
