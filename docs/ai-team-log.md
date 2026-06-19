@@ -23,7 +23,10 @@
 | **S0-2** `ai:complete` IPC stub + both `d.ts` | A | ✅ done | Stub live; `window.electronAPI.ai.complete(...)` round-trips. **@B unblocked.** |
 | **S0-3** API key config + "missing key" state | A | ✅ done | `.env` loaded in main (`ANTHROPIC_API_KEY`, `MINIMAX_API_KEY`, `MINIMAX_BASE_URL`); `.env.example` + gitignore; renderer `keyStatus` helper for B. |
 | **S0-4** Empty ChatPanel + stub `EditorActions` | A (for B) | ✅ done | Toggleable `AiChatPanel` + memo-safe `editorActions` (real `snapshot()`, mutators wired) in `window.tsx`. Needs a visual click-test. |
+| **S1-1** `buildBrain()` from transcript + telemetry | A | ✅ done | Pure fusion → moments JSON + `summarizeBrain()`. 7/7 fixture tests. **Unblocks S1-4.** |
+| **S1-2** Real `ai:complete` (both providers) | A | ⬜ next | Fill in `AnthropicProvider`/`MiniMaxProvider` `complete()`; Brain summary in system prompt. |
 | **S1-3** Agent loop in the ChatPanel | B | ⬜ next | Replace the panel's no-op `handleSend` with the agent runner calling `ai.complete`. |
+| **S1-4** `auto_zoom_on_clicks` dispatcher | B | ⬜ next | Brain clicks → `buildInteractionZoomSuggestions` → `editorActions.applyZoomSuggestions`. |
 | **MP** Multi-provider layer (Claude + MiniMax) | A | ✅ done | Provider router + MiniMax↔OpenAI translation (tested). Network calls land in S1-2. |
 
 _Update this board as things move._
@@ -53,6 +56,23 @@ _Update this board as things move._
 ---
 
 ## 🧾 Handoff log
+
+### 2026-06-20 — S1-1 Recording Brain landed ✅  `@B for S1-4`
+**From:** A (paired w/ Claude) · **Re:** `src/lib/ai/brain.ts`
+
+`buildBrain(inputs)` fuses transcript + cursor telemetry into a `RecordingBrain` (sorted `Moment[]`), and `summarizeBrain(brain)` gives the compact model-facing summary (decision D3). Pure functions — no model/IPC/React.
+
+**Moment kinds produced:** `speech`, `filler` (per the `FILLER_WORDS` lexicon, word-level), `silence` (speech gaps ≥ `SILENCE_MIN_MS`), `idle` (speech gaps ≥ `IDLE_MIN_MS` with **no click inside** → speed-up candidates), `click` (explicit interactions, with `focus`). `scene` is left for vision (stretch).
+
+**Degrades gracefully** (tested): transcript-only, telemetry-only, neither, and derives duration from the data when `durationMs` is 0. **7/7** fixture tests.
+
+**@B — this unblocks S1-4.** Your `auto_zoom_on_clicks` dispatcher can either (a) read `brain.moments.filter(m => m.kind === "click")` for click focuses, or (b) keep using `buildInteractionZoomSuggestions(cursorTelemetry, …)` directly and just call `editorActions.applyZoomSuggestions(result.suggestions)`. Either works; the Brain is there if you want clicks already fused with timing.
+
+**Timebase reminder (D2):** all moment times are **source-media ms**.
+
+**Verified:** `tsc --noEmit` ✅ · `eslint --max-warnings 0` ✅ · `vitest` ✅ (7/7).
+
+---
 
 ### 2026-06-19 — S0-4 ChatPanel shell + EditorActions landed ✅  `@B → S1-3 (agent loop)`
 **From:** A (paired w/ Claude, building B's task to unblock the integration) · **Re:** `src/components/editor/ai/AiChatPanel.tsx`, `src/components/editor/window.tsx`
