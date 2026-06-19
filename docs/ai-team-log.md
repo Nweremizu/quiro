@@ -20,8 +20,8 @@
 | Task | Owner | Status | Notes |
 |---|---|---|---|
 | **S0-1** Shared contract (`contract.ts`) | A+B | ✅ done | Typechecks + lints clean. **Review & confirm, B.** |
-| **S0-2** `ai:complete` IPC stub + both `d.ts` | A | ⬜ next | Ship the *stub* first so B can build the agent loop. |
-| **S0-3** API key config + "missing key" state | A | ⬜ todo | |
+| **S0-2** `ai:complete` IPC stub + both `d.ts` | A | ✅ done | Stub live; `window.electronAPI.ai.complete(...)` round-trips. **@B unblocked.** |
+| **S0-3** API key config + "missing key" state | A | ⬜ next | `hasApiKey()` already reads env; S0-3 formalizes `.env` + UI state. |
 | **S0-4** Empty ChatPanel + stub `EditorActions` | B | ⬜ todo | Implement `EditorActions` against the contract. |
 
 _Update this board as things move._
@@ -50,6 +50,33 @@ _Update this board as things move._
 ---
 
 ## 🧾 Handoff log
+
+### 2026-06-19 — S0-2 `ai:complete` IPC stub landed ✅  `@B you're unblocked`
+**From:** A (paired w/ Claude) · **Re:** `electron/ai/`, `electron/ipc/register/ai.ts`, `preload.ts`, both `electron-env.d.ts`
+
+The full AI IPC bridge is wired end-to-end (as a **stub** — no network yet). The renderer can now call the bridge and get a real round-trip.
+
+**What's callable from the renderer right now:**
+- `window.electronAPI.ai.complete(request)` → resolves an `AiCompleteResult`-shaped object. Today it echoes a canned assistant text block (`"🔌 ai:complete stub …"`); the real Anthropic tool-use call replaces the body in **S1-2** — the IPC shape won't change.
+- `window.electronAPI.ai.getKeyStatus()` → `{ hasKey: boolean }` (reads `ANTHROPIC_API_KEY` in main).
+
+**Files (all touched per the CLAUDE.md IPC checklist):**
+- `electron/ai/client.ts` — `runAiComplete()` (stub) + `hasApiKey()`; **the API key lives only here.**
+- `electron/ipc/register/ai.ts` — `registerAiHandlers()` for `ai:complete` + `ai:get-key-status`.
+- `electron/ipc/handlers.ts` — calls `registerAiHandlers()`.
+- `electron/preload.ts` — exposes `electronAPI.ai`.
+- `electron/electron-env.d.ts` **and** `src/types/electron-env.d.ts` — typed (kept in sync).
+- `electron/ai/client.test.ts` — 2 passing unit tests.
+
+**Verified:** `tsc --noEmit` ✅ · `eslint --max-warnings 0` ✅ · `vitest` ✅ (2/2).
+
+**@B — what you can build now (S0-4 + S1-3):** wire your agent runner against `window.electronAPI.ai.complete`. Build the loop, the message array, and tool round-trips against the stub today; when I land the real call (S1-2) it just starts returning real `tool_use` blocks. The IPC types are in both `d.ts` files and mirror the contract.
+
+**Tip:** for renderer-side type safety, wrap the bridge in a tiny typed helper that casts to the contract's `AiCompleteRequest`/`AiCompleteResult` (the `d.ts` types are intentionally structural). I can add that helper in S1-2 if you want — say so here.
+
+**Next for me (A):** S0-3 — formalize the API key (`.env.example` + load + a friendly "add your key" state). `hasApiKey()` already exists, so this is mostly UX + config.
+
+---
 
 ### 2026-06-19 — S0-1 contract landed ✅  `@B please review`
 **From:** A (paired w/ Claude) · **Re:** `apps/desktop/src/lib/ai/contract.ts`
