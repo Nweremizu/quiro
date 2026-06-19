@@ -205,6 +205,8 @@ import Scrubber from "@/components/ui/scrubber";
 import ProjectBrowserDialog from "@/components/editor/dialog/ProjectBrowserDialog";
 import { Spinner } from "@/components/ui/spinner";
 import { SettingsPanel } from "@/components/editor/SettingsPanel";
+import { AiChatPanel } from "@/components/editor/ai/AiChatPanel";
+import type { EditorActions, EditorStateForAI } from "@/lib/ai/contract";
 import { ProjectNameEditor } from "@/components/editor/ProjectNameEditor";
 import { AddLayerDropdown } from "@/components/editor/editor-window/AddLayerDropdown";
 import { AspectRatioDropdown } from "@/components/editor/editor-window/AspectRatioDropdown";
@@ -624,6 +626,77 @@ export default function EditorWindow() {
   const timelineRef = useRef<TimelineEditorHandle>(null);
 
   const [timelineCollapsed, setTimelineCollapsed] = useState(false);
+
+  // ── AI (Quiro Director) — S0-4 ────────────────────────────────────────────
+  // Stable handle the chat agent uses to read/edit the editor. snapshot() reads
+  // the latest state via a ref (kept fresh below) so the object identity stays
+  // stable for React.memo. Mutators are thin wrappers over existing setters;
+  // the dispatcher (S1-4) and undo batching (S3-4) build on these.
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const handleToggleAiPanel = useCallback(() => {
+    setAiPanelOpen((value) => !value);
+  }, []);
+
+  const aiEditorStateRef = useRef<EditorStateForAI>({
+    durationMs: 0,
+    zoomRegions: [],
+    clipRegions: [],
+    speedRegions: [],
+    annotationCount: 0,
+    captionsEnabled: false,
+    captionCueCount: 0,
+    hasTelemetry: false,
+    hasTranscript: false,
+  });
+  aiEditorStateRef.current = {
+    durationMs: duration,
+    zoomRegions,
+    clipRegions,
+    speedRegions,
+    annotationCount: annotationRegions.length,
+    captionsEnabled: autoCaptionSettings.enabled,
+    captionCueCount: autoCaptions.length,
+    hasTelemetry: cursorTelemetry.length > 0,
+    hasTranscript: autoCaptions.length > 0,
+  };
+
+  const editorActions = useMemo<EditorActions>(
+    () => ({
+      snapshot: () => aiEditorStateRef.current,
+      applyZoomSuggestions: (suggestions, depth) =>
+        setZoomRegions((prev) => [
+          ...prev,
+          ...suggestions.map(
+            (suggestion, index): ZoomRegion => ({
+              id: `ai-zoom-${Date.now()}-${index}`,
+              startMs: suggestion.start,
+              endMs: suggestion.end,
+              depth: depth ?? 2,
+              focus: suggestion.focus,
+            }),
+          ),
+        ]),
+      addZoomRegion: (region) => setZoomRegions((prev) => [...prev, region]),
+      setKeptClips: (clips) => setClipRegions(clips),
+      applyCaptions: (cues, options) => {
+        setAutoCaptions(cues);
+        if (options?.enable) {
+          setAutoCaptionSettings((prev) => ({
+            ...prev,
+            enabled: true,
+            ...(options.language ? { language: options.language } : {}),
+          }));
+        }
+      },
+      addAnnotation: (region) =>
+        setAnnotationRegions((prev) => [...prev, region]),
+      setSpeedRegion: (region) => setSpeedRegions((prev) => [...prev, region]),
+      // S3-4: wrap a run as one undo step once history integration lands.
+      beginAiBatch: () => {},
+      endAiBatch: () => {},
+    }),
+    [],
+  );
 
   useEffect(() => {
     void window.electronAPI?.getPlatform?.()?.then((platform) => {
@@ -6869,6 +6942,12 @@ export default function EditorWindow() {
 
       {projectBrowser}
       {nativeCaptureUnavailableDialog}
+
+      <AiChatPanel
+        open={aiPanelOpen}
+        onToggle={handleToggleAiPanel}
+        actions={editorActions}
+      />
 
       <Toaster  className="pointer-events-auto" />
     </div>
