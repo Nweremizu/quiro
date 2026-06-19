@@ -22,7 +22,8 @@
 | **S0-1** Shared contract (`contract.ts`) | A+B | ✅ done | Typechecks + lints clean. **Review & confirm, B.** |
 | **S0-2** `ai:complete` IPC stub + both `d.ts` | A | ✅ done | Stub live; `window.electronAPI.ai.complete(...)` round-trips. **@B unblocked.** |
 | **S0-3** API key config + "missing key" state | A | ✅ done | `.env` loaded in main (`ANTHROPIC_API_KEY`, `MINIMAX_API_KEY`, `MINIMAX_BASE_URL`); `.env.example` + gitignore; renderer `keyStatus` helper for B. |
-| **S0-4** Empty ChatPanel + stub `EditorActions` | B | ⬜ next | Implement `EditorActions` against the contract; use `fetchAiKeyStatus()` / `missingKeyMessage()` for the no-key state. |
+| **S0-4** Empty ChatPanel + stub `EditorActions` | A (for B) | ✅ done | Toggleable `AiChatPanel` + memo-safe `editorActions` (real `snapshot()`, mutators wired) in `window.tsx`. Needs a visual click-test. |
+| **S1-3** Agent loop in the ChatPanel | B | ⬜ next | Replace the panel's no-op `handleSend` with the agent runner calling `ai.complete`. |
 | **MP** Multi-provider layer (Claude + MiniMax) | A | ✅ done | Provider router + MiniMax↔OpenAI translation (tested). Network calls land in S1-2. |
 
 _Update this board as things move._
@@ -52,6 +53,23 @@ _Update this board as things move._
 ---
 
 ## 🧾 Handoff log
+
+### 2026-06-19 — S0-4 ChatPanel shell + EditorActions landed ✅  `@B → S1-3 (agent loop)`
+**From:** A (paired w/ Claude, building B's task to unblock the integration) · **Re:** `src/components/editor/ai/AiChatPanel.tsx`, `src/components/editor/window.tsx`
+
+The renderer seam is in. `window.tsx` now exposes a real `EditorActions` and renders the `AiChatPanel` dock.
+
+**What landed:**
+- `AiChatPanel.tsx` — a toggleable, `React.memo` dock (floating "Quiro Director" button → panel). Shows the **missing-key state** via S0-3 helpers, a live **context line** from `editorActions.snapshot()` (zooms/clips/captions/telemetry/transcript), and an input whose **`handleSend` is a deliberate no-op** (your S1-3 hook).
+- `window.tsx` — `editorActions` (memoized, stable identity via a state ref so it won't re-render the panel on unrelated updates). `snapshot()` returns **real** region counts; mutators (`applyZoomSuggestions`, `setKeptClips`, `applyCaptions`, …) are thin wrappers over the existing setters. `beginAiBatch/endAiBatch` are no-ops until undo integration (S3-4).
+
+**@B — S1-3 is now a small, contained change:** replace `handleSend` in `AiChatPanel.tsx` with the agent runner — build the `AiMessage[]`, call `window.electronAPI.ai.complete(...)`, loop on `tool_use` blocks, and execute them via the `actions` prop. Everything you need (key status, editor actions, IPC) is already wired and typed. No `window.tsx` surgery required.
+
+**Memo discipline kept (CLAUDE.md):** `editorActions` + `handleToggleAiPanel` are stable; the panel is `memo`'d; nothing per-frame touches playback. `tsc` + `eslint` clean.
+
+**⚠️ Not yet click-tested in a running app** — typecheck/lint pass, but someone should launch `npm run dev` and confirm the toggle opens the panel and the context line shows real numbers.
+
+---
 
 ### 2026-06-19 — S0-3 API key config + "missing key" state landed ✅  `@B for S0-4`
 **From:** A (paired w/ Claude) · **Re:** `electron/utils/loadEnv.ts`, `electron/main.ts`, `apps/desktop/.env.example`, `.gitignore`, `src/lib/ai/keyStatus.ts`
