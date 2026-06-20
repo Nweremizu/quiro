@@ -5,9 +5,8 @@ import type {
   EditorActions,
   RecordingBrain,
   TrimAggressiveness,
-  ZoomDepth,
 } from "./contract";
-import type { ClipRegion, CursorTelemetryPoint } from "@/types/editor";
+import type { ClipRegion, CursorTelemetryPoint, ZoomDepth } from "@/types/editor";
 
 const DEFAULT_FIRST_DRAFT_ZOOM_DEPTH: ZoomDepth = 2;
 const DEFAULT_FIRST_DRAFT_TRIM_AGGRESSIVENESS: TrimAggressiveness = "medium";
