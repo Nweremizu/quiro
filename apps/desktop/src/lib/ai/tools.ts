@@ -12,6 +12,7 @@ import type {
   ClipRegion,
   SpeedRegion,
   ZoomDepth,
+  ZoomFocus,
   ZoomRegion,
 } from "@/types/editor";
 import {
@@ -27,6 +28,7 @@ import {
   type AiToolUseBlock,
   type AddZoomInput,
   type AutoZoomOnClicksInput,
+  type EditZoomInput,
   type EditorActions,
   type GenerateCaptionsInput,
   type QueryRecordingInput,
@@ -440,6 +442,62 @@ function addAnnotation(
   };
 }
 
+function editZoom(
+  rawArgs: unknown,
+  ctx: DispatchContext,
+): ToolResult {
+  const args = rawArgs as EditZoomInput;
+  const { actions } = ctx;
+
+  const atMs = toNumber(args.atMs);
+  if (atMs === null || atMs < 0) {
+    return { ok: false, summary: "Invalid atMs — provide a timestamp inside the zoom.", reason: "invalid-arguments" };
+  }
+
+  const snapshot = actions.snapshot();
+  const target = snapshot.zoomRegions.find((r) => r.startMs <= atMs && r.endMs >= atMs);
+  if (!target) {
+    return {
+      ok: false,
+      summary: `No zoom found at ${(atMs / 1000).toFixed(1)}s. Use query_recording to see existing zooms.`,
+      reason: "not-found",
+    };
+  }
+
+  const updates: Partial<Pick<typeof target, "depth" | "focus">> = {};
+  const desc: string[] = [];
+
+  if (args.depth !== undefined) {
+    const d = Math.min(6, Math.max(1, Math.round(toNumber(args.depth) ?? target.depth))) as ZoomDepth;
+    updates.depth = d;
+    desc.push(`depth → ${d}`);
+  }
+
+  if (args.focus && typeof args.focus === "object") {
+    const f = args.focus as Partial<ZoomFocus>;
+    const cx = toNumber(f.cx);
+    const cy = toNumber(f.cy);
+    if (cx !== null && cy !== null) {
+      updates.focus = {
+        cx: Math.max(0, Math.min(1, cx)),
+        cy: Math.max(0, Math.min(1, cy)),
+      };
+      desc.push(`focus → (${cx.toFixed(2)}, ${cy.toFixed(2)})`);
+    }
+  }
+
+  if (desc.length === 0) {
+    return { ok: false, summary: "Specify at least depth or focus to change.", reason: "no-changes" };
+  }
+
+  actions.updateZoomRegion(target.id, updates);
+  return {
+    ok: true,
+    summary: `Updated zoom at ${formatRange(target.startMs, target.endMs)}: ${desc.join(", ")}.`,
+    applied: { zoomRegionsEdited: 1 },
+  };
+}
+
 function queryRecording(
   rawArgs: unknown,
   ctx: DispatchContext,
@@ -498,6 +556,8 @@ export async function dispatchToolCall(
       return queryRecording(block.input, ctx);
     case "add_zoom":
       return addZoom(block.input, ctx);
+    case "edit_zoom":
+      return editZoom(block.input, ctx);
     case "set_speed":
       return setSpeed(block.input, ctx);
     case "add_annotation":

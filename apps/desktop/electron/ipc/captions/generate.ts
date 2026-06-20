@@ -1,5 +1,6 @@
 import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { execFile, spawnSync } from "node:child_process";
 import { promisify } from "node:util";
@@ -215,6 +216,10 @@ export async function generateAutoCaptionsFromVideo(options: {
       options.language && options.language.trim()
         ? options.language.trim()
         : "auto";
+
+    // Use up to 8 threads (capped at logical CPU count) for faster transcription.
+    const threads = Math.max(2, Math.min(os.cpus().length, 8));
+
     const whisperBaseArgs = [
       "-m",
       whisperModelPath,
@@ -226,6 +231,17 @@ export async function generateAutoCaptionsFromVideo(options: {
       "-l",
       language,
       "-np",
+      // Multi-threading for speed.
+      "-t",
+      String(threads),
+      // Anti-hallucination: lower entropy threshold (default 2.4) rejects
+      // repetitive/non-sensical output before it reaches the cue list.
+      "-et",
+      "1.8",
+      // Anti-hallucination: higher no-speech threshold (default 0.6) suppresses
+      // segments where Whisper is uncertain whether speech is present at all.
+      "-nth",
+      "0.8",
     ];
 
     let jsonEnabled = true;

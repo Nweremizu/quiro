@@ -9,23 +9,26 @@ import {
   motion,
   MotionConfig,
   Transition,
+  useReducedMotion,
   Variants,
 } from "motion/react";
 
 import { cn } from "@/lib/utils";
 
+// Strong ease-out — punchier than the built-in "easeOut" for entrances/exits.
+const EASE_OUT = [0.23, 1, 0.32, 1] as const;
+
 const TRANSITION: Transition = {
   type: "spring",
-  stiffness: 380,
-  damping: 30,
-  duration: 0.1,
+  stiffness: 400,
+  damping: 32,
 };
 
 const CONTENT_VARIANTS: Variants = {
   initial: {
     opacity: 0,
-    scale: 0.8,
-    filter: "blur(8px)",
+    scale: 0.96,
+    filter: "blur(4px)",
   },
 
   animate: {
@@ -37,8 +40,15 @@ const CONTENT_VARIANTS: Variants = {
   exit: {
     opacity: 0,
     scale: 0.98,
-    filter: "blur(8px)",
+    filter: "blur(2px)",
   },
+};
+
+// Reduced motion: keep the opacity crossfade for comprehension, drop movement/blur.
+const REDUCED_VARIANTS: Variants = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  exit: { opacity: 0 },
 };
 
 function Popover({ children, ...props }: PopoverPrimitive.Root.Props) {
@@ -57,10 +67,14 @@ function PopoverTrigger({
   ...props
 }: PopoverPrimitive.Trigger.Props &
   React.ComponentProps<typeof motion.button>) {
+  const shouldReduceMotion = useReducedMotion();
   return (
     <PopoverPrimitive.Trigger
       render={
-        <motion.button whileTap={{ scale: 0.98 }} className={className} />
+        <motion.button
+          whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
+          className={className}
+        />
       }
       data-slot="popover-trigger"
       {...props}
@@ -89,11 +103,14 @@ function PopoverContent({
   sideOffset = 8,
 
   transition,
-  variants = CONTENT_VARIANTS,
+  variants,
 
   children,
   ...props
 }: PopoverContentProps) {
+  const shouldReduceMotion = useReducedMotion();
+  const resolvedVariants =
+    variants ?? (shouldReduceMotion ? REDUCED_VARIANTS : CONTENT_VARIANTS);
   return (
     <PopoverPrimitive.Portal>
       <AnimatePresence mode="wait">
@@ -111,24 +128,24 @@ function PopoverContent({
                 initial="initial"
                 animate="animate"
                 exit="exit"
-                variants={variants}
+                variants={resolvedVariants}
                 transition={{
                   scale: {
                     type: "spring",
-                    stiffness: 380,
-                    damping: 30,
+                    stiffness: 400,
+                    damping: 32,
                   },
 
                   opacity: {
                     type: "tween",
-                    duration: 0.18,
-                    ease: "easeOut",
+                    duration: 0.15,
+                    ease: EASE_OUT,
                   },
 
                   filter: {
                     type: "tween",
-                    duration: 0.28,
-                    ease: "easeOut",
+                    duration: 0.18,
+                    ease: EASE_OUT,
                   },
 
                   ...transition,
