@@ -24,7 +24,7 @@
 | **S0-3** API key config + "missing key" state | A | ✅ done | `.env` loaded in main (`ANTHROPIC_API_KEY`, `MINIMAX_API_KEY`, `MINIMAX_BASE_URL`); `.env.example` + gitignore; renderer `keyStatus` helper for B. |
 | **S0-4** Empty ChatPanel + stub `EditorActions` | A (for B) | ✅ done | Toggleable `AiChatPanel` + memo-safe `editorActions` (real `snapshot()`, mutators wired) in `window.tsx`. Needs a visual click-test. |
 | **S1-1** `buildBrain()` from transcript + telemetry | A | ✅ done | Pure fusion → moments JSON + `summarizeBrain()`. 7/7 fixture tests. **Unblocks S1-4.** |
-| **S1-2** Real `ai:complete` (both providers) | A | ⬜ next | Fill in `AnthropicProvider`/`MiniMaxProvider` `complete()`; Brain summary in system prompt. |
+| **S1-2** Real `ai:complete` (both providers) | A | ✅ done | `AnthropicProvider` + `MiniMaxProvider` make real calls; `buildAgentSystemPrompt()` injects Brain summary. **Unblocks S1-3.** |
 | **S1-3** Agent loop in the ChatPanel | B | ⬜ next | Replace the panel's no-op `handleSend` with the agent runner calling `ai.complete`. |
 | **S1-4** `auto_zoom_on_clicks` dispatcher | B | ⬜ next | Brain clicks → `buildInteractionZoomSuggestions` → `editorActions.applyZoomSuggestions`. |
 | **MP** Multi-provider layer (Claude + MiniMax) | A | ✅ done | Provider router + MiniMax↔OpenAI translation (tested). Network calls land in S1-2. |
@@ -56,6 +56,31 @@ _Update this board as things move._
 ---
 
 ## 🧾 Handoff log
+
+### 2026-06-20 — S1-2 Real model calls landed ✅  `@B → S1-3 unblocked`
+**From:** A (paired w/ Claude) · **Re:** `electron/ai/providers/anthropic.ts`, `electron/ai/providers/minimax.ts`, `src/lib/ai/systemPrompt.ts`
+
+Both providers now make real calls. Here's what you need for S1-3:
+
+**Anthropic** (`AnthropicProvider.complete()`): uses `@anthropic-ai/sdk`. Wire types map cleanly to the SDK — `tool_use` / `tool_result` blocks are translated automatically.
+
+**MiniMax** (`MiniMaxProvider.complete()`): `fetch`es `${MINIMAX_BASE_URL}/chat/completions` (defaults to `https://api.minimax.io/v1`) with the existing `toOpenAiRequest` / `fromOpenAiResponse` translation layer.
+
+**`buildAgentSystemPrompt(summary: BrainSummary | null): string`** (new, `src/lib/ai/systemPrompt.ts`):
+```ts
+import { buildAgentSystemPrompt } from "@/lib/ai/systemPrompt";
+// In the agent runner (S1-3):
+const system = buildAgentSystemPrompt(summarizeBrain(brain));
+```
+Pass this as `AiCompleteRequest.system`. If you don't have a Brain yet, pass `null`.
+
+**Error handling:** no key → throws before any network call (tested). The IPC handler in `electron/ipc/register/ai.ts` already catches and wraps errors as `stopReason: "error"` — so `handleSend` in S1-3 should check for that stop reason.
+
+**@B — S1-3 is fully unblocked.** The `complete()` call over IPC is real. Model + tools wired.
+
+**Verified:** `tsc --noEmit` ✅ · new S1-2 files lint-clean ✅ · `vitest` ✅ (160/160).
+
+---
 
 ### 2026-06-20 — S1-1 Recording Brain landed ✅  `@B for S1-4`
 **From:** A (paired w/ Claude) · **Re:** `src/lib/ai/brain.ts`

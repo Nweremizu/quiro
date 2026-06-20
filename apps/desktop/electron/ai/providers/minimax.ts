@@ -222,16 +222,27 @@ export class MiniMaxProvider implements ModelProvider {
   async complete(
     request: AiCompleteRequestWire,
   ): Promise<AiCompleteResultWire> {
-    // S1-2: POST toOpenAiRequest(request) to `${this.baseUrl()}/chat/completions`
-    // with the bearer key, then return fromOpenAiResponse(request.requestId, json).
-    const text =
-      `🔌 MiniMax provider scaffold — would POST ${this.baseUrl()}/chat/completions ` +
-      `for model "${request.model}". Network call lands in S1-2.`;
-    return {
-      requestId: request.requestId ?? "",
-      stopReason: "end_turn",
-      content: [{ type: "text", text }],
-      usage: { inputTokens: 0, outputTokens: 0 },
-    };
+    const apiKey = process.env.MINIMAX_API_KEY;
+    if (!apiKey) throw new Error("MINIMAX_API_KEY is not set");
+
+    const url = `${this.baseUrl()}/chat/completions`;
+    const body = toOpenAiRequest(request);
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(`MiniMax API error ${response.status}: ${text}`);
+    }
+
+    const json = (await response.json()) as OpenAiChatResponse;
+    return fromOpenAiResponse(request.requestId, json);
   }
 }
