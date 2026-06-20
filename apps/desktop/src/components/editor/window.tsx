@@ -899,6 +899,7 @@ export default function EditorWindow() {
         syncHistoryButtons();
       },
     }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
