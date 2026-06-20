@@ -146,6 +146,7 @@ export interface EditorActions {
 
   /** Apply transcript cues as captions and (optionally) enable the overlay. */
   applyCaptions(cues: CaptionCue[], opts?: { enable?: boolean; language?: string }): void;
+  generateCaptions(language?: string): Promise<GenerateCaptionsActionResult>;
 
   addAnnotation(region: AnnotationRegion): void;
   setSpeedRegion(region: SpeedRegion): void;
@@ -227,6 +228,13 @@ export interface ToolResult {
   /** Quantified effect, e.g. { zoomRegionsAdded: 4, msTrimmed: 9200 }. */
   applied?: Record<string, number>;
   /** Machine reason on failure, e.g. "no-telemetry", "out-of-range". */
+  reason?: string;
+}
+
+export interface GenerateCaptionsActionResult {
+  ok: boolean;
+  cues?: CaptionCue[];
+  message: string;
   reason?: string;
 }
 
