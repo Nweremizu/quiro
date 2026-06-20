@@ -25,8 +25,8 @@
 | **S0-4** Empty ChatPanel + stub `EditorActions` | A (for B) | ✅ done | Toggleable `AiChatPanel` + memo-safe `editorActions` (real `snapshot()`, mutators wired) in `window.tsx`. Needs a visual click-test. |
 | **S1-1** `buildBrain()` from transcript + telemetry | A | ✅ done | Pure fusion → moments JSON + `summarizeBrain()`. 7/7 fixture tests. **Unblocks S1-4.** |
 | **S1-2** Real `ai:complete` (both providers) | A | ✅ done | `AnthropicProvider` + `MiniMaxProvider` make real calls; `buildAgentSystemPrompt()` injects Brain summary. **Unblocks S1-3.** |
-| **S1-3** Agent loop in the ChatPanel | B | ⬜ next | Replace the panel's no-op `handleSend` with the agent runner calling `ai.complete`. |
-| **S1-4** `auto_zoom_on_clicks` dispatcher | B | ⬜ next | Brain clicks → `buildInteractionZoomSuggestions` → `editorActions.applyZoomSuggestions`. |
+| **S1-3** Agent loop in the ChatPanel | A+B | ✅ done | `runAgentTurn()` in `agent.ts` — real tool-use loop, MAX_TOOL_ITERATIONS guard, wired into `AiChatPanel`. |
+| **S1-4** `auto_zoom_on_clicks` dispatcher | A+B | ✅ done | `tools.ts` dispatcher: `auto_zoom_on_clicks` + `remove_silences_and_fillers` + `query_recording` live; stretch tools stubbed. |
 | **MP** Multi-provider layer (Claude + MiniMax) | A | ✅ done | Provider router + MiniMax↔OpenAI translation (tested). Network calls land in S1-2. |
 
 _Update this board as things move._
@@ -56,6 +56,46 @@ _Update this board as things move._
 ---
 
 ## 🧾 Handoff log
+
+### 2026-06-20 — S1-3 + S1-4 Agent loop + dispatcher landed ✅  `Sprint 1 complete — → Sprint 2`
+**From:** A (paired w/ Claude) · **Re:** `src/lib/ai/agent.ts`, `src/lib/ai/tools.ts`, `src/components/editor/ai/AiChatPanel.tsx`, `src/lib/ai/contract.ts`, `window.tsx`
+
+**Sprint 1 is now end-to-end.** "Zoom into my clicks" fires the real Claude model, picks `auto_zoom_on_clicks`, and zoom regions appear on the timeline. 🎯
+
+---
+
+**What landed:**
+
+**`src/lib/ai/agent.ts` — `runAgentTurn(opts)`** (S1-3)
+The real tool-use loop. Per turn:
+1. Calls `actions.getBrainInputs()` → `buildBrain()` → `summarizeBrain()` → injects into system prompt.
+2. POSTs to `ai:complete` (IPC → Anthropic/MiniMax).
+3. On `stop_reason: "tool_use"`: dispatches each `tool_use` block → appends `tool_result` messages → repeats.
+4. Stops when model returns without tools **or** `MAX_TOOL_ITERATIONS (8)` is hit.
+5. Returns `{ messages, toolsApplied, assistantText, error? }` — chat panel updates conversation.
+
+**`src/lib/ai/tools.ts` — `dispatchToolCall(block, ctx)`** (S1-4)
+Registry of tool handlers:
+- ✅ **`auto_zoom_on_clicks`** — filters telemetry by range, calls `buildInteractionZoomSuggestions`, avoids overlap with existing zooms, calls `actions.applyZoomSuggestions()`
+- ✅ **`remove_silences_and_fillers`** — maps Brain silence/filler moments by aggressiveness threshold → computes kept clips → `actions.setKeptClips()`
+- ✅ **`query_recording`** — reads Brain transcript + clicks, returns a text summary to the model
+- 🔌 `generate_captions` — stub (points user to the Captions button; wires in S2-1)
+- 🔌 `add_zoom`, `set_speed`, `add_annotation` — stubbed as "stretch tool, coming in Sprint 2"
+
+**`src/components/editor/ai/AiChatPanel.tsx`** — full chat UI
+- Bubble message list: user / assistant / tool-result chips (green/red) / error.
+- `handleSend` calls `runAgentTurn()` — async, disables input while running.
+- Auto-scroll to latest message.
+
+**`contract.ts` + `window.tsx`** — added `getBrainInputs(): BrainInputs` to `EditorActions`
+- `brainInputsRef` (useRef) refreshed each render after `normalizedCursorTelemetry` is computed.
+- Same stable-ref pattern as `aiEditorStateRef` — no new memo deps, no re-render risk.
+
+**Verified:** `tsc --noEmit` ✅ · new files lint-clean ✅ · `vitest` ✅ (160/160).
+
+**→ Sprint 2 next:** S2-1 `generate_captions` full integration, S2-2 `remove_silences_and_fillers` refinement, S2-3 system-prompt + tool-description tuning, S2-4 tool-result narration chips.
+
+---
 
 ### 2026-06-20 — S1-2 Real model calls landed ✅  `@B → S1-3 unblocked`
 **From:** A (paired w/ Claude) · **Re:** `electron/ai/providers/anthropic.ts`, `electron/ai/providers/minimax.ts`, `src/lib/ai/systemPrompt.ts`

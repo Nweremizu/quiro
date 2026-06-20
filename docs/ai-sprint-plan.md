@@ -35,10 +35,10 @@ Goal: agreed contract + skeletons that compile, so parallel work can't drift.
 
 | ID | Task | Owner | Depends | Done when |
 |---|---|---|---|---|
-| S0-1 | Write & commit `src/lib/ai/contract.ts` (Brain, tools, IPC, EditorActions) | A+B | — | Both import it; types compile |
-| S0-2 | Stub `ai:complete` IPC end-to-end (returns a canned message) + both `d.ts` files | A | S0-1 | Renderer can call `window.electronAPI.ai.complete` and get the stub |
-| S0-3 | Add `ANTHROPIC_API_KEY` config + `.env.example` + "missing key" state | A | — | App boots without key, shows a clear prompt |
-| S0-4 | Mount an empty `ChatPanel` dock in the editor; expose stub `EditorActions` from `window.tsx` | B | S0-1 | Panel toggles; `actions.snapshot()` returns real region counts |
+| S0-1 | Write & commit `src/lib/ai/contract.ts` (Brain, tools, IPC, EditorActions) | A+B | — | ✅ Both import it; types compile |
+| S0-2 | Stub `ai:complete` IPC end-to-end (returns a canned message) + both `d.ts` files | A | S0-1 | ✅ Renderer can call `window.electronAPI.ai.complete` and get the stub |
+| S0-3 | Add `ANTHROPIC_API_KEY` config + `.env.example` + "missing key" state | A | — | ✅ App boots without key, shows a clear prompt |
+| S0-4 | Mount an empty `ChatPanel` dock in the editor; expose stub `EditorActions` from `window.tsx` | B | S0-1 | ✅ Panel toggles; `actions.snapshot()` returns real region counts |
 
 **Integration check:** typing in the chat hits the stub `ai:complete` and renders a canned reply.
 
@@ -47,10 +47,10 @@ Goal: one real tool, end to end, with a real model call. Proves the whole pipe.
 
 | ID | Task | Owner | Depends | Done when |
 |---|---|---|---|---|
-| S1-1 | `buildBrain()` v1 from transcript + telemetry (no vision) + unit tests | A | S0-1 | Fixtures (both/transcript-only/telemetry-only/neither) pass |
-| S1-2 | Real `ai:complete` (Anthropic SDK, non-streaming first) + Brain-summary in system prompt | A | S0-2 | Returns real model text |
-| S1-3 | Agent runner loop (single tool round-trip) + `MAX_TOOL_ITERATIONS` | B | S0-1, S1-2 | A `tool_use` round-trips and returns a `tool_result` |
-| S1-4 | Dispatcher: `auto_zoom_on_clicks` → `buildInteractionZoomSuggestions` → `applyZoomSuggestions` | B | S0-4, S1-1 | "Zoom into my clicks" actually adds zoom regions |
+| S1-1 | `buildBrain()` v1 from transcript + telemetry (no vision) + unit tests | A | S0-1 | ✅ Fixtures (both/transcript-only/telemetry-only/neither) pass |
+| S1-2 | Real `ai:complete` (Anthropic SDK, non-streaming first) + Brain-summary in system prompt | A | S0-2 | ✅ Returns real model text |
+| S1-3 | Agent runner loop (single tool round-trip) + `MAX_TOOL_ITERATIONS` | B | S0-1, S1-2 | ✅ `tool_use` round-trips and returns a `tool_result` |
+| S1-4 | Dispatcher: `auto_zoom_on_clicks` → `buildInteractionZoomSuggestions` → `applyZoomSuggestions` | B | S0-4, S1-1 | ✅ "Zoom into my clicks" actually adds zoom regions |
 
 **Integration check:** *"Zoom into everything I clicked"* → zoom regions appear on the timeline. 🎯 First magic moment.
 

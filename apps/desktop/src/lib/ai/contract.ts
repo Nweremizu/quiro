@@ -133,6 +133,9 @@ export interface EditorActions {
   /** Current editor state for the agent's context. */
   snapshot(): EditorStateForAI;
 
+  /** Raw inputs for buildBrain() — refreshed every render via a ref. */
+  getBrainInputs(): BrainInputs;
+
   /** Apply zoom windows produced by buildInteractionZoomSuggestions(). */
   applyZoomSuggestions(suggestions: SuggestedZoomRegion[], depth?: ZoomDepth): void;
   /** Add one explicit zoom (the `add_zoom` tool). */
