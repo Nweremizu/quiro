@@ -1,76 +1,64 @@
 /**
- * electron/ai/client.ts — main-process Claude boundary (Sprint 0, task S0-2).
+ * electron/ai/client.ts — the main-process model router (Sprint 0, S0-2 + D5).
  *
- * S0-2 ships a STUB: no network call. `runAiComplete` echoes a canned assistant
- * message so Person B can build the renderer agent loop against a real IPC
- * round-trip today. S1-2 replaces the body with the actual `@anthropic-ai/sdk`
- * call and maps the wire types below to/from SDK types.
+ * `ai:complete` lands here. We pick a provider by model id and delegate. The
+ * renderer never knows which provider ran — it always speaks the same wire
+ * protocol (decision D1 + D5). API keys live only in this process.
  *
- * SECURITY: the Anthropic API key lives ONLY in this process. It is never
- * returned to or referenced by the renderer.
- *
- * The wire types here mirror the IPC section of `src/lib/ai/contract.ts`. Keep
- * them in sync — see docs/ai-team-log.md decision D1 (renderer stays SDK-free;
- * main owns the SDK and the mapping).
+ * Provider implementations: ./providers/*. Real model calls land in S1-2.
  */
+import { AnthropicProvider } from "./providers/anthropic";
+import { MiniMaxProvider } from "./providers/minimax";
+import {
+  providerIdForModel,
+  type AiCompleteRequestWire,
+  type AiCompleteResultWire,
+  type AiProviderId,
+  type ModelProvider,
+} from "./types";
 
-export type AiRole = "user" | "assistant";
+export type {
+  AiCompleteRequestWire,
+  AiCompleteResultWire,
+  AiProviderId,
+} from "./types";
 
-export interface AiContentBlockWire {
-  type: string;
-  [key: string]: unknown;
+const providers: Record<AiProviderId, ModelProvider> = {
+  anthropic: new AnthropicProvider(),
+  minimax: new MiniMaxProvider(),
+};
+
+/** The provider that will service a given model id. */
+export function getProvider(model: string): ModelProvider {
+  return providers[providerIdForModel(model)];
 }
 
-export interface AiMessageWire {
-  role: AiRole;
-  content: string | AiContentBlockWire[];
-}
-
-export interface AiCompleteRequestWire {
-  requestId: string;
-  model: string;
-  system: string;
-  messages: AiMessageWire[];
-  tools?: unknown[];
-  maxTokens?: number;
-  stream?: boolean;
-  /** Opus-only; omitted for Haiku. */
-  effort?: "low" | "medium" | "high" | "max";
-}
-
-export interface AiCompleteResultWire {
-  requestId: string;
-  stopReason: string;
-  content: AiContentBlockWire[];
-  usage?: { inputTokens: number; outputTokens: number };
-}
-
-/** True when an Anthropic API key is configured in the main-process env. */
-export function hasApiKey(): boolean {
-  const key = process.env.ANTHROPIC_API_KEY;
-  return typeof key === "string" && key.trim().length > 0;
-}
-
-/**
- * S0-2 STUB — returns a canned assistant text block, no network.
- * Replaced by the real Anthropic tool-use call in S1-2.
- */
+/** Route one model turn to the right provider. */
 export async function runAiComplete(
   request: AiCompleteRequestWire,
 ): Promise<AiCompleteResultWire> {
-  const messageCount = Array.isArray(request?.messages)
-    ? request.messages.length
-    : 0;
-  const model = request?.model ?? "(unset)";
+  return getProvider(request?.model ?? "").complete(request);
+}
 
-  const text =
-    `🔌 ai:complete stub — received ${messageCount} message(s) for model ` +
-    `"${model}". The real Anthropic call lands in S1-2.`;
+export interface KeyStatus {
+  /** True if ANY provider has a key configured. */
+  hasKey: boolean;
+  /** Per-provider key presence — lets the UI offer the configured models. */
+  providers: Record<AiProviderId, boolean>;
+}
 
-  return {
-    requestId: request?.requestId ?? "",
-    stopReason: "end_turn",
-    content: [{ type: "text", text }],
-    usage: { inputTokens: 0, outputTokens: 0 },
+export function getKeyStatus(): KeyStatus {
+  const perProvider: Record<AiProviderId, boolean> = {
+    anthropic: providers.anthropic.hasKey(),
+    minimax: providers.minimax.hasKey(),
   };
+  return {
+    hasKey: Object.values(perProvider).some(Boolean),
+    providers: perProvider,
+  };
+}
+
+/** Back-compat: true if any provider is configured. */
+export function hasApiKey(): boolean {
+  return getKeyStatus().hasKey;
 }
