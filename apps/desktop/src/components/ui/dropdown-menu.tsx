@@ -6,6 +6,7 @@ import {
   motion,
   MotionConfig,
   Transition,
+  useReducedMotion,
   Variants,
 } from "motion/react";
 
@@ -13,17 +14,20 @@ import { cn } from "@/lib/utils";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowRight01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 
+// Strong ease-out — punchier than the built-in "easeOut" for entrances/exits.
+const EASE_OUT = [0.23, 1, 0.32, 1] as const;
+
 const TRANSITION: Transition = {
   type: "spring",
-  stiffness: 380,
-  damping: 30,
+  stiffness: 400,
+  damping: 32,
 };
 
 const CONTENT_VARIANTS: Variants = {
   initial: {
     opacity: 0,
-    scale: 0.8,
-    filter: "blur(10px)",
+    scale: 0.96,
+    filter: "blur(4px)",
   },
   animate: {
     opacity: 1,
@@ -33,8 +37,15 @@ const CONTENT_VARIANTS: Variants = {
   exit: {
     opacity: 0,
     scale: 0.98,
-    filter: "blur(8px)",
+    filter: "blur(2px)",
   },
+};
+
+// Reduced motion: keep the opacity crossfade for comprehension, drop movement/blur.
+const REDUCED_VARIANTS: Variants = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  exit: { opacity: 0 },
 };
 
 function DropdownMenu({ ...props }: MenuPrimitive.Root.Props) {
@@ -65,6 +76,7 @@ function DropdownMenuContent({
     MenuPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset"
   >) {
+  const shouldReduceMotion = useReducedMotion();
   return (
     <MenuPrimitive.Portal>
       <AnimatePresence mode="wait">
@@ -82,22 +94,24 @@ function DropdownMenuContent({
                 initial="initial"
                 animate="animate"
                 exit="exit"
-                variants={CONTENT_VARIANTS}
+                variants={
+                  shouldReduceMotion ? REDUCED_VARIANTS : CONTENT_VARIANTS
+                }
                 transition={{
                   scale: {
                     type: "spring",
-                    stiffness: 380,
-                    damping: 30,
+                    stiffness: 400,
+                    damping: 32,
                   },
                   opacity: {
                     type: "tween",
-                    duration: 0.18,
-                    ease: "easeOut",
+                    duration: 0.15,
+                    ease: EASE_OUT,
                   },
                   filter: {
                     type: "tween",
-                    duration: 0.28,
-                    ease: "easeOut",
+                    duration: 0.18,
+                    ease: EASE_OUT,
                   },
                 }}
                 className={cn(

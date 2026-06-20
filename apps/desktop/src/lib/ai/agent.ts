@@ -90,7 +90,7 @@ export async function runAgentTurn(
 
       const result = await window.electronAPI.ai.complete({
       requestId: `${requestBase}-${i}`,
-      model: AI_MODELS.planner,
+      model: AI_MODELS.minimaxPlanner,
       system,
       messages,
       tools: AI_TOOLS,

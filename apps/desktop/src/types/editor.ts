@@ -112,6 +112,7 @@ export type EditorEffectSection =
   | "webcam"
   | "settings"
   | "zoom"
+  | "speed"
   | "frame"
   | "crop"
   | "extensions"

@@ -81,6 +81,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowDown01Icon, Tick02Icon } from "@/components/icons";
 
 const ZOOM_ROW_ID = "row-zoom";
+const SPEED_ROW_ID = "row-speed";
 const CLIP_ROW_ID = "row-clip";
 const ANNOTATION_ROW_ID = "row-annotation";
 const AUDIO_ROW_ID = "row-audio";
@@ -692,6 +693,7 @@ function Timeline({
   densityMode,
   onSeek,
   onAddZoomAtMs,
+  onAddSpeedAtMs,
   canPlaceZoomAtMs,
   onSelectZoom,
   onSelectTrim,
@@ -703,7 +705,7 @@ function Timeline({
   selectedTrimId: _selectedTrimId,
   selectedClipId,
   selectedAnnotationId,
-  selectedSpeedId: _selectedSpeedId,
+  selectedSpeedId,
   selectedAudioId,
   selectAllBlocksActive = false,
   onClearBlockSelection,
@@ -723,6 +725,7 @@ function Timeline({
   onSelectSpeed?: (id: string | null) => void;
   onSelectAudio?: (id: string | null) => void;
   onAddZoomAtMs?: (startMs: number) => void;
+  onAddSpeedAtMs?: (startMs: number) => void;
   selectedZoomId: string | null;
   selectedTrimId?: string | null;
   selectedClipId?: string | null;
@@ -748,6 +751,8 @@ function Timeline({
   const [timelineHoverMs, setTimelineHoverMs] = useState<number | null>(null);
   const [isZoomRowHovered, setIsZoomRowHovered] = useState(false);
   const [zoomRowHoverMs, setZoomRowHoverMs] = useState<number | null>(null);
+  const [isSpeedRowHovered, setIsSpeedRowHovered] = useState(false);
+  const [speedRowHoverMs, setSpeedRowHoverMs] = useState<number | null>(null);
   const density = getTimelineDensityConfig(densityMode);
 
   const setRefs = useCallback(
@@ -803,6 +808,7 @@ function Timeline({
   );
 
   const zoomItems = items.filter((item) => item.rowId === ZOOM_ROW_ID);
+  const speedItems = items.filter((item) => item.rowId === SPEED_ROW_ID);
   const clipItems = items.filter((item) => item.rowId === CLIP_ROW_ID);
   const annotationItems = items.filter((item) =>
     isAnnotationTrackRowId(item.rowId),
@@ -835,7 +841,7 @@ function Timeline({
       ),
     [annotationItems],
   );
-  const timelineRowCount = 2 + annotationRowIds.length + audioRowIds.length;
+  const timelineRowCount = 3 + annotationRowIds.length + audioRowIds.length;
   const timelineRowsMinHeightPx = getTimelineRowsMinHeightPx(
     timelineRowCount,
     densityMode,
@@ -988,6 +994,51 @@ function Timeline({
     [canPlaceZoomAtMs, onAddZoomAtMs, videoDurationMs, zoomRowHoverMs],
   );
 
+  const updateSpeedRowHoverTime = useCallback(
+    (clientX: number, rect: DOMRect) => {
+      if (rect.width <= 0) return;
+      const position =
+        direction === "rtl"
+          ? Math.max(0, Math.min(rect.right - clientX, rect.width))
+          : Math.max(0, Math.min(clientX - rect.left, rect.width));
+      const ratio = position / rect.width;
+      const nextMs = range.start + ratio * visibleDurationMs;
+      setSpeedRowHoverMs(Math.max(0, Math.min(nextMs, videoDurationMs)));
+    },
+    [direction, range.start, videoDurationMs, visibleDurationMs],
+  );
+
+  const handleSpeedRowMouseEnter = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      setIsSpeedRowHovered(true);
+      updateSpeedRowHoverTime(event.clientX, event.currentTarget.getBoundingClientRect());
+    },
+    [updateSpeedRowHoverTime],
+  );
+
+  const handleSpeedRowMouseMove = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (!isSpeedRowHovered) setIsSpeedRowHovered(true);
+      updateSpeedRowHoverTime(event.clientX, event.currentTarget.getBoundingClientRect());
+    },
+    [isSpeedRowHovered, updateSpeedRowHoverTime],
+  );
+
+  const handleSpeedRowMouseLeave = useCallback(() => {
+    setIsSpeedRowHovered(false);
+    setSpeedRowHoverMs(null);
+  }, []);
+
+  const handleSpeedRowClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      event.stopPropagation();
+      if (!onAddSpeedAtMs || speedRowHoverMs === null) return;
+      const startMs = Math.max(0, Math.min(speedRowHoverMs, videoDurationMs));
+      onAddSpeedAtMs(startMs);
+    },
+    [onAddSpeedAtMs, videoDurationMs, speedRowHoverMs],
+  );
+
   return (
     <div
       ref={setRefs}
@@ -1122,6 +1173,33 @@ function Timeline({
           ))}
         </Row>
 
+        <Row
+          id={SPEED_ROW_ID}
+          isEmpty={speedItems.length === 0}
+          hint={onAddSpeedAtMs ? "Click to add speed region" : undefined}
+          onMouseEnter={onAddSpeedAtMs ? handleSpeedRowMouseEnter : undefined}
+          onMouseMove={onAddSpeedAtMs ? handleSpeedRowMouseMove : undefined}
+          onMouseLeave={onAddSpeedAtMs ? handleSpeedRowMouseLeave : undefined}
+          onClick={onAddSpeedAtMs ? handleSpeedRowClick : undefined}
+          densityMode={densityMode}
+        >
+          {speedItems.map((item) => (
+            <Item
+              id={item.id}
+              key={item.id}
+              rowId={item.rowId}
+              span={item.span}
+              isSelected={selectAllBlocksActive || item.id === selectedSpeedId}
+              onSelect={() => onSelectSpeed?.(item.id)}
+              variant="speed"
+              speedValue={item.speedValue}
+              densityMode={densityMode}
+            >
+              {item.label}
+            </Item>
+          ))}
+        </Row>
+
         {annotationRowIds.map((rowId, index) => {
           const rowItems = annotationItems.filter(
             (item) =>
@@ -1232,11 +1310,11 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
       selectedAnnotationId,
       onSelectAnnotation,
       speedRegions = [],
-      onSpeedAdded: _onSpeedAdded,
+      onSpeedAdded,
       onSpeedSpanChange,
-      onSpeedDelete: _onSpeedDelete,
-      selectedSpeedId: _selectedSpeedId,
-      onSelectSpeed: _onSelectSpeed,
+      onSpeedDelete,
+      selectedSpeedId,
+      onSelectSpeed,
       audioRegions = [],
       onAudioAdded,
       onAudioSpanChange,
@@ -1420,28 +1498,38 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
       onSelectAudio(null);
     }, [selectedAudioId, onAudioDelete, onSelectAudio]);
 
+    const deleteSelectedSpeed = useCallback(() => {
+      if (!selectedSpeedId || !onSpeedDelete || !onSelectSpeed) return;
+      onSpeedDelete(selectedSpeedId);
+      onSelectSpeed(null);
+    }, [selectedSpeedId, onSpeedDelete, onSelectSpeed]);
+
     const clearSelectedBlocks = useCallback(() => {
       onSelectZoom(null);
       onSelectClip?.(null);
       onSelectAnnotation?.(null);
+      onSelectSpeed?.(null);
       onSelectAudio?.(null);
       setSelectAllBlocksActive(false);
-    }, [onSelectAnnotation, onSelectAudio, onSelectClip, onSelectZoom]);
+    }, [onSelectAnnotation, onSelectAudio, onSelectClip, onSelectSpeed, onSelectZoom]);
 
     const hasAnyTimelineBlocks =
       zoomRegions.length > 0 ||
       clipRegions.length > 0 ||
+      speedRegions.length > 0 ||
       annotationRegions.length > 0 ||
       audioRegions.length > 0;
 
     const deleteAllBlocks = useCallback(() => {
       const zoomIds = zoomRegions.map((region) => region.id);
       const clipIds = clipRegions.map((region) => region.id);
+      const speedIds = speedRegions.map((region) => region.id);
       const annotationIds = annotationRegions.map((region) => region.id);
       const audioIds = audioRegions.map((region) => region.id);
 
       zoomIds.forEach((id) => onZoomDelete(id));
       clipIds.forEach((id) => onClipDelete?.(id));
+      speedIds.forEach((id) => onSpeedDelete?.(id));
       annotationIds.forEach((id) => onAnnotationDelete?.(id));
       audioIds.forEach((id) => onAudioDelete?.(id));
 
@@ -1455,7 +1543,9 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
       onAnnotationDelete,
       onAudioDelete,
       onClipDelete,
+      onSpeedDelete,
       onZoomDelete,
+      speedRegions,
       zoomRegions,
     ]);
 
@@ -1489,6 +1579,14 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
         onSelectAudio?.(id);
       },
       [onSelectAudio],
+    );
+
+    const handleSelectSpeed = useCallback(
+      (id: string | null) => {
+        setSelectAllBlocksActive(false);
+        onSelectSpeed?.(id);
+      },
+      [onSelectSpeed],
     );
 
     useEffect(() => {
@@ -1765,6 +1863,17 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
         defaultRegionDurationMs,
         canPlaceZoomAtMs,
       ],
+    );
+
+    const addSpeedAtMs = useCallback(
+      (startMs: number) => {
+        if (!videoDuration || videoDuration === 0 || totalMs === 0) return;
+        const defaultDuration = Math.min(defaultRegionDurationMs, totalMs);
+        if (defaultDuration <= 0) return;
+        const startPos = Math.max(0, Math.min(startMs, totalMs));
+        onSpeedAdded?.({ start: startPos, end: startPos + defaultDuration });
+      },
+      [videoDuration, totalMs, onSpeedAdded, defaultRegionDurationMs],
     );
 
     const handleAddZoom = useCallback(() => {
@@ -2143,6 +2252,8 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
             deleteSelectedZoom();
           } else if (selectedClipId) {
             deleteSelectedClip();
+          } else if (selectedSpeedId) {
+            deleteSelectedSpeed();
           } else if (selectedAnnotationId) {
             deleteSelectedAnnotation();
           } else if (selectedAudioId) {
@@ -2161,11 +2272,13 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
       deleteSelectedKeyframe,
       deleteSelectedZoom,
       deleteSelectedClip,
+      deleteSelectedSpeed,
       deleteSelectedAnnotation,
       deleteSelectedAudio,
       selectedKeyframeId,
       selectedZoomId,
       selectedClipId,
+      selectedSpeedId,
       selectedAnnotationId,
       selectedAudioId,
       annotationRegions,
@@ -2267,8 +2380,17 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
         };
       });
 
-      return [...zooms, ...clips, ...annotations, ...audios];
-    }, [zoomRegions, clipRegions, annotationRegions, audioRegions]);
+      const speeds: TimelineRenderItem[] = speedRegions.map((region) => ({
+        id: region.id,
+        rowId: SPEED_ROW_ID,
+        span: { start: region.startMs, end: region.endMs },
+        label: `${region.speed}×`,
+        speedValue: region.speed,
+        variant: "speed",
+      }));
+
+      return [...zooms, ...clips, ...speeds, ...annotations, ...audios];
+    }, [zoomRegions, clipRegions, speedRegions, annotationRegions, audioRegions]);
 
     // Flat list of draggable row spans for neighbour-clamping during drag/resize.
     const allRegionSpans = useMemo(() => {
@@ -2284,14 +2406,20 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
         end: r.endMs,
         rowId: CLIP_ROW_ID,
       }));
+      const speeds = speedRegions.map((r) => ({
+        id: r.id,
+        start: r.startMs,
+        end: r.endMs,
+        rowId: SPEED_ROW_ID,
+      }));
       const audios = audioRegions.map((r) => ({
         id: r.id,
         start: r.startMs,
         end: r.endMs,
         rowId: getAudioTrackRowId(r.trackIndex ?? 0),
       }));
-      return [...zooms, ...clips, ...audios];
-    }, [zoomRegions, clipRegions, audioRegions]);
+      return [...zooms, ...clips, ...speeds, ...audios];
+    }, [zoomRegions, clipRegions, speedRegions, audioRegions]);
 
     const getResolvedDropRowId = useCallback(
       (id: string, proposedRowId: string) => {
@@ -2656,13 +2784,16 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
               densityMode={densityMode}
               onSeek={onSeek}
               onAddZoomAtMs={addZoomAtMs}
+              onAddSpeedAtMs={onSpeedAdded ? addSpeedAtMs : undefined}
               canPlaceZoomAtMs={canPlaceZoomAtMs}
               onSelectZoom={handleSelectZoom}
               onSelectClip={handleSelectClip}
               onSelectAnnotation={handleSelectAnnotation}
+              onSelectSpeed={handleSelectSpeed}
               onSelectAudio={handleSelectAudio}
               selectedZoomId={selectedZoomId}
               selectedClipId={selectedClipId}
+              selectedSpeedId={selectedSpeedId}
               selectedAnnotationId={selectedAnnotationId}
               selectedAudioId={selectedAudioId}
               selectAllBlocksActive={selectAllBlocksActive}

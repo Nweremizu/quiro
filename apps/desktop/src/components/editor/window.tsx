@@ -127,6 +127,7 @@ import {
   type OverlayLayerOrder,
   mapSourceTimeToTimelineTime as resolveSourceTimeToTimelineTime,
   mapTimelineTimeToSourceTime as resolveTimelineTimeToSourceTime,
+  type PlaybackSpeed,
   type SpeedRegion,
   type TrimRegion,
   trimsToClips,
@@ -275,6 +276,33 @@ function LiveTimecode({ fallbackSec }: { fallbackSec: number }) {
     playbackTimeStore.get,
   );
   return <>{formatTime(live ? live.timelineMs / 1000 : fallbackSec)}</>;
+}
+
+/**
+ * Merge an incoming zoom into the existing set instead of stacking.
+ * If the new region overlaps any existing zooms they are unioned into one;
+ * the first overlapping zoom's id and settings (depth, focus) are kept so
+ * the user's prior intent is preserved. Non-overlapping regions are untouched.
+ */
+function mergeZoomIntoExisting(
+  existing: ZoomRegion[],
+  incoming: ZoomRegion,
+): ZoomRegion[] {
+  const overlapping = existing.filter(
+    (r) => r.startMs < incoming.endMs && r.endMs > incoming.startMs,
+  );
+  if (overlapping.length === 0) {
+    return [...existing, incoming];
+  }
+  const mergedStart = Math.min(incoming.startMs, ...overlapping.map((r) => r.startMs));
+  const mergedEnd = Math.max(incoming.endMs, ...overlapping.map((r) => r.endMs));
+  const base = overlapping[0];
+  const merged: ZoomRegion = { ...base, startMs: mergedStart, endMs: mergedEnd };
+  const overlappingIds = new Set(overlapping.map((r) => r.id));
+  return [
+    ...existing.filter((r) => !overlappingIds.has(r.id)),
+    merged,
+  ].sort((a, b) => a.startMs - b.startMs);
 }
 
 export default function EditorWindow() {
@@ -477,6 +505,7 @@ export default function EditorWindow() {
   const [clipRegions, setClipRegions] = useState<ClipRegion[]>([]);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [speedRegions, setSpeedRegions] = useState<SpeedRegion[]>([]);
+  const [selectedSpeedId, setSelectedSpeedId] = useState<string | null>(null);
   const [annotationRegions, setAnnotationRegions] = useState<
     AnnotationRegion[]
   >([]);
@@ -601,6 +630,7 @@ export default function EditorWindow() {
   );
   const nextZoomIdRef = useRef(1);
   const nextClipIdRef = useRef(1);
+  const nextSpeedIdRef = useRef(1);
   const nextAudioIdRef = useRef(1);
 
   const { shortcuts, isMac } = useShortcuts();
@@ -699,19 +729,26 @@ export default function EditorWindow() {
       snapshot: () => aiEditorStateRef.current,
       getBrainInputs: () => brainInputsRef.current,
       applyZoomSuggestions: (suggestions, depth) =>
-        setZoomRegions((prev) => [
-          ...prev,
-          ...suggestions.map(
-            (suggestion, index): ZoomRegion => ({
+        setZoomRegions((prev) => {
+          let result = [...prev];
+          suggestions.forEach((suggestion, index) => {
+            const incoming: ZoomRegion = {
               id: `ai-zoom-${Date.now()}-${index}`,
               startMs: suggestion.start,
               endMs: suggestion.end,
               depth: depth ?? 2,
               focus: suggestion.focus,
-            }),
-          ),
-        ]),
-      addZoomRegion: (region) => setZoomRegions((prev) => [...prev, region]),
+            };
+            result = mergeZoomIntoExisting(result, incoming);
+          });
+          return result;
+        }),
+      addZoomRegion: (region) =>
+        setZoomRegions((prev) => mergeZoomIntoExisting(prev, region)),
+      updateZoomRegion: (id, updates) =>
+        setZoomRegions((prev) =>
+          prev.map((r) => (r.id === id ? { ...r, ...updates } : r)),
+        ),
       setKeptClips: (clips) => setClipRegions(clips),
       applyCaptions: (cues, options) => {
         setAutoCaptions(cues);
@@ -792,6 +829,9 @@ export default function EditorWindow() {
         }
 
         setAutoCaptions(result.cues);
+        // Update the ref immediately so getBrainInputs() sees the new transcript
+        // before React re-renders (the agent loop runs in the same async chain).
+        brainInputsRef.current = { ...brainInputsRef.current, transcript: result.cues };
         setAutoCaptionSettings((prev) => ({
           ...prev,
           enabled: true,
@@ -3587,12 +3627,6 @@ export default function EditorWindow() {
         }
 
         setClipRegions(nextClipRegions);
-        if (speedRegions.length > 0) {
-          // Legacy speed regions no longer have dedicated editing surfaces.
-          // Clear them during clip bootstrap so old projects do not keep
-          // hidden playback changes that users cannot inspect or edit.
-          setSpeedRegions([]);
-        }
       }
       clipInitializedRef.current = true;
       return;
@@ -4073,6 +4107,51 @@ export default function EditorWindow() {
     },
     [createProjectSnapshot, selectedZoomId],
   );
+
+  const handleSelectSpeed = useCallback((id: string | null) => {
+    setSelectedSpeedId(id);
+    if (id) {
+      setActiveEffectSection("speed");
+    } else {
+      setActiveEffectSection((s) => (s === "speed" ? "scene" : s));
+    }
+  }, []);
+
+  const handleSpeedAdded = useCallback((span: Span) => {
+    const id = `speed-${nextSpeedIdRef.current++}`;
+    const newRegion: SpeedRegion = {
+      id,
+      startMs: Math.round(span.start),
+      endMs: Math.round(span.end),
+      speed: 2,
+    };
+    setSpeedRegions((prev) => [...prev, newRegion]);
+    setSelectedSpeedId(id);
+  }, []);
+
+  const handleSpeedSpanChange = useCallback((id: string, span: Span) => {
+    setSpeedRegions((prev) =>
+      prev.map((region) =>
+        region.id === id
+          ? { ...region, startMs: Math.round(span.start), endMs: Math.round(span.end) }
+          : region,
+      ),
+    );
+  }, []);
+
+  const handleSpeedDelete = useCallback((id: string) => {
+    setSpeedRegions((prev) => prev.filter((region) => region.id !== id));
+    if (selectedSpeedId === id) setSelectedSpeedId(null);
+  }, [selectedSpeedId]);
+
+  const handleSpeedValueChange = useCallback((speed: PlaybackSpeed) => {
+    if (!selectedSpeedId) return;
+    setSpeedRegions((prev) =>
+      prev.map((region) =>
+        region.id === selectedSpeedId ? { ...region, speed } : region,
+      ),
+    );
+  }, [selectedSpeedId]);
 
   const handleSelectClip = useCallback((id: string | null) => {
     setSelectedClipId(id);
@@ -6536,6 +6615,14 @@ export default function EditorWindow() {
                 onClipSpeedChange={handleClipSpeedChange}
                 onClipMutedChange={handleClipMutedChange}
                 onClipDelete={handleClipDelete}
+                selectedSpeedId={selectedSpeedId}
+                selectedSpeedValue={
+                  selectedSpeedId
+                    ? (speedRegions.find((r) => r.id === selectedSpeedId)?.speed ?? null)
+                    : null
+                }
+                onSpeedValueChange={handleSpeedValueChange}
+                onSpeedDelete={handleSpeedDelete}
                 selectedAudioId={selectedAudioId}
                 selectedAudioVolume={
                   selectedAudioId
@@ -7141,6 +7228,12 @@ export default function EditorWindow() {
             onAudioDelete={handleAudioDelete}
             selectedAudioId={selectedAudioId}
             onSelectAudio={handleSelectAudio}
+            speedRegions={speedRegions}
+            onSpeedAdded={handleSpeedAdded}
+            onSpeedSpanChange={handleSpeedSpanChange}
+            onSpeedDelete={handleSpeedDelete}
+            selectedSpeedId={selectedSpeedId}
+            onSelectSpeed={handleSelectSpeed}
             annotationRegions={annotationRegions}
             onAnnotationAdded={handleAnnotationAdded}
             onAnnotationSpanChange={handleAnnotationSpanChange}

@@ -5,6 +5,21 @@ import type {
   WhisperJsonToken,
 } from "@/types";
 
+/**
+ * Detect Whisper hallucinations. Repeated syllable patterns are the clearest
+ * signal (e.g. "మార్ర్ర్ర్ర్ర్ర్ర్" or "AAAAAAAAAAAAA").
+ */
+function isHallucinatedCue(text: string): boolean {
+  const t = text.trim();
+  if (!t) return true;
+  // A 1–8 char sequence repeating 4+ consecutive times → hallucination.
+  if (/(.{1,8})\1{4,}/.test(t)) return true;
+  // Single "word" longer than 80 chars is never real speech.
+  const longestWord = t.split(/\s+/).reduce((a, b) => (b.length > a.length ? b : a), "");
+  if (longestWord.length > 80) return true;
+  return false;
+}
+
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
@@ -116,7 +131,7 @@ export function parseWhisperJsonCues(content: string): CaptionCuePayload[] {
         const text =
           words.length > 0 ? buildCaptionTextFromWords(words) : segmentText;
 
-        if (!text) {
+        if (!text || isHallucinatedCue(text)) {
           return null;
         }
 
@@ -175,7 +190,7 @@ export function parseSrtCues(content: string): CaptionCuePayload[] {
         .join("\n")
         .trim();
 
-      if (!text) {
+      if (!text || isHallucinatedCue(text)) {
         return null;
       }
 
