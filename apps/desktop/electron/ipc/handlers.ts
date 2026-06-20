@@ -8,6 +8,7 @@ import { registerRecordingHandlers } from "./register/recording";
 import { registerRecordingStreamHandlers } from "./register/recording-stream";
 import { registerSettingsHandlers } from "./register/settings";
 import { registerSourceHandlers } from "./register/sources";
+import { registerAiHandlers } from "./register/ai";
 import { registerPerfHandlers } from "../ipc/perf";
 import {
   selectedSource,
@@ -74,4 +75,5 @@ export function registerIpcHandlers(
   registerProjectHandlers();
   registerSettingsHandlers();
   registerPerfHandlers();
+  registerAiHandlers();
 }
