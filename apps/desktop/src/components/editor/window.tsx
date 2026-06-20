@@ -674,6 +674,26 @@ export default function EditorWindow() {
     cursorTelemetry: [],
   });
 
+  // captionCtxRef holds live values read by generateCaptions at call time.
+  // Refreshed after syncActiveVideoSource is declared (similar to brainInputsRef).
+  const captionCtxRef = useRef<{
+    language: string;
+    videoPath: string | null | undefined;
+    videoSourcePath: string | null | undefined;
+    webcamSourcePath: string | null;
+    whisperExecutablePath: string | null;
+    whisperModelPath: string | null;
+    syncActiveVideoSource: ((sourcePath: string, webcamPath?: string | null) => Promise<void>) | null;
+  }>({
+    language: "",
+    videoPath: undefined,
+    videoSourcePath: undefined,
+    webcamSourcePath: null,
+    whisperExecutablePath: null,
+    whisperModelPath: null,
+    syncActiveVideoSource: null,
+  });
+
   const editorActions = useMemo<EditorActions>(
     () => ({
       snapshot: () => aiEditorStateRef.current,
@@ -704,12 +724,13 @@ export default function EditorWindow() {
         }
       },
       generateCaptions: async (language) => {
+        const ctx = captionCtxRef.current;
         const requestedLanguage =
           typeof language === "string" && language.trim()
             ? language
-            : autoCaptionSettings.language || "auto";
+            : ctx.language || "auto";
 
-        if (!whisperModelPath) {
+        if (!ctx.whisperModelPath) {
           return {
             ok: false,
             message: "Select or download a Whisper model before generating captions.",
@@ -718,8 +739,8 @@ export default function EditorWindow() {
         }
 
         let sourcePath = resolveAutoCaptionSourcePath({
-          videoSourcePath,
-          videoPath,
+          videoSourcePath: ctx.videoSourcePath,
+          videoPath: ctx.videoPath,
         });
 
         if (!sourcePath) {
@@ -745,17 +766,17 @@ export default function EditorWindow() {
           };
         }
 
-        if (sourcePath !== videoSourcePath) {
+        if (sourcePath !== ctx.videoSourcePath) {
           setVideoSourcePath(sourcePath);
           setVideoPath(await resolveVideoUrl(sourcePath));
         }
 
-        await syncActiveVideoSource(sourcePath, webcam.sourcePath ?? null);
+        await ctx.syncActiveVideoSource?.(sourcePath, ctx.webcamSourcePath);
 
         const result = await window.electronAPI.generateAutoCaptions({
           videoPath: sourcePath,
-          whisperExecutablePath: whisperExecutablePath ?? undefined,
-          whisperModelPath,
+          whisperExecutablePath: ctx.whisperExecutablePath ?? undefined,
+          whisperModelPath: ctx.whisperModelPath,
           language: requestedLanguage,
         });
 
@@ -838,15 +859,8 @@ export default function EditorWindow() {
         syncHistoryButtons();
       },
     }),
-    [
-      autoCaptionSettings.language,
-      videoPath,
-      videoSourcePath,
-      webcam.sourcePath,
-      whisperExecutablePath,
-      whisperModelPath,
-      syncActiveVideoSource,
-    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
   );
 
   const handleRunFirstDraft = useCallback(async () => {
@@ -3509,6 +3523,17 @@ export default function EditorWindow() {
     durationMs: Math.max(0, Math.round(duration * 1000)),
     transcript: autoCaptions,
     cursorTelemetry: normalizedCursorTelemetry,
+  };
+
+  // Refresh captionCtxRef so generateCaptions() reads current values at call time.
+  captionCtxRef.current = {
+    language: autoCaptionSettings.language,
+    videoPath,
+    videoSourcePath,
+    webcamSourcePath: webcam.sourcePath ?? null,
+    whisperExecutablePath: whisperExecutablePath ?? null,
+    whisperModelPath: whisperModelPath ?? null,
+    syncActiveVideoSource,
   };
 
   const displayedTimelineWindow = useMemo(() => {

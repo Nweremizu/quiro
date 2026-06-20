@@ -11,17 +11,18 @@ import type {
   AnnotationRegion,
   ClipRegion,
   SpeedRegion,
+  ZoomDepth,
   ZoomRegion,
 } from "@/types/editor";
 import {
   DEFAULT_ANNOTATION_ANIMATION,
-  DEFAULT_ANNOTATION_POSITION,
   DEFAULT_ANNOTATION_SIZE,
   DEFAULT_ANNOTATION_STYLE,
 } from "@/types/editor";
 import { buildInteractionZoomSuggestions } from "@/components/editor/timeline/zoomSuggestionUtils";
 import {
   SILENCE_MIN_MS,
+  type AddAnnotationInput,
   type AiToolName,
   type AiToolUseBlock,
   type AddZoomInput,
@@ -143,7 +144,7 @@ async function autoZoomOnClicks(
     end: s.end + range.startMs,
   }));
 
-  actions.applyZoomSuggestions(adjusted, range.depth);
+  actions.applyZoomSuggestions(adjusted, range.depth as ZoomDepth);
   return {
     ok: true,
     summary: `Added ${adjusted.length} zoom(s) on your clicks for ${formatRange(range.startMs, range.endMs)}.`,
@@ -259,7 +260,7 @@ function normalizeZoomRegion(rawArgs: unknown, totalMs: number): { region?: Zoom
     return { error: "invalid-focus" };
   }
 
-  const depth = Math.min(6, Math.max(1, Math.round(toNumber(args.depth) ?? 2)));
+  const depth = Math.min(6, Math.max(1, Math.round(toNumber(args.depth) ?? 2))) as ZoomDepth;
 
   return {
     region: {
@@ -476,14 +477,6 @@ function queryRecording(
   return {
     ok: true,
     summary: `[Question: "${args.question}"]\n${lines.join("\n")}`,
-  };
-}
-
-function notImplemented(name: string): ToolResult {
-  return {
-    ok: false,
-    summary: `"${name}" is a stretch tool — coming in Sprint 2. Try "zoom into my clicks" or "cut the dead air" instead.`,
-    reason: "not-implemented",
   };
 }
 
