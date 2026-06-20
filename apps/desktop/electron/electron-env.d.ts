@@ -210,6 +210,13 @@ interface Window {
 				hasKey: boolean;
 				providers: { anthropic: boolean; minimax: boolean };
 			}>;
+			onStreamEvent: (callback: (event: {
+				type: "delta" | "done" | "error";
+				requestId: string;
+				text?: string;
+				result?: unknown;
+				message?: string;
+			}) => void) => () => void;
 		};
 		hudOverlaySetIgnoreMouse: (ignore: boolean) => void;
 		hudOverlayDrag: (phase: "start" | "move" | "end", screenX: number, screenY: number) => void;
