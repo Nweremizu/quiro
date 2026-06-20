@@ -77,6 +77,12 @@ function settleNativeVideoExportPendingRequests(
 }
 
 contextBridge.exposeInMainWorld("electronAPI", {
+  // AI (Quiro Director) — Sprint 0, S0-2. Channels mirror src/lib/ai/contract.ts.
+  ai: {
+    complete: (request: unknown) =>
+      ipcRenderer.invoke("ai:complete", request),
+    getKeyStatus: () => ipcRenderer.invoke("ai:get-key-status"),
+  },
   hudOverlaySetIgnoreMouse: (ignore: boolean) => {
     ipcRenderer.send("hud-overlay-set-ignore-mouse", ignore);
   },

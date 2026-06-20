@@ -205,6 +205,25 @@ interface RendererNativeVideoMetadataProbe {
 
 interface Window {
   electronAPI: {
+    /** AI (Quiro Director) — mirrors src/lib/ai/contract.ts; keep in sync (S0-2). */
+    ai: {
+      complete: (request: {
+        requestId: string;
+        model: string;
+        system: string;
+        messages: Array<{ role: 'user' | 'assistant'; content: string | unknown[] }>;
+        tools?: unknown[];
+        maxTokens?: number;
+        stream?: boolean;
+        effort?: 'low' | 'medium' | 'high' | 'max';
+      }) => Promise<{
+        requestId: string;
+        stopReason: string;
+        content: Array<{ type: string; [key: string]: unknown }>;
+        usage?: { inputTokens: number; outputTokens: number };
+      }>;
+      getKeyStatus: () => Promise<{ hasKey: boolean }>;
+    };
     hudOverlaySetIgnoreMouse: (ignore: boolean) => void;
     hudOverlayDrag: (
       phase: 'start' | 'move' | 'end',
