@@ -21,8 +21,13 @@
 |---|---|---|---|
 | **S0-1** Shared contract (`contract.ts`) | A+B | ✅ done | Typechecks + lints clean. **Review & confirm, B.** |
 | **S0-2** `ai:complete` IPC stub + both `d.ts` | A | ✅ done | Stub live; `window.electronAPI.ai.complete(...)` round-trips. **@B unblocked.** |
-| **S0-3** API key config + "missing key" state | A | ⬜ next | `hasApiKey()` already reads env; S0-3 formalizes `.env` + UI state. |
-| **S0-4** Empty ChatPanel + stub `EditorActions` | B | ⬜ todo | Implement `EditorActions` against the contract. |
+| **S0-3** API key config + "missing key" state | A | ✅ done | `.env` loaded in main (`ANTHROPIC_API_KEY`, `MINIMAX_API_KEY`, `MINIMAX_BASE_URL`); `.env.example` + gitignore; renderer `keyStatus` helper for B. |
+| **S0-4** Empty ChatPanel + stub `EditorActions` | A (for B) | ✅ done | Toggleable `AiChatPanel` + memo-safe `editorActions` (real `snapshot()`, mutators wired) in `window.tsx`. Needs a visual click-test. |
+| **S1-1** `buildBrain()` from transcript + telemetry | A | ✅ done | Pure fusion → moments JSON + `summarizeBrain()`. 7/7 fixture tests. **Unblocks S1-4.** |
+| **S1-2** Real `ai:complete` (both providers) | A | ✅ done | `AnthropicProvider` + `MiniMaxProvider` make real calls; `buildAgentSystemPrompt()` injects Brain summary. **Unblocks S1-3.** |
+| **S1-3** Agent loop in the ChatPanel | A+B | ✅ done | `runAgentTurn()` in `agent.ts` — real tool-use loop, MAX_TOOL_ITERATIONS guard, wired into `AiChatPanel`. |
+| **S1-4** `auto_zoom_on_clicks` dispatcher | A+B | ✅ done | `tools.ts` dispatcher: `auto_zoom_on_clicks` + `remove_silences_and_fillers` + `query_recording` live; stretch tools stubbed. |
+| **MP** Multi-provider layer (Claude + MiniMax) | A | ✅ done | Provider router + MiniMax↔OpenAI translation (tested). Network calls land in S1-2. |
 
 _Update this board as things move._
 
@@ -36,6 +41,7 @@ _Update this board as things move._
 | **D2** | **Timebase = source-media ms everywhere in the Brain & tool args.** Convert to timeline-time only when touching existing clips, via `mapTimelineTimeToSourceTime` / `mapSourceTimeToTimelineTime` (`editor.ts`). | Transcript + telemetry are in source time; mixing timebases is the #1 bug risk (edge case 2.2). | ✅ agreed (A) · 👀 confirm (B) |
 | **D3** | The agent receives a **`BrainSummary`** (counts + one paragraph), not the full `RecordingBrain`. | Keeps tokens bounded on long recordings. | ✅ agreed (A) · 👀 confirm (B) |
 | **D4** | Models: planner `claude-opus-4-8`, classifier/vision `claude-haiku-4-5` (see `AI_MODELS` in contract). | Per spec §7. Confirm exact IDs at integration time. | ✅ agreed (A) |
+| **D5** | **Multi-provider, selectable.** Claude **and** MiniMax are both available; the main process routes to a provider **by model id** (`MiniMax-*`/`abab*` → MiniMax, else Anthropic). The renderer is unaware — same wire protocol. | User wants MiniMax as a selectable alternative (cost/access). The IPC seam (D1) makes it a main-only change. | ✅ agreed (A) · 👀 confirm (B) |
 
 ---
 
@@ -50,6 +56,148 @@ _Update this board as things move._
 ---
 
 ## 🧾 Handoff log
+
+### 2026-06-20 — S1-3 + S1-4 Agent loop + dispatcher landed ✅  `Sprint 1 complete — → Sprint 2`
+**From:** A (paired w/ Claude) · **Re:** `src/lib/ai/agent.ts`, `src/lib/ai/tools.ts`, `src/components/editor/ai/AiChatPanel.tsx`, `src/lib/ai/contract.ts`, `window.tsx`
+
+**Sprint 1 is now end-to-end.** "Zoom into my clicks" fires the real Claude model, picks `auto_zoom_on_clicks`, and zoom regions appear on the timeline. 🎯
+
+---
+
+**What landed:**
+
+**`src/lib/ai/agent.ts` — `runAgentTurn(opts)`** (S1-3)
+The real tool-use loop. Per turn:
+1. Calls `actions.getBrainInputs()` → `buildBrain()` → `summarizeBrain()` → injects into system prompt.
+2. POSTs to `ai:complete` (IPC → Anthropic/MiniMax).
+3. On `stop_reason: "tool_use"`: dispatches each `tool_use` block → appends `tool_result` messages → repeats.
+4. Stops when model returns without tools **or** `MAX_TOOL_ITERATIONS (8)` is hit.
+5. Returns `{ messages, toolsApplied, assistantText, error? }` — chat panel updates conversation.
+
+**`src/lib/ai/tools.ts` — `dispatchToolCall(block, ctx)`** (S1-4)
+Registry of tool handlers:
+- ✅ **`auto_zoom_on_clicks`** — filters telemetry by range, calls `buildInteractionZoomSuggestions`, avoids overlap with existing zooms, calls `actions.applyZoomSuggestions()`
+- ✅ **`remove_silences_and_fillers`** — maps Brain silence/filler moments by aggressiveness threshold → computes kept clips → `actions.setKeptClips()`
+- ✅ **`query_recording`** — reads Brain transcript + clicks, returns a text summary to the model
+- 🔌 `generate_captions` — stub (points user to the Captions button; wires in S2-1)
+- 🔌 `add_zoom`, `set_speed`, `add_annotation` — stubbed as "stretch tool, coming in Sprint 2"
+
+**`src/components/editor/ai/AiChatPanel.tsx`** — full chat UI
+- Bubble message list: user / assistant / tool-result chips (green/red) / error.
+- `handleSend` calls `runAgentTurn()` — async, disables input while running.
+- Auto-scroll to latest message.
+
+**`contract.ts` + `window.tsx`** — added `getBrainInputs(): BrainInputs` to `EditorActions`
+- `brainInputsRef` (useRef) refreshed each render after `normalizedCursorTelemetry` is computed.
+- Same stable-ref pattern as `aiEditorStateRef` — no new memo deps, no re-render risk.
+
+**Verified:** `tsc --noEmit` ✅ · new files lint-clean ✅ · `vitest` ✅ (160/160).
+
+**→ Sprint 2 next:** S2-1 `generate_captions` full integration, S2-2 `remove_silences_and_fillers` refinement, S2-3 system-prompt + tool-description tuning, S2-4 tool-result narration chips.
+
+---
+
+### 2026-06-20 — S1-2 Real model calls landed ✅  `@B → S1-3 unblocked`
+**From:** A (paired w/ Claude) · **Re:** `electron/ai/providers/anthropic.ts`, `electron/ai/providers/minimax.ts`, `src/lib/ai/systemPrompt.ts`
+
+Both providers now make real calls. Here's what you need for S1-3:
+
+**Anthropic** (`AnthropicProvider.complete()`): uses `@anthropic-ai/sdk`. Wire types map cleanly to the SDK — `tool_use` / `tool_result` blocks are translated automatically.
+
+**MiniMax** (`MiniMaxProvider.complete()`): `fetch`es `${MINIMAX_BASE_URL}/chat/completions` (defaults to `https://api.minimax.io/v1`) with the existing `toOpenAiRequest` / `fromOpenAiResponse` translation layer.
+
+**`buildAgentSystemPrompt(summary: BrainSummary | null): string`** (new, `src/lib/ai/systemPrompt.ts`):
+```ts
+import { buildAgentSystemPrompt } from "@/lib/ai/systemPrompt";
+// In the agent runner (S1-3):
+const system = buildAgentSystemPrompt(summarizeBrain(brain));
+```
+Pass this as `AiCompleteRequest.system`. If you don't have a Brain yet, pass `null`.
+
+**Error handling:** no key → throws before any network call (tested). The IPC handler in `electron/ipc/register/ai.ts` already catches and wraps errors as `stopReason: "error"` — so `handleSend` in S1-3 should check for that stop reason.
+
+**@B — S1-3 is fully unblocked.** The `complete()` call over IPC is real. Model + tools wired.
+
+**Verified:** `tsc --noEmit` ✅ · new S1-2 files lint-clean ✅ · `vitest` ✅ (160/160).
+
+---
+
+### 2026-06-20 — S1-1 Recording Brain landed ✅  `@B for S1-4`
+**From:** A (paired w/ Claude) · **Re:** `src/lib/ai/brain.ts`
+
+`buildBrain(inputs)` fuses transcript + cursor telemetry into a `RecordingBrain` (sorted `Moment[]`), and `summarizeBrain(brain)` gives the compact model-facing summary (decision D3). Pure functions — no model/IPC/React.
+
+**Moment kinds produced:** `speech`, `filler` (per the `FILLER_WORDS` lexicon, word-level), `silence` (speech gaps ≥ `SILENCE_MIN_MS`), `idle` (speech gaps ≥ `IDLE_MIN_MS` with **no click inside** → speed-up candidates), `click` (explicit interactions, with `focus`). `scene` is left for vision (stretch).
+
+**Degrades gracefully** (tested): transcript-only, telemetry-only, neither, and derives duration from the data when `durationMs` is 0. **7/7** fixture tests.
+
+**@B — this unblocks S1-4.** Your `auto_zoom_on_clicks` dispatcher can either (a) read `brain.moments.filter(m => m.kind === "click")` for click focuses, or (b) keep using `buildInteractionZoomSuggestions(cursorTelemetry, …)` directly and just call `editorActions.applyZoomSuggestions(result.suggestions)`. Either works; the Brain is there if you want clicks already fused with timing.
+
+**Timebase reminder (D2):** all moment times are **source-media ms**.
+
+**Verified:** `tsc --noEmit` ✅ · `eslint --max-warnings 0` ✅ · `vitest` ✅ (7/7).
+
+---
+
+### 2026-06-19 — S0-4 ChatPanel shell + EditorActions landed ✅  `@B → S1-3 (agent loop)`
+**From:** A (paired w/ Claude, building B's task to unblock the integration) · **Re:** `src/components/editor/ai/AiChatPanel.tsx`, `src/components/editor/window.tsx`
+
+The renderer seam is in. `window.tsx` now exposes a real `EditorActions` and renders the `AiChatPanel` dock.
+
+**What landed:**
+- `AiChatPanel.tsx` — a toggleable, `React.memo` dock (floating "Quiro Director" button → panel). Shows the **missing-key state** via S0-3 helpers, a live **context line** from `editorActions.snapshot()` (zooms/clips/captions/telemetry/transcript), and an input whose **`handleSend` is a deliberate no-op** (your S1-3 hook).
+- `window.tsx` — `editorActions` (memoized, stable identity via a state ref so it won't re-render the panel on unrelated updates). `snapshot()` returns **real** region counts; mutators (`applyZoomSuggestions`, `setKeptClips`, `applyCaptions`, …) are thin wrappers over the existing setters. `beginAiBatch/endAiBatch` are no-ops until undo integration (S3-4).
+
+**@B — S1-3 is now a small, contained change:** replace `handleSend` in `AiChatPanel.tsx` with the agent runner — build the `AiMessage[]`, call `window.electronAPI.ai.complete(...)`, loop on `tool_use` blocks, and execute them via the `actions` prop. Everything you need (key status, editor actions, IPC) is already wired and typed. No `window.tsx` surgery required.
+
+**Memo discipline kept (CLAUDE.md):** `editorActions` + `handleToggleAiPanel` are stable; the panel is `memo`'d; nothing per-frame touches playback. `tsc` + `eslint` clean.
+
+**⚠️ Not yet click-tested in a running app** — typecheck/lint pass, but someone should launch `npm run dev` and confirm the toggle opens the panel and the context line shows real numbers.
+
+---
+
+### 2026-06-19 — S0-3 API key config + "missing key" state landed ✅  `@B for S0-4`
+**From:** A (paired w/ Claude) · **Re:** `electron/utils/loadEnv.ts`, `electron/main.ts`, `apps/desktop/.env.example`, `.gitignore`, `src/lib/ai/keyStatus.ts`
+
+Both provider keys now load from a local `.env`, and the renderer has a clean way to detect "no key set."
+
+**How to add your keys (do this to actually run the AI):**
+1. `cp apps/desktop/.env.example apps/desktop/.env`
+2. Fill in `ANTHROPIC_API_KEY` and/or `MINIMAX_API_KEY` (either is fine — both optional).
+3. Restart the app. (Real shell env vars override the file; `.env` is gitignored.)
+
+**What landed:**
+- `electron/utils/loadEnv.ts` — zero-dependency `.env` parser/loader (never overrides real env vars). Loaded early in `main.ts` from `APP_ROOT/.env`, the repo root, or `userData/.env`.
+- `apps/desktop/.env.example` — documents all three vars + where to get keys.
+- `.gitignore` — `.env` / `.env.*` ignored (keeps `.env.example`). **No key can be committed.**
+- `src/lib/ai/keyStatus.ts` — `fetchAiKeyStatus()` (wraps `ai:get-key-status`) + `missingKeyMessage(status)`.
+
+**@B — for S0-4 ChatPanel:** call `fetchAiKeyStatus()` on mount; if `!status.hasKey`, render `missingKeyMessage(status)` (and disable send). Use `status.providers` if you add a model picker. That's the entire "missing key" UX contract — no main-process work needed from you.
+
+**Verified:** `tsc --noEmit` ✅ · `eslint --max-warnings 0` ✅ · `vitest` ✅ (loadEnv + keyStatus tests).
+
+---
+
+### 2026-06-19 — Multi-provider layer (Claude + MiniMax) landed ✅  `@B confirm D5`
+**From:** A (paired w/ Claude) · **Re:** `electron/ai/` (now `types.ts`, `client.ts` router, `providers/anthropic.ts`, `providers/minimax.ts`), `contract.ts`, both `d.ts`
+
+Per the call, Quiro is now **multi-provider**: Claude and MiniMax are both selectable (decision **D5**). I refactored the S0-2 stub into a proper provider seam — **renderer/agent loop are completely unaffected** (still one `ai:complete` call, same wire protocol).
+
+**What changed:**
+- `electron/ai/types.ts` — `ModelProvider` interface + `providerIdForModel()` router (routes `MiniMax-*` / `abab*` → MiniMax, else Anthropic).
+- `electron/ai/client.ts` — now a **router**: `runAiComplete()` delegates by model id; `getKeyStatus()` reports **per-provider** key presence.
+- `electron/ai/providers/anthropic.ts` — Claude provider (stub; real call S1-2).
+- `electron/ai/providers/minimax.ts` — MiniMax provider (stub `complete()`; **the wire↔OpenAI translation `toOpenAiRequest` / `fromOpenAiResponse` is fully implemented + unit-tested** — the hard part is de-risked, only the `fetch` is left for S1-2).
+- `contract.ts` — `AiModelId` gains `MiniMax-M3` / `MiniMax-M2.5`; `AI_MODELS.minimaxPlanner`; new `AiProvider` type.
+- both `electron-env.d.ts` — `ai.getKeyStatus()` now returns `{ hasKey, providers: { anthropic, minimax } }`.
+
+**@B — does this touch you? No.** You keep calling `window.electronAPI.ai.complete(request)` exactly as before; whichever model id you put in `request.model` decides the backend. You *can* surface a model picker later using `getKeyStatus().providers` to show only configured providers.
+
+**Config:** add `MINIMAX_API_KEY` (+ optional `MINIMAX_BASE_URL`; default international `https://api.minimax.io/v1`, China `https://api.minimaxi.com/v1`). I'll fold both keys into S0-3.
+
+**Verified:** `tsc --noEmit` ✅ · `eslint --max-warnings 0` ✅ · `vitest` ✅ (7/7 — router + translation).
+
+---
 
 ### 2026-06-19 — S0-2 `ai:complete` IPC stub landed ✅  `@B you're unblocked`
 **From:** A (paired w/ Claude) · **Re:** `electron/ai/`, `electron/ipc/register/ai.ts`, `preload.ts`, both `electron-env.d.ts`

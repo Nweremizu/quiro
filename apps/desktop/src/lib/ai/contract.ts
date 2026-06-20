@@ -133,6 +133,9 @@ export interface EditorActions {
   /** Current editor state for the agent's context. */
   snapshot(): EditorStateForAI;
 
+  /** Raw inputs for buildBrain() — refreshed every render via a ref. */
+  getBrainInputs(): BrainInputs;
+
   /** Apply zoom windows produced by buildInteractionZoomSuggestions(). */
   applyZoomSuggestions(suggestions: SuggestedZoomRegion[], depth?: ZoomDepth): void;
   /** Add one explicit zoom (the `add_zoom` tool). */
@@ -373,15 +376,24 @@ export const AI_TOOLS: AiToolDefinition[] = [
  * Plain serializable wire types. Main maps these to/from the Anthropic SDK.
  * ════════════════════════════════════════════════════════════════════════ */
 
+/** Which backend serves a model. Routed in the main process by model id. */
+export type AiProvider = "anthropic" | "minimax";
+
 export type AiModelId =
+  // Anthropic
   | "claude-opus-4-8" // planner / agent
   | "claude-haiku-4-5" // bulk classification + vision
   | "claude-sonnet-4-6" // mid-tier alternative
+  // MiniMax (selectable alternative — D5). Ids starting "MiniMax"/"abab" route to MiniMax.
+  | "MiniMax-M3" // newest flagship
+  | "MiniMax-M2.5" // coding / reasoning tuned
   | (string & Record<never, never>);
 
 export const AI_MODELS = {
   planner: "claude-opus-4-8",
   classifier: "claude-haiku-4-5",
+  /** Selectable MiniMax alternative for the planner/agent. */
+  minimaxPlanner: "MiniMax-M2.5",
 } as const satisfies Record<string, AiModelId>;
 
 export type AiRole = "user" | "assistant";
