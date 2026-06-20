@@ -12,6 +12,7 @@ import {
   VolumeOffIcon,
   VolumeHighIcon,
   MagicWand01Icon,
+  AiMagicIcon,
   SearchAddIcon,
   Tick02Icon,
   TimelineListIcon,
@@ -41,6 +42,7 @@ import { useShortcuts } from "@/contexts/shortcut-context";
 import { useSystemHealthWarning } from "@/hooks/useSystemHealthWarning";
 import { playbackSessionDebug } from "@/lib/playbackSessionDebug";
 import { playbackTimeStore } from "@/lib/playbackTimeStore";
+import { runFirstDraft } from "@/lib/ai/firstDraft";
 import {
   calculateOutputDimensions,
   DEFAULT_MP4_CODEC,
@@ -610,6 +612,9 @@ export default function EditorWindow() {
   const historyEntriesRef = useRef<EditorHistoryEntry[]>([]);
   const historyIndexRef = useRef(-1);
   const applyingHistoryRef = useRef(false);
+  const historyBatchDepthRef = useRef(0);
+  const historyBatchStartSnapshotRef = useRef<EditorHistorySnapshot | null>(null);
+  const historyBatchLabelRef = useRef<string | undefined>(undefined);
   const pendingExportSaveRef = useRef<PendingExportSave | null>(null);
   const pendingTelemetryRetryTimeoutRef = useRef<number | null>(null);
   const pendingFreshRecordingAutoSuggestTimeoutRef = useRef<number | null>(
@@ -633,6 +638,7 @@ export default function EditorWindow() {
   // stable for React.memo. Mutators are thin wrappers over existing setters;
   // the dispatcher (S1-4) and undo batching (S3-4) build on these.
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [isFirstDraftRunning, setIsFirstDraftRunning] = useState(false);
   const handleToggleAiPanel = useCallback(() => {
     setAiPanelOpen((value) => !value);
   }, []);
@@ -697,15 +703,173 @@ export default function EditorWindow() {
           }));
         }
       },
+      generateCaptions: async (language) => {
+        const requestedLanguage =
+          typeof language === "string" && language.trim()
+            ? language
+            : autoCaptionSettings.language || "auto";
+
+        if (!whisperModelPath) {
+          return {
+            ok: false,
+            message: "Select or download a Whisper model before generating captions.",
+            reason: "missing-model",
+          };
+        }
+
+        let sourcePath = resolveAutoCaptionSourcePath({
+          videoSourcePath,
+          videoPath,
+        });
+
+        if (!sourcePath) {
+          const sessionResult =
+            await window.electronAPI.getCurrentRecordingSession?.();
+          const currentVideoResult = await window.electronAPI.getCurrentVideoPath();
+          sourcePath = resolveAutoCaptionSourcePath({
+            recordingSessionVideoPath:
+              sessionResult?.success && sessionResult.session?.videoPath
+                ? sessionResult.session.videoPath
+                : null,
+            currentVideoPath: currentVideoResult.success
+              ? currentVideoResult.path ?? null
+              : null,
+          });
+        }
+
+        if (!sourcePath) {
+          return {
+            ok: false,
+            message: "No source video is loaded.",
+            reason: "no-source",
+          };
+        }
+
+        if (sourcePath !== videoSourcePath) {
+          setVideoSourcePath(sourcePath);
+          setVideoPath(await resolveVideoUrl(sourcePath));
+        }
+
+        await syncActiveVideoSource(sourcePath, webcam.sourcePath ?? null);
+
+        const result = await window.electronAPI.generateAutoCaptions({
+          videoPath: sourcePath,
+          whisperExecutablePath: whisperExecutablePath ?? undefined,
+          whisperModelPath,
+          language: requestedLanguage,
+        });
+
+        if (!result.success || !result.cues) {
+          return {
+            ok: false,
+            message:
+              result.message ||
+              getErrorMessage(result.error) ||
+              "Failed to generate captions.",
+            reason: "generate-captions-failed",
+          };
+        }
+
+        setAutoCaptions(result.cues);
+        setAutoCaptionSettings((prev) => ({
+          ...prev,
+          enabled: true,
+          language: requestedLanguage,
+        }));
+
+        return {
+          ok: true,
+          cues: result.cues,
+          message:
+            result.message || `Generated ${result.cues.length} captions.`,
+        };
+      },
       addAnnotation: (region) =>
         setAnnotationRegions((prev) => [...prev, region]),
       setSpeedRegion: (region) => setSpeedRegions((prev) => [...prev, region]),
-      // S3-4: wrap a run as one undo step once history integration lands.
-      beginAiBatch: () => {},
-      endAiBatch: () => {},
+      beginAiBatch: (label) => {
+        if (historyBatchDepthRef.current === 0) {
+          historyBatchStartSnapshotRef.current = cloneSnapshot(buildHistorySnapshot());
+          historyBatchLabelRef.current = label;
+        }
+        historyBatchDepthRef.current += 1;
+      },
+      endAiBatch: () => {
+        if (historyBatchDepthRef.current <= 0) {
+          return;
+        }
+
+        historyBatchDepthRef.current -= 1;
+        if (historyBatchDepthRef.current > 0) {
+          return;
+        }
+
+        const startSnapshot = historyBatchStartSnapshotRef.current;
+        historyBatchStartSnapshotRef.current = null;
+        const label = historyBatchLabelRef.current ?? "AI edit";
+        historyBatchLabelRef.current = undefined;
+
+        if (!startSnapshot) {
+          return;
+        }
+
+        const currentSnapshot = buildHistorySnapshot();
+        if (areDeepEqual(startSnapshot, currentSnapshot)) {
+          return;
+        }
+
+        if (historyIndexRef.current < 0) {
+          historyEntriesRef.current = [
+            createHistoryEntry(cloneSnapshot(currentSnapshot), "Initial state"),
+          ];
+          historyIndexRef.current = 0;
+          syncHistoryButtons();
+          return;
+        }
+
+        const entry = createHistoryEntry(cloneSnapshot(currentSnapshot), label);
+        const next = appendHistoryEntry(
+          historyEntriesRef.current,
+          historyIndexRef.current,
+          entry,
+        );
+        historyEntriesRef.current = next.entries;
+        historyIndexRef.current = next.index;
+        syncHistoryButtons();
+      },
     }),
-    [],
+    [
+      autoCaptionSettings.language,
+      videoPath,
+      videoSourcePath,
+      webcam.sourcePath,
+      whisperExecutablePath,
+      whisperModelPath,
+      syncActiveVideoSource,
+    ],
   );
+
+  const handleRunFirstDraft = useCallback(async () => {
+    if (isFirstDraftRunning) {
+      return;
+    }
+
+    setIsFirstDraftRunning(true);
+    editorActions.beginAiBatch?.("Magic first draft");
+    try {
+      const result = await runFirstDraft(editorActions);
+      if (!result.ok) {
+        toast.error(result.summary);
+        return;
+      }
+      toast.success(result.summary);
+    } catch (error) {
+      toast.error(`Magic draft failed: ${String(error)}`);
+    } finally {
+      editorActions.endAiBatch?.();
+      setIsFirstDraftRunning(false);
+    }
+  }, [editorActions, isFirstDraftRunning]);
 
   useEffect(() => {
     void window.electronAPI?.getPlatform?.()?.then((platform) => {
@@ -2384,6 +2548,10 @@ export default function EditorWindow() {
   }, [createProjectSnapshot, syncRecordingSessionWebcam, t]);
 
   useEffect(() => {
+    if (historyBatchDepthRef.current > 0) {
+      return;
+    }
+
     const snapshot = buildHistorySnapshot();
     const currentEntry =
       historyIndexRef.current >= 0
@@ -6673,6 +6841,19 @@ export default function EditorWindow() {
                     onClick={() => timelineRef.current?.suggestZooms()}
                   >
                     <MagicWand01Icon className="w-3.5 h-3.5" />
+                  </Button>
+                </ShortcutTooltip>
+                <ShortcutTooltip
+                  label="Magic first draft"
+                  side="top"
+                >
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleRunFirstDraft}
+                    disabled={isFirstDraftRunning}
+                  >
+                    <AiMagicIcon className="w-3.5 h-3.5" />
                   </Button>
                 </ShortcutTooltip>
                 <ShortcutTooltip
