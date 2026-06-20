@@ -145,7 +145,6 @@ export function toOpenAiRequest(
     messages,
     ...(tools.length ? { tools } : {}),
     ...(request.maxTokens ? { max_tokens: request.maxTokens } : {}),
-    ...(request.stream ? { stream: true } : {}),
   };
 }
 

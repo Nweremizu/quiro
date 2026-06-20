@@ -48,6 +48,7 @@ function createActions(overrides: Partial<EditorActions> = {}): EditorActions {
     generateCaptions: async () => ({ ok: true, cues: AUTO_CAPTION, message: "mock captions" }),
     addAnnotation: () => {},
     setSpeedRegion: () => {},
+    updateZoomRegion: () => {},
     beginAiBatch: () => {},
     endAiBatch: () => {},
     ...overrides,

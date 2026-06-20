@@ -53,7 +53,17 @@
       "Bash(npx eslint *)",
       "Bash(git stash *)",
       "Bash(git add *)",
-      "Bash(xargs -0 -I{} sh -c 'test -f \"{}\" && find \"{}\" -size +5M -printf \"%s\\\\t%p\\\\n\"')"
+      "Bash(xargs -0 -I{} sh -c 'test -f \"{}\" && find \"{}\" -size +5M -printf \"%s\\\\t%p\\\\n\"')",
+      "Bash(echo \"watch exit: $?\")",
+      "Bash(node -e \"const fs=require\\('fs'\\),yaml=require\\('js-yaml'\\);yaml.load\\(fs.readFileSync\\('.github/workflows/release.yml','utf8'\\)\\);console.log\\('release.yml: YAML OK'\\)\")",
+      "Bash(git rev-parse *)",
+      "Bash(git log *)",
+      "Bash(git tag *)",
+      "PowerShell(node scripts/build-vision-pdf.mjs)",
+      "PowerShell($f = \"docs/Quiro-AI-Native-Vision.pdf\"; \"Size: {0:N0} KB\" -f \\(\\(Get-Item $f\\).Length/1KB\\); python -c \"from pypdf import PdfReader; print\\('Pages:', len\\(PdfReader\\(r'docs/Quiro-AI-Native-Vision.pdf'\\).pages\\)\\)\" 2>&1)",
+      "Bash(gh auth *)",
+      "Bash(git checkout *)",
+      "Bash(git fetch *)"
     ]
   }
 }

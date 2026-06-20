@@ -554,7 +554,40 @@ export function createHudOverlayWindow(): BrowserWindow {
   screen.on("display-removed", handleDisplayRemoved);
   screen.on("display-metrics-changed", handleDisplayMetricsChanged);
 
+  // On Windows, activating any other window reorders the HWND_TOPMOST z-stack
+  // and can push the HUD underneath. Periodically call moveTop() to re-assert
+  // our position at the top of the TOPMOST group.
+  //
+  // moveTop() uses SetWindowPos(HWND_TOP | SWP_SHOWWINDOW | SWP_NOACTIVATE),
+  // which re-asserts z-order WITHOUT ever going through HWND_NOTOPMOST — so
+  // there is no visible flash unlike the setAlwaysOnTop(false→true) toggle.
+  // SWP_SHOWWINDOW can corrupt WS_EX_TRANSPARENT on Win11+ (same side-effect
+  // as showHudWindow/show/focus), so we replicate the showHudWindow passthrough
+  // reset immediately after: setIgnoreMouseEvents(false) → true+forward.
+  let topAssertInterval: ReturnType<typeof setInterval> | null = null;
+  if (process.platform === "win32") {
+    topAssertInterval = setInterval(() => {
+      // Skip while the user is hovering/dragging the HUD to avoid
+      // interfering with active interaction.
+      if (!win.isDestroyed() && win.isVisible() && !hudRendererInteractive) {
+        win.moveTop();
+        if (isHudOverlayMousePassthroughSupported()) {
+          win.setIgnoreMouseEvents(false);
+          setTimeout(() => {
+            if (!win.isDestroyed() && !hudRendererInteractive) {
+              win.setIgnoreMouseEvents(true, { forward: true });
+            }
+          }, 50);
+        }
+      }
+    }, 1000);
+  }
+
   win.on("closed", () => {
+    if (topAssertInterval !== null) {
+      clearInterval(topAssertInterval);
+      topAssertInterval = null;
+    }
     ipcMain.removeListener(
       "hud-overlay-renderer-ready",
       handleHudRendererReady,
