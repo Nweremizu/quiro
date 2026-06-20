@@ -82,6 +82,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     complete: (request: unknown) =>
       ipcRenderer.invoke("ai:complete", request),
     getKeyStatus: () => ipcRenderer.invoke("ai:get-key-status"),
+    onStreamEvent: (callback: (event: unknown) => void) => {
+      const listener = (_event: unknown, payload: unknown) => callback(payload);
+      ipcRenderer.on("ai:stream-event", listener);
+      return () => ipcRenderer.removeListener("ai:stream-event", listener);
+    },
   },
   hudOverlaySetIgnoreMouse: (ignore: boolean) => {
     ipcRenderer.send("hud-overlay-set-ignore-mouse", ignore);

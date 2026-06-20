@@ -33,6 +33,8 @@ export interface AgentRunOptions {
   previousMessages: AiMessage[];
   /** Stable EditorActions ref from window.tsx. */
   actions: EditorActions;
+  /** Optional callback for streaming assistant text. */
+  onAssistantDelta?: (text: string) => void;
 }
 
 export interface AgentRunResult {
@@ -53,12 +55,6 @@ export async function runAgentTurn(
 ): Promise<AgentRunResult> {
   const { userMessage, previousMessages, actions } = opts;
 
-  // Build brain once per run for consistent context.
-  const inputs = actions.getBrainInputs();
-  const brain = buildBrain(inputs);
-  const summary = summarizeBrain(brain);
-  const system = buildAgentSystemPrompt(summary);
-
   let messages: AiMessage[] = [
     ...previousMessages,
     { role: "user", content: userMessage },
@@ -68,14 +64,38 @@ export async function runAgentTurn(
   let assistantText = "";
   const requestBase = `agent-${Date.now()}`;
 
-  for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
-    const result = await window.electronAPI.ai.complete({
+  actions.beginAiBatch?.("AI run");
+  let disposeStreamListener: (() => void) | undefined;
+  if (opts.onAssistantDelta) {
+    disposeStreamListener = window.electronAPI.ai.onStreamEvent((payload: unknown) => {
+      if (
+        typeof payload === "object" &&
+        payload !== null &&
+        (payload as { type?: unknown }).type === "delta" &&
+        typeof (payload as { requestId?: unknown }).requestId === "string"
+      ) {
+        const event = payload as { type: string; requestId: string; text?: string };
+        if (event.requestId.startsWith(requestBase) && typeof event.text === "string") {
+          opts.onAssistantDelta?.(event.text);
+        }
+      }
+    });
+  }
+
+  try {
+    for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
+      const brain = buildBrain(actions.getBrainInputs());
+      const summary = summarizeBrain(brain);
+      const system = buildAgentSystemPrompt(summary);
+
+      const result = await window.electronAPI.ai.complete({
       requestId: `${requestBase}-${i}`,
       model: AI_MODELS.planner,
       system,
       messages,
       tools: AI_TOOLS,
       maxTokens: DEFAULT_MAX_TOKENS,
+      stream: Boolean(opts.onAssistantDelta),
     });
 
     if (result.stopReason === "error") {
@@ -102,7 +122,7 @@ export async function runAgentTurn(
 
       let toolResult: ToolResult;
       try {
-        toolResult = dispatchToolCall(toolBlock, { brain, actions });
+        toolResult = await dispatchToolCall(toolBlock, { brain, actions });
       } catch (err) {
         toolResult = { ok: false, summary: `Tool error: ${String(err)}`, reason: "dispatch-error" };
       }
@@ -121,6 +141,10 @@ export async function runAgentTurn(
   }
 
   return { messages, toolsApplied, assistantText };
+  } finally {
+    disposeStreamListener?.();
+    actions.endAiBatch?.();
+  }
 }
 
 // Narrow helper type used for the error block check above.

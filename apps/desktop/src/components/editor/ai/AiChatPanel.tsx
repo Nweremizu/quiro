@@ -43,6 +43,7 @@ function AiChatPanelImpl({ open, onToggle, actions }: AiChatPanelProps) {
   const [displayMessages, setDisplayMessages] = useState<DisplayMessage[]>([]);
   // Raw AiMessage[] for conversation history passed to the agent.
   const historyRef = useRef<AiMessage[]>([]);
+  const assistantMessageIndexRef = useRef<number | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -66,26 +67,58 @@ function AiChatPanelImpl({ open, onToggle, actions }: AiChatPanelProps) {
     if (!text || isRunning) return;
     setDraft("");
     setIsRunning(true);
+    assistantMessageIndexRef.current = null;
 
-    setDisplayMessages((prev) => [...prev, { kind: "user", text }]);
+    setDisplayMessages((prev) => [...prev, { kind: "user", text }] );
+
+    const appendAssistantDelta = (delta: string) => {
+      setDisplayMessages((prev) => {
+        if (assistantMessageIndexRef.current === null) {
+          assistantMessageIndexRef.current = prev.length;
+          return [...prev, { kind: "assistant", text: delta }];
+        }
+
+        const index = assistantMessageIndexRef.current;
+        if (index < 0 || index >= prev.length) {
+          return prev;
+        }
+
+        const next = [...prev];
+        const current = next[index];
+        if (current.kind !== "assistant") {
+          return prev;
+        }
+        next[index] = { kind: "assistant", text: `${current.text}${delta}` };
+        return next;
+      });
+    };
 
     try {
       const result = await runAgentTurn({
         userMessage: text,
         previousMessages: historyRef.current,
         actions,
+        onAssistantDelta: appendAssistantDelta,
       });
 
       historyRef.current = result.messages;
 
       if (result.error) {
-        setDisplayMessages((prev) => [...prev, { kind: "error", text: result.error! }]);
+        setDisplayMessages((prev) => [
+          ...prev,
+          { kind: "error", text: result.error! },
+        ]);
       } else {
         if (result.assistantText) {
-          setDisplayMessages((prev) => [
-            ...prev,
-            { kind: "assistant", text: result.assistantText },
-          ]);
+          setDisplayMessages((prev) => {
+            const index = assistantMessageIndexRef.current;
+            if (index !== null && index >= 0 && index < prev.length) {
+              const next = [...prev];
+              next[index] = { kind: "assistant", text: result.assistantText };
+              return next;
+            }
+            return [...prev, { kind: "assistant", text: result.assistantText }];
+          });
         }
         if (result.toolsApplied.length > 0) {
           setDisplayMessages((prev) => [
@@ -100,6 +133,7 @@ function AiChatPanelImpl({ open, onToggle, actions }: AiChatPanelProps) {
         { kind: "error", text: `Something went wrong: ${String(err)}` },
       ]);
     } finally {
+      assistantMessageIndexRef.current = null;
       setIsRunning(false);
     }
   }, [draft, isRunning, actions]);
