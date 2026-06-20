@@ -54,6 +54,7 @@ import type {
   EditorEffectSection,
   FigureData,
   Padding,
+  PlaybackSpeed,
   WebcamOverlaySettings,
   WebcamPositionPreset,
   ZoomDepth,
@@ -87,6 +88,7 @@ import {
 import { ExtensionSettingsSection } from "@/components/editor/settings-panel/ExtensionSettingsSection";
 import { SettingsSection as PanelSettingsSection } from "@/components/editor/settings-panel/SettingsSection";
 import { ClipSection as PanelClipSection } from "@/components/editor/settings-panel/ClipSection";
+import { SpeedSection as PanelSpeedSection } from "@/components/editor/settings-panel/SpeedSection";
 import { BackgroundSection as PanelBackgroundSection } from "@/components/editor/settings-panel/background/BackgroundSection";
 import { FrameSection as PanelFrameSection } from "@/components/editor/settings-panel/sections/FrameSection";
 import { CropSection as PanelCropSection } from "@/components/editor/settings-panel/sections/CropSection";
@@ -119,6 +121,10 @@ interface SettingsPanelProps {
   onClipSpeedChange?: (speed: number) => void;
   onClipMutedChange?: (muted: boolean) => void;
   onClipDelete?: (id: string) => void;
+  selectedSpeedId?: string | null;
+  selectedSpeedValue?: PlaybackSpeed | null;
+  onSpeedValueChange?: (speed: PlaybackSpeed) => void;
+  onSpeedDelete?: (id: string) => void;
   selectedAudioId?: string | null;
   selectedAudioVolume?: number | null;
   onAudioVolumeChange?: (volume: number) => void;
@@ -452,6 +458,10 @@ function SettingsPanelImpl({
   onClipSpeedChange,
   onClipMutedChange,
   onClipDelete,
+  selectedSpeedId,
+  selectedSpeedValue,
+  onSpeedValueChange,
+  onSpeedDelete,
   selectedAudioId,
   selectedAudioVolume,
   onAudioVolumeChange,
@@ -1412,6 +1422,18 @@ function SettingsPanelImpl({
           onZoomDelete={onZoomDelete}
           ZOOM_DEPTH_OPTIONS={ZOOM_DEPTH_OPTIONS}
           renderExtensionPanelsForSections={renderExtensionPanelsForSections}
+        />
+      );
+    }
+
+    if (activeEffectSection === "speed") {
+      return (
+        <PanelSpeedSection
+          tSettings={tSettings}
+          selectedSpeedId={selectedSpeedId}
+          selectedSpeedValue={selectedSpeedValue}
+          onSpeedValueChange={onSpeedValueChange}
+          onSpeedDelete={onSpeedDelete}
         />
       );
     }

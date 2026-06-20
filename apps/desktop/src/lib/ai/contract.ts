@@ -138,8 +138,10 @@ export interface EditorActions {
 
   /** Apply zoom windows produced by buildInteractionZoomSuggestions(). */
   applyZoomSuggestions(suggestions: SuggestedZoomRegion[], depth?: ZoomDepth): void;
-  /** Add one explicit zoom (the `add_zoom` tool). */
+  /** Add one explicit zoom; merges into any overlapping existing zoom. */
   addZoomRegion(region: ZoomRegion): void;
+  /** Edit depth/focus of an existing zoom by id. */
+  updateZoomRegion(id: string, updates: Partial<Pick<ZoomRegion, "depth" | "focus">>): void;
 
   /** Set the kept segments; trims are derived via clipsToTrims(). */
   setKeptClips(clips: ClipRegion[]): void;
@@ -165,6 +167,7 @@ export type AiToolName =
   | "remove_silences_and_fillers"
   | "generate_captions"
   | "add_zoom"
+  | "edit_zoom"
   | "set_speed"
   | "add_annotation"
   | "query_recording";
@@ -191,6 +194,14 @@ export interface AddZoomInput {
   focus: ZoomFocus;
   depth: ZoomDepth;
 }
+export interface EditZoomInput {
+  /** Any source-ms timestamp that falls inside the zoom to edit. */
+  atMs: number;
+  /** New zoom depth (1=subtle … 6=extreme). Omit to keep existing. */
+  depth?: ZoomDepth;
+  /** New focus point, normalized 0..1. Omit to keep existing. */
+  focus?: ZoomFocus;
+}
 export interface SetSpeedInput {
   startMs: number;
   endMs: number;
@@ -215,6 +226,7 @@ export interface AiToolInputMap {
   remove_silences_and_fillers: RemoveSilencesAndFillersInput;
   generate_captions: GenerateCaptionsInput;
   add_zoom: AddZoomInput;
+  edit_zoom: EditZoomInput;
   set_speed: SetSpeedInput;
   add_annotation: AddAnnotationInput;
   query_recording: QueryRecordingInput;
@@ -322,6 +334,29 @@ export const AI_TOOLS: AiToolDefinition[] = [
         depth: { type: "integer", minimum: 1, maximum: 6 },
       },
       required: ["startMs", "endMs", "focus", "depth"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "edit_zoom",
+    description:
+      "Change the depth or focus point of an existing zoom. Use when the user says " +
+      "a zoom is too strong or too weak ('make that zoom more subtle', 'zoom in deeper " +
+      "at 0:08') or wants to shift what it focuses on. `atMs` is any timestamp that " +
+      "falls inside the zoom to edit.",
+    input_schema: {
+      type: "object",
+      properties: {
+        atMs: { type: "number", description: "Source-ms timestamp inside the zoom to edit." },
+        depth: { type: "integer", minimum: 1, maximum: 6, description: "New zoom depth (1=subtle, 6=extreme). Omit to keep current." },
+        focus: {
+          type: "object",
+          properties: { cx: { type: "number" }, cy: { type: "number" } },
+          required: ["cx", "cy"],
+          description: "New normalized focus point (0..1 x/y). Omit to keep current.",
+        },
+      },
+      required: ["atMs"],
       additionalProperties: false,
     },
   },
