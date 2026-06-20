@@ -206,7 +206,7 @@ import ProjectBrowserDialog from "@/components/editor/dialog/ProjectBrowserDialo
 import { Spinner } from "@/components/ui/spinner";
 import { SettingsPanel } from "@/components/editor/SettingsPanel";
 import { AiChatPanel } from "@/components/editor/ai/AiChatPanel";
-import type { EditorActions, EditorStateForAI } from "@/lib/ai/contract";
+import type { BrainInputs, EditorActions, EditorStateForAI } from "@/lib/ai/contract";
 import { ProjectNameEditor } from "@/components/editor/ProjectNameEditor";
 import { AddLayerDropdown } from "@/components/editor/editor-window/AddLayerDropdown";
 import { AspectRatioDropdown } from "@/components/editor/editor-window/AspectRatioDropdown";
@@ -660,9 +660,18 @@ export default function EditorWindow() {
     hasTranscript: autoCaptions.length > 0,
   };
 
+  // brainInputsRef is refreshed later (after normalizedCursorTelemetry is computed).
+  const brainInputsRef = useRef<BrainInputs>({
+    sourcePath: "",
+    durationMs: 0,
+    transcript: [],
+    cursorTelemetry: [],
+  });
+
   const editorActions = useMemo<EditorActions>(
     () => ({
       snapshot: () => aiEditorStateRef.current,
+      getBrainInputs: () => brainInputsRef.current,
       applyZoomSuggestions: (suggestions, depth) =>
         setZoomRegions((prev) => [
           ...prev,
@@ -3325,6 +3334,14 @@ export default function EditorWindow() {
       totalMs > 0 ? totalMs : undefined,
     );
   }, [cursorTelemetry, duration]);
+
+  // Refresh brainInputsRef so getBrainInputs() always returns the latest values.
+  brainInputsRef.current = {
+    sourcePath: videoSourcePath ?? "",
+    durationMs: Math.max(0, Math.round(duration * 1000)),
+    transcript: autoCaptions,
+    cursorTelemetry: normalizedCursorTelemetry,
+  };
 
   const displayedTimelineWindow = useMemo(() => {
     const totalMs = Math.max(0, Math.round(duration * 1000));
