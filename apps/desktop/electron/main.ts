@@ -923,7 +923,6 @@ app.whenReady().then(async () => {
     },
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   session.defaultSession.setDevicePermissionHandler((_details) => true);
 
   syncDockIcon();

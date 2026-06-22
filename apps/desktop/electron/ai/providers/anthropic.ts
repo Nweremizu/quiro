@@ -14,16 +14,13 @@ import {
   type AiContentBlockWire,
   type ModelProvider,
 } from "../types";
+import { getCachedAiPreferences, resolveKey } from "../aiSettings";
 
 const DEFAULT_MAX_TOKENS = 2048;
 
-let _client: Anthropic | null = null;
-
 function getClient(): Anthropic {
-  if (!_client) {
-    _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  }
-  return _client;
+  const apiKey = resolveKey("ANTHROPIC_API_KEY", getCachedAiPreferences().anthropicKey);
+  return new Anthropic({ apiKey });
 }
 
 /* ── Wire → SDK ──────────────────────────────────────────────────────────── */
@@ -126,7 +123,8 @@ export class AnthropicProvider implements ModelProvider {
   readonly id = "anthropic" as const;
 
   hasKey(): boolean {
-    return envHasValue("ANTHROPIC_API_KEY");
+    const stored = getCachedAiPreferences().anthropicKey.trim();
+    return stored.length > 0 || envHasValue("ANTHROPIC_API_KEY");
   }
 
   async complete(request: AiCompleteRequestWire): Promise<AiCompleteResultWire> {

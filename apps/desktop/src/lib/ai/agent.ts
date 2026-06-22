@@ -18,6 +18,7 @@ import {
   MAX_TOOL_ITERATIONS,
   type AiContentBlock,
   type AiMessage,
+  type AiToolName,
   type AiToolResultBlock,
   type AiToolUseBlock,
   type EditorActions,
@@ -26,6 +27,27 @@ import {
 
 /* ── Public API ──────────────────────────────────────────────────────────── */
 
+/**
+ * Part-level stream events, emitted in the order they happen so the UI can
+ * build AI SDK-style `UIMessage` parts live (streaming text, then each tool
+ * call appearing as it's dispatched). This is what drives the AI Elements
+ * Conversation/Message/Tool/ChainOfThought rendering.
+ */
+export type AgentStreamEvent =
+  | { type: "text-delta"; text: string }
+  | {
+      type: "tool-input";
+      toolCallId: string;
+      toolName: AiToolName;
+      input: unknown;
+    }
+  | {
+      type: "tool-output";
+      toolCallId: string;
+      toolName: AiToolName;
+      output: ToolResult;
+    };
+
 export interface AgentRunOptions {
   /** The user's latest message text. */
   userMessage: string;
@@ -33,8 +55,10 @@ export interface AgentRunOptions {
   previousMessages: AiMessage[];
   /** Stable EditorActions ref from window.tsx. */
   actions: EditorActions;
-  /** Optional callback for streaming assistant text. */
+  /** Optional callback for streaming assistant text (legacy/plain-text path). */
   onAssistantDelta?: (text: string) => void;
+  /** Optional part-level event stream (preferred — drives UIMessage parts). */
+  onEvent?: (event: AgentStreamEvent) => void;
 }
 
 export interface AgentRunResult {
@@ -66,7 +90,7 @@ export async function runAgentTurn(
 
   actions.beginAiBatch?.("AI run");
   let disposeStreamListener: (() => void) | undefined;
-  if (opts.onAssistantDelta) {
+  if (opts.onAssistantDelta || opts.onEvent) {
     disposeStreamListener = window.electronAPI.ai.onStreamEvent((payload: unknown) => {
       if (
         typeof payload === "object" &&
@@ -77,6 +101,7 @@ export async function runAgentTurn(
         const event = payload as { type: string; requestId: string; text?: string };
         if (event.requestId.startsWith(requestBase) && typeof event.text === "string") {
           opts.onAssistantDelta?.(event.text);
+          opts.onEvent?.({ type: "text-delta", text: event.text });
         }
       }
     });
@@ -88,14 +113,17 @@ export async function runAgentTurn(
       const summary = summarizeBrain(brain);
       const system = buildAgentSystemPrompt(summary);
 
+      const aiPrefs = await window.electronAPI.ai.getAiPreferences().catch(() => null);
+      const model = aiPrefs?.selectedModel ?? AI_MODELS.minimaxPlanner;
+
       const result = await window.electronAPI.ai.complete({
       requestId: `${requestBase}-${i}`,
-      model: AI_MODELS.minimaxPlanner,
+      model,
       system,
       messages,
       tools: AI_TOOLS,
       maxTokens: DEFAULT_MAX_TOKENS,
-      stream: Boolean(opts.onAssistantDelta),
+      stream: Boolean(opts.onAssistantDelta || opts.onEvent),
     });
 
     if (result.stopReason === "error") {
@@ -120,12 +148,28 @@ export async function runAgentTurn(
       if (block.type !== "tool_use") continue;
       const toolBlock = block as AiToolUseBlock;
 
+      // Announce the call before running it, so the UI can show the tool part
+      // in its "input-available" state while the edit is applied.
+      opts.onEvent?.({
+        type: "tool-input",
+        toolCallId: toolBlock.id,
+        toolName: toolBlock.name,
+        input: toolBlock.input,
+      });
+
       let toolResult: ToolResult;
       try {
         toolResult = await dispatchToolCall(toolBlock, { brain, actions });
       } catch (err) {
         toolResult = { ok: false, summary: `Tool error: ${String(err)}`, reason: "dispatch-error" };
       }
+
+      opts.onEvent?.({
+        type: "tool-output",
+        toolCallId: toolBlock.id,
+        toolName: toolBlock.name,
+        output: toolResult,
+      });
 
       toolsApplied.push({ name: toolBlock.name, result: toolResult });
       toolResultBlocks.push({

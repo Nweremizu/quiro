@@ -1771,11 +1771,12 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
         );
       }
 
+      const trackSettings = videoTrack.getSettings();
+      const frameRate = trackSettings.frameRate ?? TARGET_FRAME_RATE;
       let {
         width = DEFAULT_WIDTH,
         height = DEFAULT_HEIGHT,
-        frameRate = TARGET_FRAME_RATE,
-      } = videoTrack.getSettings();
+      } = trackSettings;
 
       width = Math.floor(width / CODEC_ALIGNMENT) * CODEC_ALIGNMENT;
       height = Math.floor(height / CODEC_ALIGNMENT) * CODEC_ALIGNMENT;

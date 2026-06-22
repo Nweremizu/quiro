@@ -8,21 +8,21 @@
       "binarySha256": "3dd46ff8e7dd3b4284ca8b42b079b7994a830c8480dbd02613e4dc18665a6706",
       "sourceDir": "electron/native/wgc-capture",
       "sourceFingerprint": "8b4d96fe61aa2f1be8e28877315f7657bbcdc60498508cfd1ff6d3ae3c1e60c1",
-      "updatedAt": "2026-06-20T07:22:27.759Z"
+      "updatedAt": "2026-06-22T12:00:43.241Z"
     },
     "quiro-gpu-export": {
       "binaryName": "quiro-gpu-export.exe",
       "binarySha256": "0446cc0b6585defc80813708efb15d53c1499e5eac727bbf5c245e3d36ad7697",
       "sourceDir": "electron/native/gpu-export-probe",
       "sourceFingerprint": "f6eb5a38ef798e7b012385d2437d69009ecb4338030021b4468e9415591961fd",
-      "updatedAt": "2026-06-20T07:22:30.993Z"
+      "updatedAt": "2026-06-22T12:00:46.659Z"
     },
     "cursor-monitor": {
       "binaryName": "cursor-monitor.exe",
       "binarySha256": "cb6ba7767e98daee57c7bfd514a5da4f12dc15e284a09520fd336ea88662794c",
       "sourceDir": "electron/native/cursor-monitor",
       "sourceFingerprint": "81e6429ec7fbd17855cb8625d1f2f35479cd3811db7a2e0ecc22d38af3b20b1e",
-      "updatedAt": "2026-06-20T07:22:34.692Z"
+      "updatedAt": "2026-06-22T12:00:50.551Z"
     }
   }
 }

@@ -5,6 +5,10 @@ import {
   downloadWhisperSmallModel,
   deleteWhisperSmallModel,
   sendWhisperModelDownloadProgress,
+  getWhisperTinyModelStatus,
+  downloadWhisperTinyModel,
+  deleteWhisperTinyModel,
+  sendWhisperTinyModelDownloadProgress,
 } from "../captions/whisper";
 import { generateAutoCaptionsFromVideo } from "../captions/generate";
 import { approveUserPath, getRecordingsDir } from "@electron/utils";
@@ -190,6 +194,48 @@ export function registerCaptionHandlers() {
         path: null,
         error: String(error),
       });
+      return { success: false, error: String(error) };
+    }
+  });
+
+  ipcMain.handle("get-whisper-tiny-model-status", async () => {
+    try {
+      return await getWhisperTinyModelStatus();
+    } catch (error) {
+      return { success: false, exists: false, path: null, error: String(error) };
+    }
+  });
+
+  ipcMain.handle("download-whisper-tiny-model", async (event) => {
+    try {
+      const existing = await getWhisperTinyModelStatus();
+      if (existing.exists) {
+        sendWhisperTinyModelDownloadProgress(event.sender, {
+          status: "downloaded",
+          progress: 100,
+          path: existing.path,
+        });
+        return { success: true, path: existing.path, alreadyDownloaded: true };
+      }
+      const modelPath = await downloadWhisperTinyModel(event.sender);
+      return { success: true, path: modelPath };
+    } catch (error) {
+      console.error("Failed to download Whisper tiny model:", error);
+      return { success: false, error: String(error) };
+    }
+  });
+
+  ipcMain.handle("delete-whisper-tiny-model", async (event) => {
+    try {
+      await deleteWhisperTinyModel();
+      sendWhisperTinyModelDownloadProgress(event.sender, {
+        status: "idle",
+        progress: 0,
+        path: null,
+      });
+      return { success: true };
+    } catch (error) {
+      console.error("Failed to delete Whisper tiny model:", error);
       return { success: false, error: String(error) };
     }
   });
