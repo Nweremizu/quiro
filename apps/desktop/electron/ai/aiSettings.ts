@@ -6,7 +6,14 @@
  * that users who set keys via the UI don't need to maintain a .env file.
  */
 import fs from "node:fs/promises";
-import { AI_SETTINGS_FILE } from "@electron/utils/constants";
+import path from "node:path";
+import { app } from "electron";
+
+// Resolved lazily so importing this module never calls app.getPath() at
+// module evaluation time (which crashes in the Vitest environment).
+function getSettingsFilePath(): string {
+  return path.join(app.getPath("userData"), "ai-settings.json");
+}
 
 export interface AiPreferences {
   anthropicKey: string;
@@ -25,7 +32,7 @@ let _cache: AiPreferences | null = null;
 export async function loadAiPreferences(): Promise<AiPreferences> {
   if (_cache) return _cache;
   try {
-    const raw = await fs.readFile(AI_SETTINGS_FILE, "utf-8");
+    const raw = await fs.readFile(getSettingsFilePath(), "utf-8");
     const parsed = JSON.parse(raw) as Partial<AiPreferences>;
     _cache = {
       anthropicKey:
@@ -48,7 +55,7 @@ export async function saveAiPreferences(
 ): Promise<void> {
   const current = await loadAiPreferences();
   _cache = { ...current, ...patch };
-  await fs.writeFile(AI_SETTINGS_FILE, JSON.stringify(_cache, null, 2), "utf-8");
+  await fs.writeFile(getSettingsFilePath(), JSON.stringify(_cache, null, 2), "utf-8");
 }
 
 /** Synchronous read of the in-memory cache (populated after first loadAiPreferences call). */
