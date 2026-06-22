@@ -9,6 +9,7 @@ import { registerRecordingStreamHandlers } from "./register/recording-stream";
 import { registerSettingsHandlers } from "./register/settings";
 import { registerSourceHandlers } from "./register/sources";
 import { registerAiHandlers } from "./register/ai";
+import { loadAiPreferences } from "../ai/aiSettings";
 import { registerPerfHandlers } from "../ipc/perf";
 import {
   selectedSource,
@@ -76,4 +77,6 @@ export function registerIpcHandlers(
   registerSettingsHandlers();
   registerPerfHandlers();
   registerAiHandlers();
+  // Warm the AI preferences cache so providers can read stored keys synchronously.
+  loadAiPreferences().catch(() => {});
 }

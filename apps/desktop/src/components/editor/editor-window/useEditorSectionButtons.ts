@@ -7,6 +7,7 @@ import {
   PuzzleIcon,
   Settings01Icon,
   SparklesIcon,
+  AiBrain01Icon,
 } from "@/components/icons";
 import { extensionHost } from "@/lib/extensions";
 import type { EditorEffectSection } from "@/types/editor";
@@ -64,6 +65,11 @@ export function useEditorSectionButtons(t: Translate): EditorSectionButton[] {
         id: "captions" as const,
         label: t("settings.sections.captions", "Captions"),
         icon: ClosedCaptionIcon,
+      },
+      {
+        id: "ai" as const,
+        label: t("settings.sections.ai", "AI"),
+        icon: AiBrain01Icon,
       },
       {
         id: "settings" as const,
