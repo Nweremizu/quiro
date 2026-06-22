@@ -672,6 +672,7 @@ export class ExtensionHost {
     permissions: string[],
     disposables: (() => void)[],
   ): QuiroExtensionAPI {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     const host = this;
     const perms = new Set(permissions);
 

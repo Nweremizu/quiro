@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 
 import type { Range, Span } from "dnd-timeline";
 import { useTimelineContext } from "dnd-timeline";

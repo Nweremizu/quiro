@@ -4,6 +4,7 @@ import {
   runAiComplete,
   type AiCompleteRequestWire,
 } from "../../ai/client";
+import { loadAiPreferences, saveAiPreferences, type AiPreferences } from "../../ai/aiSettings";
 
 /**
  * AI (Quiro Director) IPC — Sprint 0, task S0-2.
@@ -71,4 +72,28 @@ export function registerAiHandlers() {
   ipcMain.handle(AI_GET_KEY_STATUS, async () => {
     return getKeyStatus();
   });
+
+  ipcMain.handle("ai:get-preferences", async () => {
+    const prefs = await loadAiPreferences();
+    const keyStatus = getKeyStatus();
+    return {
+      selectedModel: prefs.selectedModel,
+      anthropicKeySet: prefs.anthropicKey.trim().length > 0,
+      minimaxKeySet: prefs.minimaxKey.trim().length > 0,
+      providers: keyStatus.providers,
+    };
+  });
+
+  ipcMain.handle(
+    "ai:set-preferences",
+    async (_, patch: Partial<AiPreferences>) => {
+      try {
+        await saveAiPreferences(patch);
+        return { success: true };
+      } catch (error) {
+        console.error("ai:set-preferences failed:", error);
+        return { success: false, error: String(error) };
+      }
+    },
+  );
 }

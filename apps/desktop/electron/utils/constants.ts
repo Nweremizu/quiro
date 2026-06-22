@@ -19,6 +19,10 @@ export const COUNTDOWN_SETTINGS_FILE = path.join(
   USER_DATA_PATH,
   "countdown-settings.json",
 );
+export const AI_SETTINGS_FILE = path.join(
+  USER_DATA_PATH,
+  "ai-settings.json",
+);
 export const AUTO_RECORDING_PREFIX = "recording-";
 export const AUTO_RECORDING_RETENTION_COUNT = 20;
 export const AUTO_RECORDING_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
@@ -28,10 +32,16 @@ export const ALLOW_QUIRO_WINDOW_CAPTURE = Boolean(
 export const RECORDING_SESSION_MANIFEST_SUFFIX = ".quiro-session.json";
 export const WHISPER_MODEL_DOWNLOAD_URL =
   "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin";
+export const WHISPER_TINY_MODEL_DOWNLOAD_URL =
+  "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin";
 export const WHISPER_MODEL_DIR = path.join(USER_DATA_PATH, "whisper");
 export const WHISPER_SMALL_MODEL_PATH = path.join(
   WHISPER_MODEL_DIR,
   "ggml-small.bin",
+);
+export const WHISPER_TINY_MODEL_PATH = path.join(
+  WHISPER_MODEL_DIR,
+  "ggml-tiny.bin",
 );
 export const COMPANION_AUDIO_LAYOUTS = [
   {

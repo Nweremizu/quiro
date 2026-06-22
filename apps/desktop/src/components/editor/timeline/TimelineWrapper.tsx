@@ -33,7 +33,6 @@ export default function TimelineWrapper({
   onRangeChange,
   minItemDurationMs,
   minVisibleRangeMs,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   gridSizeMs: _gridSizeMs,
   onItemSpanChange,
   resolveTargetRowId,

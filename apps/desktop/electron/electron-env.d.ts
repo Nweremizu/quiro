@@ -210,6 +210,17 @@ interface Window {
 				hasKey: boolean;
 				providers: { anthropic: boolean; minimax: boolean };
 			}>;
+			getAiPreferences: () => Promise<{
+				selectedModel: string;
+				anthropicKeySet: boolean;
+				minimaxKeySet: boolean;
+				providers: { anthropic: boolean; minimax: boolean };
+			}>;
+			setAiPreferences: (patch: {
+				anthropicKey?: string;
+				minimaxKey?: string;
+				selectedModel?: string;
+			}) => Promise<{ success: boolean; error?: string }>;
 			onStreamEvent: (callback: (event: {
 				type: "delta" | "done" | "error";
 				requestId: string;
@@ -671,6 +682,27 @@ interface Window {
 		}>;
 		deleteWhisperSmallModel: () => Promise<{ success: boolean; error?: string }>;
 		onWhisperSmallModelDownloadProgress: (
+			callback: (state: {
+				status: "idle" | "downloading" | "downloaded" | "error";
+				progress: number;
+				path?: string | null;
+				error?: string;
+			}) => void,
+		) => () => void;
+		getWhisperTinyModelStatus: () => Promise<{
+			success: boolean;
+			exists: boolean;
+			path?: string | null;
+			error?: string;
+		}>;
+		downloadWhisperTinyModel: () => Promise<{
+			success: boolean;
+			path?: string;
+			alreadyDownloaded?: boolean;
+			error?: string;
+		}>;
+		deleteWhisperTinyModel: () => Promise<{ success: boolean; error?: string }>;
+		onWhisperTinyModelDownloadProgress: (
 			callback: (state: {
 				status: "idle" | "downloading" | "downloaded" | "error";
 				progress: number;

@@ -82,6 +82,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     complete: (request: unknown) =>
       ipcRenderer.invoke("ai:complete", request),
     getKeyStatus: () => ipcRenderer.invoke("ai:get-key-status"),
+    getAiPreferences: () => ipcRenderer.invoke("ai:get-preferences"),
+    setAiPreferences: (patch: {
+      anthropicKey?: string;
+      minimaxKey?: string;
+      selectedModel?: string;
+    }) => ipcRenderer.invoke("ai:set-preferences", patch),
     onStreamEvent: (callback: (event: unknown) => void) => {
       const listener = (_event: unknown, payload: unknown) => callback(payload);
       ipcRenderer.on("ai:stream-event", listener);
@@ -521,6 +527,39 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () =>
       ipcRenderer.removeListener(
         "whisper-small-model-download-progress",
+        listener,
+      );
+  },
+  getWhisperTinyModelStatus: () => {
+    return ipcRenderer.invoke("get-whisper-tiny-model-status");
+  },
+  downloadWhisperTinyModel: () => {
+    return ipcRenderer.invoke("download-whisper-tiny-model");
+  },
+  deleteWhisperTinyModel: () => {
+    return ipcRenderer.invoke("delete-whisper-tiny-model");
+  },
+  onWhisperTinyModelDownloadProgress: (
+    callback: (state: {
+      status: "idle" | "downloading" | "downloaded" | "error";
+      progress: number;
+      path?: string | null;
+      error?: string;
+    }) => void,
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      payload: {
+        status: "idle" | "downloading" | "downloaded" | "error";
+        progress: number;
+        path?: string | null;
+        error?: string;
+      },
+    ) => callback(payload);
+    ipcRenderer.on("whisper-tiny-model-download-progress", listener);
+    return () =>
+      ipcRenderer.removeListener(
+        "whisper-tiny-model-download-progress",
         listener,
       );
   },
