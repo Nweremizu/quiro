@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import { ArrowRight, Clock, Menu, X } from "lucide-react";
 import { GITHUB_OWNER, GITHUB_REPO } from "@quiro/shared";
 import { ExpandableMediaCard } from "./ExpandableMediaCard";
@@ -179,10 +180,18 @@ function Navbar({
         <nav className="flex items-center justify-between rounded-full bg-white p-[5px]">
           <div className="flex items-center">
             <a
-              href="#"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-900 text-[10px] font-bold tracking-tight text-white sm:h-10 sm:w-10 sm:text-[11px]"
+              href="/"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-white overflow-hidden shadow-sm ring-1 ring-black/5 transition-opacity hover:opacity-80 sm:h-10 sm:w-10"
+              aria-label="Quiro home"
             >
-              QU
+              <Image
+                src="/app-icons/quiro-128.png"
+                alt="Quiro"
+                width={40}
+                height={40}
+                className="h-full w-full object-cover"
+                priority
+              />
             </a>
             <div className="ml-5 hidden items-center gap-6 md:flex">
               {NAV_LINKS.map((link) => (
