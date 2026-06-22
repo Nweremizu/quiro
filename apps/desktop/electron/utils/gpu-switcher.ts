@@ -56,7 +56,15 @@ export function getGpuSwitches(
   }
 
   if (platform === 'win32') {
-    return { useAngle: 'd3d11' };
+    // CalculateNativeWinOcclusion: Chromium's native occlusion detection marks a
+    // window "occluded" whenever it isn't the foreground window and stops painting
+    // it. For the transparent, always-on-top HUD overlay this makes the bar vanish
+    // the moment it loses focus (it reappears only when clicked). Disabling the
+    // feature keeps the HUD painted at all times. See electron/electron#25368.
+    return {
+      useAngle: 'd3d11',
+      disableFeatures: ['CalculateNativeWinOcclusion'],
+    };
   }
 
   if (platform === 'linux') {

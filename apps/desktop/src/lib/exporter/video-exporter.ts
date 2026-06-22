@@ -203,7 +203,7 @@ export class VideoExporter {
       const nativeAudioPlan = shouldUseExperimentalNativeExport
         ? audioPlan
         : null;
-      let useNativeEncoder = shouldUseExperimentalNativeExport
+      const useNativeEncoder = shouldUseExperimentalNativeExport
         ? await this.tryStartNativeVideoExport()
         : false;
       const shouldUsePitchPreservingFfmpegAudio =

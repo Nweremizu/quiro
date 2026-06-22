@@ -1,6 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   ArrowDown01Icon,
   ArrowUp01Icon,
@@ -531,6 +530,8 @@ export default function EditorWindow() {
   >(initialEditorPreferences.whisperModelPath ? "downloaded" : "idle");
   const [whisperModelDownloadProgress, setWhisperModelDownloadProgress] =
     useState(0);
+  const [whisperTinyModelDownloadStatus, setWhisperTinyModelDownloadStatus] =
+    useState<"idle" | "downloading" | "downloaded" | "error">("idle");
   const [isGeneratingCaptions, setIsGeneratingCaptions] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(
@@ -667,7 +668,7 @@ export default function EditorWindow() {
   // the latest state via a ref (kept fresh below) so the object identity stays
   // stable for React.memo. Mutators are thin wrappers over existing setters;
   // the dispatcher (S1-4) and undo batching (S3-4) build on these.
-  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [aiPanelOpen, setAiPanelOpen] = useState(true);
   const [isFirstDraftRunning, setIsFirstDraftRunning] = useState(false);
   const handleToggleAiPanel = useCallback(() => {
     setAiPanelOpen((value) => !value);
@@ -899,7 +900,6 @@ export default function EditorWindow() {
         syncHistoryButtons();
       },
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
@@ -3065,6 +3065,47 @@ export default function EditorWindow() {
     setWhisperModelDownloadProgress(0);
     toast.success("Whisper small model deleted");
   }, [downloadedWhisperModelPath]);
+
+  // Tiny model — check on mount, subscribe to progress, auto-select as default.
+  useEffect(() => {
+    const unsubscribe = window.electronAPI.onWhisperTinyModelDownloadProgress(
+      (state: { status: "idle" | "downloading" | "downloaded" | "error"; progress: number; path?: string | null; error?: string }) => {
+        setWhisperTinyModelDownloadStatus(state.status);
+        if (state.status === "downloaded" && state.path) {
+          setWhisperModelPath((current) => current ?? state.path ?? null);
+        }
+        if (state.status === "error" && state.error) {
+          toast.error(`Speech model download failed: ${state.error}`);
+        }
+      },
+    );
+
+    void (async () => {
+      const result = await window.electronAPI.getWhisperTinyModelStatus();
+      if (result.exists && result.path) {
+        setWhisperTinyModelDownloadStatus("downloaded");
+        setWhisperModelPath((current) => current ?? result.path ?? null);
+      } else {
+        setWhisperTinyModelDownloadStatus("idle");
+      }
+    })();
+
+    return () => unsubscribe?.();
+  }, []);
+
+  const handleDownloadWhisperTinyModel = useCallback(async () => {
+    if (whisperTinyModelDownloadStatus === "downloading") return;
+    setWhisperTinyModelDownloadStatus("downloading");
+    const result = await window.electronAPI.downloadWhisperTinyModel();
+    if (!result.success) {
+      setWhisperTinyModelDownloadStatus("error");
+      toast.error(result.error || "Failed to download speech model");
+      return;
+    }
+    if (result.path) {
+      setWhisperModelPath((current) => current ?? result.path ?? null);
+    }
+  }, [whisperTinyModelDownloadStatus]);
 
   const handleGenerateAutoCaptions = useCallback(async () => {
     if (isGeneratingCaptions) {
@@ -7175,6 +7216,18 @@ export default function EditorWindow() {
               </div>
             </div>
           </div>
+
+          {/* Right-hand AI panel — flex sibling mirroring the left SettingsPanel
+              so the timeline below stays full-width and is never overlapped. */}
+          <AiChatPanel
+            open={aiPanelOpen}
+            onToggle={handleToggleAiPanel}
+            actions={editorActions}
+            videoPath={videoPath}
+            durationMs={duration}
+            whisperTinyModelDownloadStatus={whisperTinyModelDownloadStatus}
+            onDownloadWhisperModel={handleDownloadWhisperTinyModel}
+          />
         </div>
         <motion.div
           initial={false}
@@ -7258,12 +7311,6 @@ export default function EditorWindow() {
 
       {projectBrowser}
       {nativeCaptureUnavailableDialog}
-
-      <AiChatPanel
-        open={aiPanelOpen}
-        onToggle={handleToggleAiPanel}
-        actions={editorActions}
-      />
 
       <Toaster  className="pointer-events-auto" />
     </div>

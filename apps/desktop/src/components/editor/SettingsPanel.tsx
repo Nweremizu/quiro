@@ -97,6 +97,7 @@ import { ZoomSection as PanelZoomSection } from "@/components/editor/settings-pa
 import { CursorSection as PanelCursorSection } from "@/components/editor/settings-panel/sections/CursorSection";
 import { WebcamSection as PanelWebcamSection } from "@/components/editor/settings-panel/sections/WebcamSection";
 import { LayersSection as PanelLayersSection } from "@/components/editor/settings-panel/sections/LayersSection";
+import { AiSettingsSection as PanelAiSettingsSection } from "@/components/editor/settings-panel/sections/AiSettingsSection";
 import { isZeroPadding } from "@/components/editor/settings-panel/background";
 
 const tahoeCursorUrl = cursorSetAssets.tahoe.arrow.url;
@@ -1526,6 +1527,8 @@ function SettingsPanelImpl({
         return clipSectionContent;
       case "captions":
         return captionsSectionContent;
+      case "ai":
+        return <PanelAiSettingsSection />;
       default: {
         // Handle extension-contributed standalone section pages (ext:extensionId/panelId)
         if (activeEffectSection?.startsWith("ext:")) {

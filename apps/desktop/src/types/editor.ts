@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 export type ZoomDepth = 1 | 2 | 3 | 4 | 5 | 6;
 
 export interface ZoomFocus {
@@ -111,6 +110,7 @@ export type EditorEffectSection =
   | "captions"
   | "webcam"
   | "settings"
+  | "ai"
   | "zoom"
   | "speed"
   | "frame"

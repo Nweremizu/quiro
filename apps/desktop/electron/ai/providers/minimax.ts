@@ -19,6 +19,7 @@ import {
   type AiContentBlockWire,
   type ModelProvider,
 } from "../types";
+import { getCachedAiPreferences, resolveKey } from "../aiSettings";
 
 const DEFAULT_BASE_URL = "https://api.minimax.io/v1";
 
@@ -211,7 +212,8 @@ export class MiniMaxProvider implements ModelProvider {
   readonly id = "minimax" as const;
 
   hasKey(): boolean {
-    return envHasValue("MINIMAX_API_KEY");
+    const stored = getCachedAiPreferences().minimaxKey.trim();
+    return stored.length > 0 || envHasValue("MINIMAX_API_KEY");
   }
 
   baseUrl(): string {
@@ -221,7 +223,7 @@ export class MiniMaxProvider implements ModelProvider {
   async complete(
     request: AiCompleteRequestWire,
   ): Promise<AiCompleteResultWire> {
-    const apiKey = process.env.MINIMAX_API_KEY;
+    const apiKey = resolveKey("MINIMAX_API_KEY", getCachedAiPreferences().minimaxKey);
     if (!apiKey) throw new Error("MINIMAX_API_KEY is not set");
 
     const url = `${this.baseUrl()}/chat/completions`;

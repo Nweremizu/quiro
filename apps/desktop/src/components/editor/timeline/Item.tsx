@@ -171,7 +171,6 @@ export default function Item({
             event.stopPropagation();
             onSelect?.();
           }}
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           onPointerDownCapture={(_e) => {
             setIsDragging(true);
             onSelect?.();
