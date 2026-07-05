@@ -26,11 +26,12 @@
     "rebuild:native": "electron-rebuild --force --only uiohook-napi",
     "build:native-helpers": "node scripts/build-native-helpers.mjs",
     "build:whisper-runtime": "node scripts/build-whisper-runtime.mjs",
-    "build:platform-native-helpers": "npm run build:native-helpers && npm run build:windows-capture && npm run build:windows-gpu-export && npm run build:nvidia-cuda-compositor && npm run build:cursor-monitor && npm run build:whisper-runtime",
+    "build:platform-native-helpers": "npm run build:native-helpers && npm run build:windows-capture && npm run build:windows-gpu-export && npm run build:nvidia-cuda-compositor && npm run build:cursor-monitor && npm run build:hud-topmost-guard && npm run build:whisper-runtime",
     "build:windows-gpu-export": "node scripts/build-windows-gpu-export.mjs",
     "build:nvidia-cuda-compositor": "node scripts/build-nvidia-cuda-compositor.mjs",
     "build:windows-capture": "node scripts/build-windows-capture.mjs",
     "build:cursor-monitor": "node scripts/build-cursor-monitor.mjs",
+    "build:hud-topmost-guard": "node scripts/build-hud-topmost-guard.mjs",
     "generate:icons": "tsx scripts/generate-icon.ts",
     "rename:exporter-files": "node scripts/rename-exporter-filenames.mjs"
   },

@@ -23,6 +23,13 @@
       "sourceDir": "electron/native/cursor-monitor",
       "sourceFingerprint": "81e6429ec7fbd17855cb8625d1f2f35479cd3811db7a2e0ecc22d38af3b20b1e",
       "updatedAt": "2026-06-22T12:00:50.551Z"
+    },
+    "hud-topmost-guard": {
+      "binaryName": "hud-topmost-guard.exe",
+      "binarySha256": "3e4b761b456f66ccd1feaf382b80de37a34ee54c9f465fc868310c60fe36f611",
+      "sourceDir": "electron/native/hud-topmost-guard",
+      "sourceFingerprint": "febcfa2319c94d7a9b4a6e9a459a58ac47a84f85e8f3261f5b6ab986769637e2",
+      "updatedAt": "2026-07-05T09:23:52.441Z"
     }
   }
 }
