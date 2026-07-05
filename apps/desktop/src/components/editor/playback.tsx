@@ -563,6 +563,10 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
     const cursorOverlayRef = useRef<PixiCursorOverlay | null>(null);
     const cursorEffectsCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const effectsCtx2dRef = useRef<CanvasRenderingContext2D | null>(null);
+    // True while the effects canvas holds extension-drawn content. Lets the
+    // ticker skip the per-frame clear + hookParams build when no extension is
+    // active, while still erasing the last drawn frame once on transition.
+    const effectsCanvasHasContentRef = useRef(false);
     const cursorTelemetryRef = useRef<CursorTelemetryPoint[]>([]);
     const showCursorRef = useRef(showCursor);
     const cursorSizeRef = useRef(cursorSize);
@@ -2561,94 +2565,121 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
         ) {
           const ctx2d = effectsCtx2dRef.current ?? effectsCanvas.getContext("2d");
           if (ctx2d) {
-            ctx2d.clearRect(0, 0, effectsCanvas.width, effectsCanvas.height);
+            // Only pay for the effects-canvas clear + hookParams build when an
+            // extension actually draws. With no extensions active (the common
+            // case) this whole pass is a wasted full-canvas clear + allocation
+            // every frame. When extensions have just been removed, erase their
+            // last drawn frame exactly once, then stop touching the canvas.
+            const needsExtensionRender =
+              extensionHost.hasAnyRenderHooks() ||
+              extensionHost.hasCursorEffects();
 
-            const maskRect = baseMaskRef.current;
-            const animationState = animationStateRef.current;
-            const videoInfo = extensionHost.getVideoInfoSnapshot();
-            const rawCursor = getCursorPositionAtTime(
-              cursorTelemetryRef.current,
-              timeMs,
-              {
-                maskRect,
-                canvasWidth: effectsCanvas.width,
-                canvasHeight: effectsCanvas.height,
-              },
-            );
-            const hookParams = {
-              width: effectsCanvas.width,
-              height: effectsCanvas.height,
-              timeMs,
-              durationMs: videoInfo?.durationMs ?? 0,
-              cursor: smoothedCursorForHooks
-                ? {
-                    cx: smoothedCursorForHooks.cx,
-                    cy: smoothedCursorForHooks.cy,
-                    interactionType: rawCursor?.interactionType,
-                  }
-                : rawCursor,
-              smoothedCursor: smoothedCursorForHooks,
-              videoLayout:
-                maskRect.width > 0 && maskRect.height > 0
+            if (!needsExtensionRender) {
+              if (effectsCanvasHasContentRef.current) {
+                ctx2d.clearRect(
+                  0,
+                  0,
+                  effectsCanvas.width,
+                  effectsCanvas.height,
+                );
+                effectsCanvasHasContentRef.current = false;
+              }
+            } else {
+              ctx2d.clearRect(0, 0, effectsCanvas.width, effectsCanvas.height);
+
+              const maskRect = baseMaskRef.current;
+              const animationState = animationStateRef.current;
+              const videoInfo = extensionHost.getVideoInfoSnapshot();
+              const rawCursor = getCursorPositionAtTime(
+                cursorTelemetryRef.current,
+                timeMs,
+                {
+                  maskRect,
+                  canvasWidth: effectsCanvas.width,
+                  canvasHeight: effectsCanvas.height,
+                },
+              );
+              const hookParams = {
+                width: effectsCanvas.width,
+                height: effectsCanvas.height,
+                timeMs,
+                durationMs: videoInfo?.durationMs ?? 0,
+                cursor: smoothedCursorForHooks
                   ? {
-                      maskRect: {
-                        x: maskRect.x,
-                        y: maskRect.y,
-                        width: maskRect.width,
-                        height: maskRect.height,
-                      },
-                      borderRadius,
-                      padding,
+                      cx: smoothedCursorForHooks.cx,
+                      cy: smoothedCursorForHooks.cy,
+                      interactionType: rawCursor?.interactionType,
                     }
-                  : undefined,
-              zoom: {
-                scale: animationState.scale,
-                focusX: animationState.focusX,
-                focusY: animationState.focusY,
-                progress: animationState.progress,
-              },
-              shadow: {
-                enabled: Boolean(showShadow) && shadowIntensity > 0,
-                intensity: shadowIntensity,
-              },
-              sceneTransform: {
+                  : rawCursor,
+                smoothedCursor: smoothedCursorForHooks,
+                videoLayout:
+                  maskRect.width > 0 && maskRect.height > 0
+                    ? {
+                        maskRect: {
+                          x: maskRect.x,
+                          y: maskRect.y,
+                          width: maskRect.width,
+                          height: maskRect.height,
+                        },
+                        borderRadius,
+                        padding,
+                      }
+                    : undefined,
+                zoom: {
+                  scale: animationState.scale,
+                  focusX: animationState.focusX,
+                  focusY: animationState.focusY,
+                  progress: animationState.progress,
+                },
+                shadow: {
+                  enabled: Boolean(showShadow) && shadowIntensity > 0,
+                  intensity: shadowIntensity,
+                },
+                sceneTransform: {
+                  scale: animationState.appliedScale,
+                  x: animationState.x,
+                  y: animationState.y,
+                },
+              };
+
+              ctx2d.save();
+              applyCanvasSceneTransform(ctx2d, {
                 scale: animationState.appliedScale,
                 x: animationState.x,
                 y: animationState.y,
-              },
-            };
+              });
+              executeExtensionRenderHooks("post-video", ctx2d, hookParams);
+              executeExtensionRenderHooks("post-zoom", ctx2d, hookParams);
+              executeExtensionRenderHooks("post-cursor", ctx2d, hookParams);
 
-            ctx2d.save();
-            applyCanvasSceneTransform(ctx2d, {
-              scale: animationState.appliedScale,
-              x: animationState.x,
-              y: animationState.y,
-            });
-            executeExtensionRenderHooks("post-video", ctx2d, hookParams);
-            executeExtensionRenderHooks("post-zoom", ctx2d, hookParams);
-            executeExtensionRenderHooks("post-cursor", ctx2d, hookParams);
+              if (isSeekingRef.current) {
+                clearCursorEffects();
+              } else {
+                executeExtensionCursorEffects(
+                  ctx2d,
+                  timeMs,
+                  effectsCanvas.width,
+                  effectsCanvas.height,
+                  {
+                    zoom: hookParams.zoom,
+                    sceneTransform: hookParams.sceneTransform,
+                    videoLayout: hookParams.videoLayout,
+                  },
+                );
+              }
+              ctx2d.restore();
 
-            if (isSeekingRef.current) {
-              clearCursorEffects();
-            } else {
-              executeExtensionCursorEffects(
+              executeExtensionRenderHooks("post-webcam", ctx2d, hookParams);
+              executeExtensionRenderHooks(
+                "post-annotations",
                 ctx2d,
-                timeMs,
-                effectsCanvas.width,
-                effectsCanvas.height,
-                {
-                  zoom: hookParams.zoom,
-                  sceneTransform: hookParams.sceneTransform,
-                  videoLayout: hookParams.videoLayout,
-                },
+                hookParams,
               );
+
+              executeExtensionRenderHooks("final", ctx2d, hookParams);
+
+              effectsCanvasHasContentRef.current = true;
             }
-            ctx2d.restore();
-
-            executeExtensionRenderHooks("post-webcam", ctx2d, hookParams);
-            executeExtensionRenderHooks("post-annotations", ctx2d, hookParams);
-
-            executeExtensionRenderHooks("final", ctx2d, hookParams);
           }
         }
 

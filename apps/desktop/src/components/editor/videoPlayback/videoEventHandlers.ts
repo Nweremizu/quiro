@@ -188,10 +188,16 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
     if (trimRegionToSkip && !video.paused && !video.ended) {
       skipPastTrimRegion(trimRegionToSkip);
     } else {
-      // Apply playback speed from active speed region
+      // Apply playback speed from active speed region. `preservesPitch` is set
+      // once when the handlers are created and persists on the element, so it
+      // does not need re-applying every presented frame. Only write
+      // playbackRate when it actually changes to avoid a redundant per-frame
+      // property write.
       const activeSpeedRegion = findActiveSpeedRegion(currentTimeMs);
-      enablePitchPreservingPlayback(video);
-      video.playbackRate = activeSpeedRegion ? activeSpeedRegion.speed : 1;
+      const nextPlaybackRate = activeSpeedRegion ? activeSpeedRegion.speed : 1;
+      if (video.playbackRate !== nextPlaybackRate) {
+        video.playbackRate = nextPlaybackRate;
+      }
       emitTime(presentedTime);
     }
 
