@@ -402,6 +402,11 @@ export class ExtensionHost {
     return this.renderHooks.some((h) => h.phase === phase);
   }
 
+  /** Cheap check for whether any render hook (any phase) is registered. */
+  hasAnyRenderHooks(): boolean {
+    return this.renderHooks.length > 0;
+  }
+
   hasCursorEffects(): boolean {
     return this.cursorEffects.length > 0;
   }

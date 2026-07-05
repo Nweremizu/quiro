@@ -67,6 +67,16 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
+      # `npm ci --ignore-scripts` skips Electron's postinstall, so
+      # node_modules/electron/dist is absent. The first tests to import electron
+      # then trigger a lazy download+extract, and because vitest runs test files
+      # in parallel, multiple workers race to extract into the same dist. On
+      # macOS they collide creating the `Electron Framework` symlink and fail
+      # with EEXIST (Windows has no such symlink, so it only breaks on macOS).
+      # Extract the binary once, serially, up front so no test worker has to.
+      - name: Install Electron binary
+        run: node node_modules/electron/install.js
+
       - name: Run desktop CI tests
         run: npm run test:ci -w @quiro/desktop
 

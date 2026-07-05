@@ -1,9 +1,11 @@
+import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, ipcMain } from "electron";
+import { getHudTopmostGuardExePath } from "@electron/ipc/paths/binaries";
 import { USER_DATA_PATH } from "@electron/utils/application-path";
 import { getPackagedRendererBaseUrl } from "./renderer-server";
 
@@ -554,18 +556,31 @@ export function createHudOverlayWindow(): BrowserWindow {
   screen.on("display-removed", handleDisplayRemoved);
   screen.on("display-metrics-changed", handleDisplayMetricsChanged);
 
-  // On Windows, activating any other window reorders the HWND_TOPMOST z-stack
-  // and can push the HUD underneath. Periodically call moveTop() to re-assert
-  // our position at the top of the TOPMOST group.
+  // On Windows, activating any other window (Alt+Tab, the taskbar, etc.)
+  // reorders the HWND_TOPMOST z-stack and can leave an ordinary, *non*-topmost
+  // window rendered above the HUD — the classic "alwaysOnBottom" state.
   //
-  // moveTop() uses SetWindowPos(HWND_TOP | SWP_SHOWWINDOW | SWP_NOACTIVATE),
-  // which re-asserts z-order WITHOUT ever going through HWND_NOTOPMOST — so
-  // there is no visible flash unlike the setAlwaysOnTop(false→true) toggle.
-  // SWP_SHOWWINDOW can corrupt WS_EX_TRANSPARENT on Win11+ (same side-effect
-  // as showHudWindow/show/focus), so we replicate the showHudWindow passthrough
-  // reset immediately after: setIgnoreMouseEvents(false) → true+forward.
+  // The native `hud-topmost-guard` helper watches the HUD's z-order and, only
+  // when a non-topmost window is found above it, re-asserts topmost via
+  // SetWindowPos(HWND_TOPMOST, SWP_NOACTIVATE|SWP_NOMOVE|SWP_NOSIZE) — WITHOUT
+  // SWP_SHOWWINDOW. That re-asserts the actual WS_EX_TOPMOST flag (not just the
+  // in-band order that Electron's moveTop() touches), never steals focus, and
+  // does not corrupt WS_EX_TRANSPARENT pass-through, so it is safe to run even
+  // while the user is interacting with the HUD.
+  //
+  // If the helper binary is unavailable or fails to spawn, we fall back to the
+  // legacy 1s moveTop() poll. moveTop() uses SetWindowPos(HWND_TOP |
+  // SWP_SHOWWINDOW | SWP_NOACTIVATE); SWP_SHOWWINDOW can corrupt
+  // WS_EX_TRANSPARENT on Win11+, so the fallback replicates the showHudWindow
+  // pass-through reset (setIgnoreMouseEvents(false) → true+forward) and skips
+  // while the user is interacting.
   let topAssertInterval: ReturnType<typeof setInterval> | null = null;
-  if (process.platform === "win32") {
+  let topmostGuardProcess: ChildProcess | null = null;
+
+  const startLegacyTopAssertInterval = () => {
+    if (process.platform !== "win32" || topAssertInterval !== null) {
+      return;
+    }
     topAssertInterval = setInterval(() => {
       // Skip while the user is hovering/dragging the HUD to avoid
       // interfering with active interaction.
@@ -581,13 +596,77 @@ export function createHudOverlayWindow(): BrowserWindow {
         }
       }
     }, 1000);
+  };
+
+  if (process.platform === "win32") {
+    try {
+      const guardExe = getHudTopmostGuardExePath();
+      if (fs.existsSync(guardExe)) {
+        const hwnd = win.getNativeWindowHandle().readBigUInt64LE().toString();
+        const guard = spawn(guardExe, [hwnd], {
+          stdio: ["pipe", "ignore", "pipe"],
+        });
+        guard.once("error", (error) => {
+          console.warn("[hud-overlay] topmost guard spawn error", error);
+          if (topmostGuardProcess === guard) {
+            topmostGuardProcess = null;
+            // Fall back to the JS poll so the HUD keeps its topmost guarantee.
+            if (!win.isDestroyed()) {
+              startLegacyTopAssertInterval();
+            }
+          }
+        });
+        guard.once("close", () => {
+          if (topmostGuardProcess === guard) {
+            topmostGuardProcess = null;
+            if (!win.isDestroyed()) {
+              startLegacyTopAssertInterval();
+            }
+          }
+        });
+        if (guard.stderr) {
+          guard.stderr.on("data", (chunk: Buffer) => {
+            console.warn(`[hud-topmost-guard] ${chunk.toString().trim()}`);
+          });
+        }
+        topmostGuardProcess = guard;
+      } else {
+        console.warn(
+          "[hud-overlay] topmost guard helper missing, using JS fallback:",
+          guardExe,
+        );
+        startLegacyTopAssertInterval();
+      }
+    } catch (error) {
+      console.warn("[hud-overlay] failed to start topmost guard", error);
+      startLegacyTopAssertInterval();
+    }
   }
+
+  const stopTopmostGuard = () => {
+    if (topmostGuardProcess === null) {
+      return;
+    }
+    const guard = topmostGuardProcess;
+    topmostGuardProcess = null;
+    try {
+      guard.stdin?.write("stop\n");
+    } catch {
+      // ignore stop-signal issues
+    }
+    try {
+      guard.kill();
+    } catch {
+      // ignore kill issues
+    }
+  };
 
   win.on("closed", () => {
     if (topAssertInterval !== null) {
       clearInterval(topAssertInterval);
       topAssertInterval = null;
     }
+    stopTopmostGuard();
     ipcMain.removeListener(
       "hud-overlay-renderer-ready",
       handleHudRendererReady,
