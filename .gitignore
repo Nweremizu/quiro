@@ -51,6 +51,7 @@ apps/desktop/electron/native/wgc-capture/build/
 apps/desktop/electron/native/cursor-monitor/build/
 apps/desktop/electron/native/gpu-export-probe/build/
 apps/desktop/electron/native/nvidia-cuda-compositor/build/
+apps/desktop/electron/native/hud-topmost-guard/build/
 apps/desktop/electron/native/bin/*/whisper-*
 apps/desktop/electron/native/bin/*/whisper-runtime.json
 

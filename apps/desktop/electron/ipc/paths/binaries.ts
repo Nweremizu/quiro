@@ -165,6 +165,13 @@ export function getCursorMonitorExePath(): string {
   );
 }
 
+export function getHudTopmostGuardExePath(): string {
+  return resolvePreferredWindowsNativeHelperPath(
+    "hud-topmost-guard",
+    "hud-topmost-guard.exe",
+  );
+}
+
 async function migrateLegacyNativeHelperBinaries(): Promise<void> {
   const legacyToCurrentPaths: Array<[string, string]> = [
     [
