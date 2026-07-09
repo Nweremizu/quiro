@@ -434,12 +434,14 @@ function About() {
             <img
               src="/feature3.png"
               alt="Quiro recording controls"
-              className="aspect-[438/346] w-full rounded-xl object-cover sm:w-[45%] sm:rounded-2xl"
+              className="aspect-438/346 w-full rounded-xl object-cover sm:w-[45%] sm:rounded-2xl"
             />
-            <img
-              src="/demo.gif"
-              alt="A screen recording made with Quiro"
-              className="aspect-[900/600] w-full rounded-xl object-cover sm:w-[55%] sm:rounded-2xl"
+            <video
+              src="/demo.mp4"
+              className="aspect-900/600 w-full rounded-xl object-cover sm:w-[55%] sm:rounded-2xl"
+              autoPlay
+              loop
+              muted
             />
           </div>
         </div>
@@ -449,7 +451,7 @@ function About() {
           <img
             src="/feature3.png"
             alt="Quiro recording controls"
-            className="aspect-[438/346] w-full self-end rounded-2xl object-cover"
+            className="aspect-438/346 w-full self-end rounded-2xl object-cover"
           />
           <div className="flex justify-end self-start">
             <div>
@@ -467,10 +469,12 @@ function About() {
               </div>
             </div>
           </div>
-          <img
-            src="/demo.gif"
-            alt="A screen recording made with Quiro"
-            className="aspect-[3/2] w-full self-end rounded-2xl object-cover"
+          <video
+            src="/demo.mp4"
+            autoPlay
+            loop
+            muted
+            className="aspect-16/9 w-full self-end rounded-2xl object-cover"
           />
         </div>
       </div>
