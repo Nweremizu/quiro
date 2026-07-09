@@ -18,12 +18,28 @@ import {
   MAX_TOOL_ITERATIONS,
   type AiContentBlock,
   type AiMessage,
+  type AiToolDefinition,
   type AiToolName,
   type AiToolResultBlock,
   type AiToolUseBlock,
   type EditorActions,
   type ToolResult,
 } from "./contract";
+
+/**
+ * Tools whose failure reasons are independent of their (small) input surface —
+ * e.g. `generate_captions` only takes a `language`, which cannot fix "no audio
+ * track" / "missing model" / "no source video". Retrying these with the model
+ * looping on its own can never succeed, so once one fails it is removed from
+ * the tool list for the rest of THIS turn — the model literally cannot call it
+ * again (rather than merely being asked not to), which is what stops it from
+ * narrating repeated "retrying…" text into the chat. A fresh user message (or
+ * the dedicated "Retry" button on the Director's greeting bubble) starts a new
+ * attempt once the user has actually fixed the underlying cause.
+ */
+const NON_RETRYABLE_ON_FAILURE: ReadonlySet<AiToolName> = new Set([
+  "generate_captions",
+]);
 
 /* ── Public API ──────────────────────────────────────────────────────────── */
 
@@ -88,6 +104,13 @@ export async function runAgentTurn(
   let assistantText = "";
   const requestBase = `agent-${Date.now()}`;
 
+  // Tools disabled for the rest of this turn after a failure — see
+  // NON_RETRYABLE_ON_FAILURE above. `seenFailures` is a general safety net for
+  // every other tool: if the identical (tool, reason) pair fails twice in one
+  // turn, further retries are provably making no progress, so disable it too.
+  const disabledTools = new Set<AiToolName>();
+  const seenFailureKeys = new Set<string>();
+
   actions.beginAiBatch?.("AI run");
   let disposeStreamListener: (() => void) | undefined;
   if (opts.onAssistantDelta || opts.onEvent) {
@@ -116,12 +139,18 @@ export async function runAgentTurn(
       const aiPrefs = await window.electronAPI.ai.getAiPreferences().catch(() => null);
       const model = aiPrefs?.selectedModel ?? AI_MODELS.minimaxPlanner;
 
+      // Tools that already failed unrecoverably this turn are omitted from the
+      // schema entirely, so the model has no way to call them again.
+      const availableTools: AiToolDefinition[] = disabledTools.size
+        ? AI_TOOLS.filter((tool) => !disabledTools.has(tool.name))
+        : AI_TOOLS;
+
       const result = await window.electronAPI.ai.complete({
       requestId: `${requestBase}-${i}`,
       model,
       system,
       messages,
-      tools: AI_TOOLS,
+      tools: availableTools,
       maxTokens: DEFAULT_MAX_TOKENS,
       stream: Boolean(opts.onAssistantDelta || opts.onEvent),
     });
@@ -172,6 +201,20 @@ export async function runAgentTurn(
       });
 
       toolsApplied.push({ name: toolBlock.name, result: toolResult });
+
+      if (!toolResult.ok) {
+        if (NON_RETRYABLE_ON_FAILURE.has(toolBlock.name)) {
+          disabledTools.add(toolBlock.name);
+        } else {
+          const failureKey = `${toolBlock.name}:${toolResult.reason ?? toolResult.summary}`;
+          if (seenFailureKeys.has(failureKey)) {
+            disabledTools.add(toolBlock.name);
+          } else {
+            seenFailureKeys.add(failureKey);
+          }
+        }
+      }
+
       toolResultBlocks.push({
         type: "tool_result",
         tool_use_id: toolBlock.id,

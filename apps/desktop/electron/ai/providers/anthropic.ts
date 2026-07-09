@@ -15,12 +15,33 @@ import {
   type ModelProvider,
 } from "../types";
 import { getCachedAiPreferences, resolveKey } from "../aiSettings";
+import { getClaudeAccessToken, hasClaudeOAuthSync } from "../claudeOAuth";
 
 const DEFAULT_MAX_TOKENS = 2048;
 
-function getClient(): Anthropic {
+// Beta header + identity that Anthropic requires for consumer OAuth tokens.
+// Without both, `user:inference` tokens are rejected. See claudeOAuth.ts.
+const OAUTH_BETA_HEADER = "oauth-2025-04-20";
+const CLAUDE_CODE_IDENTITY = "You are Claude Code, Anthropic's official CLI for Claude.";
+
+/**
+ * Prefer a Claude Code OAuth login when present; otherwise use an API key.
+ * `oauth` is true when the returned client is bearer-authed, so the caller
+ * knows to prepend the Claude Code identity to the system prompt.
+ */
+async function getClient(): Promise<{ client: Anthropic; oauth: boolean }> {
+  const token = await getClaudeAccessToken().catch(() => null);
+  if (token) {
+    return {
+      client: new Anthropic({
+        authToken: token,
+        defaultHeaders: { "anthropic-beta": OAUTH_BETA_HEADER },
+      }),
+      oauth: true,
+    };
+  }
   const apiKey = resolveKey("ANTHROPIC_API_KEY", getCachedAiPreferences().anthropicKey);
-  return new Anthropic({ apiKey });
+  return { client: new Anthropic({ apiKey }), oauth: false };
 }
 
 /* ── Wire → SDK ──────────────────────────────────────────────────────────── */
@@ -124,14 +145,27 @@ export class AnthropicProvider implements ModelProvider {
 
   hasKey(): boolean {
     const stored = getCachedAiPreferences().anthropicKey.trim();
-    return stored.length > 0 || envHasValue("ANTHROPIC_API_KEY");
+    return (
+      stored.length > 0 ||
+      envHasValue("ANTHROPIC_API_KEY") ||
+      hasClaudeOAuthSync()
+    );
   }
 
   async complete(request: AiCompleteRequestWire): Promise<AiCompleteResultWire> {
-    const message = await getClient().messages.create({
+    const { client, oauth } = await getClient();
+    // OAuth tokens are only accepted when the system prompt leads with the
+    // Claude Code identity block — prepend it, keeping our real prompt intact.
+    const system = oauth
+      ? [
+          { type: "text" as const, text: CLAUDE_CODE_IDENTITY },
+          { type: "text" as const, text: request.system },
+        ]
+      : request.system;
+    const message = await client.messages.create({
       model: request.model,
       max_tokens: request.maxTokens ?? DEFAULT_MAX_TOKENS,
-      system: request.system,
+      system,
       messages: toSdkMessages(request.messages),
       ...(request.tools?.length ? { tools: toSdkTools(request.tools) } : {}),
     });

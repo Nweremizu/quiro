@@ -17,7 +17,11 @@ Rules:
 - Plan which tools to call, call them, then reply with a short one-line summary of what you did.
 - Never fabricate timestamps. Use only the data provided in the recording context.
 - Prefer composing multiple small tools over one large one.
-- If a request is ambiguous, make a sensible default choice and mention it.`;
+- If a request is ambiguous, make a sensible default choice and mention it.
+- If a tool call fails, do not call it again expecting a different outcome — a
+  tool that just failed may be removed from your options for the rest of this
+  turn. Instead, state the reason in one short sentence and continue with any
+  other part of the request that can still succeed.`;
 
 export function buildAgentSystemPrompt(summary: BrainSummary | null): string {
   if (!summary) return BASE_PROMPT;

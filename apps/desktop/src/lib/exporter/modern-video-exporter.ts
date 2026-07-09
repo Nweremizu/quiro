@@ -2705,6 +2705,14 @@ export class ModernVideoExporter {
       bitrate: this.config.bitrate,
       framerate: this.config.frameRate,
       hardwareAcceleration: "prefer-hardware",
+      // Realtime mode makes the hardware encoder emit frames in display order
+      // with no B-frames. The h264-stream path muxes a raw Annex B elementary
+      // stream via `ffmpeg -f h264 -r <fps> -c:v copy`, which carries no
+      // timestamps and forces CFR by -r; with B-frames that reconstruction
+      // paces unevenly (judder). No reordering => coded order == display order
+      // => clean CFR output. (Legacy stays "quality" — mediabunny muxes using
+      // the encoder's own chunk timestamps, so it tolerates B-frames.)
+      latencyMode: "realtime",
       avc: { format: "annexb" },
     };
 

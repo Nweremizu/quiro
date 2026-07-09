@@ -306,7 +306,10 @@ export const AI_TOOLS: AiToolDefinition[] = [
     description:
       "Transcribe the audio and turn on burned-in captions. Use for 'add captions', " +
       "'add subtitles', 'caption this'. If the speech model is not downloaded yet, " +
-      "this returns a failure asking the user to download it.",
+      "this returns a failure asking the user to download it. On ANY failure " +
+      "(missing model, no audio track, no source video) this tool will not be " +
+      "offered again this turn — calling it again cannot succeed since none of " +
+      "those causes are fixed by retrying. State the failure reason once and move on.",
     input_schema: {
       type: "object",
       properties: {

@@ -35,6 +35,26 @@ Platform support depends on the available capture and audio APIs for each OS. Wi
 
 ---
 
+## Install
+
+One-line installers that download the latest release, install it, and open the app.
+
+**macOS / Linux**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Nweremizu/quiro/main/scripts/install.sh | sh
+```
+
+**Windows (PowerShell)**
+
+```powershell
+irm https://raw.githubusercontent.com/Nweremizu/quiro/main/scripts/install.ps1 | iex
+```
+
+Each script detects your OS and architecture and pulls the matching build from the [latest GitHub Release](https://github.com/Nweremizu/quiro/releases/latest): macOS installs `Quiro.app` into `/Applications`, Linux drops an AppImage in `~/.local/bin`, and Windows runs the installer. Prefer a manual download? Grab an installer from the [releases page](https://github.com/Nweremizu/quiro/releases).
+
+---
+
 ## Core Features
 
 ### Screen Recording
