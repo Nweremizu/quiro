@@ -265,7 +265,7 @@ export const SourceSelectorContent = ({
   if (loading && !hasAnySources) {
     return (
       <div className="flex items-center justify-center py-8">
-        <div className="h-5 w-5 animate-spin rounded-full border border-white/10 border-b-primary" />
+        <Spinner className="size-5 text-primary" />
       </div>
     );
   }

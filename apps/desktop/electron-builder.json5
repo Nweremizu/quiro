@@ -37,6 +37,8 @@
     "!README.md",
     "!CONTRIBUTING.md",
     "!LICENSE",
+    "!release/**",
+    "!release-verify/**",
   ],
   extraResources: [
     {

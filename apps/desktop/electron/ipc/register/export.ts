@@ -323,6 +323,88 @@ export function registerExportHandlers() {
     },
   );
 
+  // Batched counterpart of the single-frame writer above. The renderer's
+  // Breeze/H264-stream path coalesces encoded chunks and sends them here via
+  // `nativeVideoExportWriteFrames`; without this handler those sends are never
+  // acked, so the renderer's in-flight-write gate deadlocks the export at the
+  // first `maxInFlightNativeWrites` batches (~frame 100). One ack settles the
+  // whole batch once every chunk has been written to ffmpeg's stdin.
+  ipcMain.on(
+    "native-video-export-write-frames-async",
+    (
+      event,
+      payload: {
+        sessionId: string;
+        requestId: number;
+        frameDataList: Uint8Array[];
+      },
+    ) => {
+      const sessionId = payload?.sessionId;
+      const requestId = payload?.requestId;
+      const frameDataList = payload?.frameDataList;
+
+      if (
+        typeof sessionId !== "string" ||
+        typeof requestId !== "number" ||
+        !Array.isArray(frameDataList)
+      ) {
+        return;
+      }
+
+      const session = nativeVideoExportSessions.get(sessionId);
+      if (!session) {
+        sendNativeVideoExportWriteFrameResult(
+          event.sender,
+          sessionId,
+          requestId,
+          {
+            success: false,
+            error: "Invalid native export session",
+          },
+        );
+        return;
+      }
+
+      session.sender = event.sender;
+      session.pendingWriteRequestIds.add(requestId);
+
+      if (session.terminating) {
+        settleNativeVideoExportWriteFrameRequest(sessionId, session, requestId, {
+          success: false,
+          error: "Native video export session was cancelled",
+        });
+        return;
+      }
+
+      void (async () => {
+        try {
+          // Writes chain on session.writeSequence internally, so enqueuing in
+          // order preserves stream ordering; await each so a mid-batch failure
+          // surfaces immediately.
+          for (const frameData of frameDataList) {
+            if (!frameData) {
+              continue;
+            }
+            await enqueueNativeVideoExportFrameWrite(session, frameData);
+          }
+          settleNativeVideoExportWriteFrameRequest(sessionId, session, requestId, {
+            success: true,
+          });
+        } catch (error) {
+          session.stdinError =
+            error instanceof Error ? error : new Error(String(error));
+          settleNativeVideoExportWriteFrameRequest(sessionId, session, requestId, {
+            success: false,
+            error: getNativeVideoExportSessionError(
+              session,
+              session.stdinError.message,
+            ),
+          });
+        }
+      })();
+    },
+  );
+
   ipcMain.handle(
     "native-video-export-finish",
     async (_, sessionId: string, options?: NativeVideoExportFinishOptions) => {

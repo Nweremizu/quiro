@@ -490,59 +490,29 @@ export function registerSourceHandlers({
       highlightWin.setIgnoreMouseEvents(true);
 
       const borderRadius = isMacScreen ? 0 : 10;
-      const glowInset = isMacScreen ? 0 : -4;
       const glowRadius = isMacScreen ? 0 : 14;
       const glowPad = isMacScreen ? 3 : 6;
 
+      // A masked, animated conic-gradient (Houdini @property + mask-composite)
+      // on a transparent/layered/always-on-top OS window crashes the GPU
+      // process on some Windows driver stacks (STATUS_ACCESS_VIOLATION right
+      // on click) — use a plain animated border + box-shadow glow instead,
+      // which sticks to well-trodden compositor code paths.
       const html = `<!DOCTYPE html>
 <html><head><style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:transparent;overflow:hidden;width:100vw;height:100vh}
 
 .border-wrap{
-  position:fixed;inset:0;border-radius:${borderRadius}px;padding:3px;
-  background:conic-gradient(from var(--angle,0deg),
-    transparent 0%,
-    transparent 60%,
-    rgba(99,96,245,.15) 70%,
-    rgba(99,96,245,.9) 80%,
-    rgba(123,120,255,1) 85%,
-    rgba(99,96,245,.9) 90%,
-    rgba(99,96,245,.15) 95%,
-    transparent 100%
-  );
-  -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
-  -webkit-mask-composite:xor;
-  mask-composite:exclude;
-  animation:spin 1.2s linear forwards, fadeAll 1.6s ease-out forwards;
+  position:fixed;inset:0;border-radius:${borderRadius}px;
+  border:3px solid rgba(123,120,255,.95);
+  box-shadow:0 0 ${glowRadius}px ${glowPad}px rgba(99,96,245,.55);
+  animation:pulse 1.2s ease-in-out infinite, fadeAll 1.6s ease-out forwards;
 }
 
-.glow-wrap{
-  position:fixed;inset:${glowInset}px;border-radius:${glowRadius}px;padding:${glowPad}px;
-  background:conic-gradient(from var(--angle,0deg),
-    transparent 0%,
-    transparent 65%,
-    rgba(99,96,245,.3) 78%,
-    rgba(123,120,255,.5) 85%,
-    rgba(99,96,245,.3) 92%,
-    transparent 100%
-  );
-  -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
-  -webkit-mask-composite:xor;
-  mask-composite:exclude;
-  filter:blur(8px);
-  animation:spin 1.2s linear forwards, fadeAll 1.6s ease-out forwards;
-}
-
-@property --angle{
-  syntax:'<angle>';
-  initial-value:0deg;
-  inherits:false;
-}
-
-@keyframes spin{
-  0%{--angle:0deg}
-  100%{--angle:360deg}
+@keyframes pulse{
+  0%,100%{opacity:.7}
+  50%{opacity:1}
 }
 
 @keyframes fadeAll{
@@ -550,7 +520,6 @@ body{background:transparent;overflow:hidden;width:100vw;height:100vh}
   100%{opacity:0}
 }
 </style></head><body>
-<div class="glow-wrap"></div>
 <div class="border-wrap"></div>
 </body></html>`;
 

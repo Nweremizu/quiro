@@ -169,6 +169,21 @@ export async function createReadableMediaResourceFile(
   });
 }
 
+/**
+ * True when the resource is a local file (raw path, file:// URL, or a
+ * local-media-server URL), as opposed to a genuinely remote http(s)/blob/data
+ * resource.
+ *
+ * web-demuxer's URL loader (Emscripten WORKERFS synchronous XHR, run from a
+ * blob: worker) is unreliable in the Electron renderer: it fails on loopback
+ * media-server URLs and cannot resolve relative URLs. For local media we
+ * therefore hand the demuxer an in-memory File (read over IPC) instead of a
+ * URL — see the export decoders. Remote resources still load by URL.
+ */
+export function isLocalMediaResource(resource: string): boolean {
+  return getLocalFilePath(resource) !== null;
+}
+
 export async function resolveMediaElementSource(resource: string): Promise<{
   src: string;
   revoke: () => void;

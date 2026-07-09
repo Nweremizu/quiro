@@ -3,6 +3,7 @@ import { getEffectiveVideoStreamDurationSeconds } from "@/lib/mediaTiming";
 import { getDecodedFrameTimelineOffsetUs } from "./streaming-decoder";
 import {
 	createReadableMediaResourceFile,
+	isLocalMediaResource,
 	resolveMediaResourceUrl,
 } from "./local-media-source";
 
@@ -46,22 +47,13 @@ export class ForwardFrameSource {
 	private decodeCapacityWaiters = new Set<() => void>();
 
 	async initialize(videoUrl: string): Promise<ForwardFrameSourceMetadata> {
-		const resourceUrl = await resolveMediaResourceUrl(videoUrl);
 		const wasmUrl = new URL("./wasm/web-demuxer.wasm", window.location.href).href;
 		const loadMediaInfo = async (source: string | File) => {
 			this.demuxer = new WebDemuxer({ wasmFilePath: wasmUrl });
 			await this.demuxer.load(source);
 			return this.demuxer.getMediaInfo();
 		};
-
-		let mediaInfo;
-		try {
-			mediaInfo = await loadMediaInfo(resourceUrl);
-		} catch (error) {
-			console.warn(
-				"[ForwardFrameSource] Direct source load failed, retrying with file fallback:",
-				error,
-			);
+		const destroyDemuxerBeforeFallback = () => {
 			const currentDemuxer = this.demuxer;
 			if (currentDemuxer) {
 				try {
@@ -70,7 +62,31 @@ export class ForwardFrameSource {
 					// Ignore cleanup errors before fallback re-init.
 				}
 			}
-			mediaInfo = await loadMediaInfo(await createReadableMediaResourceFile(videoUrl));
+		};
+
+		// web-demuxer's URL loader is unreliable in the Electron renderer (see
+		// isLocalMediaResource), so for local media hand it an in-memory File and
+		// keep the URL only as a fallback. Remote resources load by URL first.
+		const isLocal = isLocalMediaResource(videoUrl);
+		const loadPrimary = () =>
+			isLocal
+				? createReadableMediaResourceFile(videoUrl).then(loadMediaInfo)
+				: resolveMediaResourceUrl(videoUrl).then(loadMediaInfo);
+		const loadFallback = () =>
+			isLocal
+				? resolveMediaResourceUrl(videoUrl).then(loadMediaInfo)
+				: createReadableMediaResourceFile(videoUrl).then(loadMediaInfo);
+
+		let mediaInfo;
+		try {
+			mediaInfo = await loadPrimary();
+		} catch (error) {
+			console.warn(
+				"[ForwardFrameSource] Primary source load failed, retrying with fallback:",
+				error,
+			);
+			destroyDemuxerBeforeFallback();
+			mediaInfo = await loadFallback();
 		}
 
 		const videoStream = mediaInfo.streams.find(
