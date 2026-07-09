@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-09T00:00:00.000Z",
+  "title": "Design System: Quiro",
+  "extensions": {
+    "colorMeta": {
+      "director-orange": {
+        "role": "primary",
+        "displayName": "Director's Orange",
+        "canonical": "#F26522",
+        "tonalRamp": ["#3d1405", "#6b2408", "#99340c", "#c74310", "#f26522", "#f5824d", "#f8a880", "#fcd4bf"]
+      },
+      "ember-glow": {
+        "role": "secondary",
+        "displayName": "Ember Glow",
+        "canonical": "#FF5F03",
+        "tonalRamp": ["#3d1700", "#6b2900", "#993b00", "#c74d00", "#ff5f03", "#ff8540", "#ffab7d", "#ffd5bf"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#111827",
+        "tonalRamp": ["#111827", "#1f2937", "#374151", "#4b5563", "#6b7280", "#9ca3af", "#d1d5db", "#f3f4f6"]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Canvas",
+        "canonical": "#EFEFEF",
+        "tonalRamp": ["#171717", "#2e2e2e", "#525252", "#7a7a7a", "#a3a3a3", "#d1d1d1", "#efefef", "#ffffff"]
+      },
+      "surface-gray": {
+        "role": "neutral",
+        "displayName": "Surface Grey",
+        "canonical": "#F5F5F5",
+        "tonalRamp": ["#1a1a1a", "#333333", "#595959", "#808080", "#a6a6a6", "#cccccc", "#f5f5f5", "#ffffff"]
+      },
+      "media-void": {
+        "role": "neutral",
+        "displayName": "Media Void",
+        "canonical": "#101010",
+        "tonalRamp": ["#000000", "#101010", "#262626", "#404040", "#666666", "#999999", "#cccccc", "#f2f2f2"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Hero H1 and the Showcase heading. The largest voice; ceiling ~4.2rem." },
+      "headline": { "displayName": "Headline", "purpose": "Section H2s. One step quieter than Display." },
+      "title": { "displayName": "Title", "purpose": "Media-card titles and the expanded overlay heading. The only semibold." },
+      "body": { "displayName": "Body", "purpose": "Lead paragraphs; medium weight for presence, 65-75ch measure." },
+      "label": { "displayName": "Label", "purpose": "Pills, nav links, badges, meta rows, version chips." }
+    },
+    "shadows": [
+      { "name": "hairline-ring", "value": "0 0 0 1px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.05)", "purpose": "Nav logo chip only; a whisper of separation from the white bar." },
+      { "name": "lifted-rest", "value": "0 2px 8px rgba(0,0,0,0.08)", "purpose": "The floating 'Free & open source' button at rest." },
+      { "name": "lifted-hover", "value": "0 4px 16px rgba(0,0,0,0.12)", "purpose": "That button's hover deepening; shadow grows as a response to intent." }
+    ],
+    "motion": [
+      { "name": "ease-house", "value": "cubic-bezier(0.25, 0.1, 0.25, 1)", "purpose": "Default easing for button hovers, text-roll, arrow rotation (500ms)." },
+      { "name": "ease-sheet", "value": "cubic-bezier(0.32, 0.72, 0, 1)", "purpose": "Mobile bottom-sheet slide-up (500ms)." },
+      { "name": "duration-hover", "value": "500ms", "purpose": "Standard hover/state transition duration." },
+      { "name": "duration-micro", "value": "300ms", "purpose": "Pill expansion, nav-link color, card hover label reveal." },
+      { "name": "card-expand", "value": "0.4s shared-element (motion layoutId)", "purpose": "Media card trigger-to-content expand, 16px -> 24px radius." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" },
+      { "name": "max", "value": "1440px content cap" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button (Director's Orange)",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The download CTA. Orange pill with a text-roll label and a white circular arrow chip.",
+      "html": "<a href=\"#\" class=\"ds-btn-primary\"><span class=\"ds-roll\"><span class=\"ds-roll-track\"><span>Download Quiro</span><span>Download Quiro</span></span></span><span class=\"ds-btn-chip\"><svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5 12h14M13 6l6 6-6 6\"/></svg></span></a>",
+      "css": ".ds-btn-primary { display:inline-flex; align-items:center; gap:12px; padding:8px 8px 8px 24px; background:#F26522; color:#fff; border-radius:9999px; font-family:'Satoshi Variable',system-ui,sans-serif; font-size:14px; font-weight:500; text-decoration:none; transition:background .5s cubic-bezier(0.25,0.1,0.25,1); } .ds-btn-primary:hover { background:#E05A1A; } .ds-btn-primary:focus-visible { outline:2px solid #F26522; outline-offset:2px; } .ds-roll { display:block; height:20px; overflow:hidden; } .ds-roll-track { display:flex; flex-direction:column; transition:transform .5s cubic-bezier(0.25,0.1,0.25,1); } .ds-btn-primary:hover .ds-roll-track { transform:translateY(-50%); } .ds-roll-track > span { display:flex; height:20px; align-items:center; } .ds-btn-chip { display:flex; height:28px; width:28px; align-items:center; justify-content:center; border-radius:9999px; background:#fff; color:#F26522; } .ds-btn-primary:hover .ds-btn-chip svg { transform:rotate(-45deg); } .ds-btn-chip svg { transition:transform .5s cubic-bezier(0.25,0.1,0.25,1); }"
+    },
+    {
+      "name": "Dark Button (Nav Download)",
+      "kind": "button",
+      "refersTo": "button-dark",
+      "description": "The download CTA inside the floating nav bar; ink fill, same anatomy at smaller scale.",
+      "html": "<a href=\"#\" class=\"ds-btn-dark\"><span class=\"ds-roll ds-roll-sm\"><span class=\"ds-roll-track\"><span>Download for Windows</span><span>Download for Windows</span></span></span><span class=\"ds-btn-chip-sm\"><svg viewBox=\"0 0 24 24\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5 12h14M13 6l6 6-6 6\"/></svg></span></a>",
+      "css": ".ds-btn-dark { display:inline-flex; align-items:center; gap:10px; padding:8px 8px 8px 20px; background:#111827; color:#fff; border-radius:9999px; font-family:'Satoshi Variable',system-ui,sans-serif; font-size:13px; font-weight:500; text-decoration:none; } .ds-btn-dark:focus-visible { outline:2px solid #111827; outline-offset:2px; } .ds-roll-sm { height:20px; overflow:hidden; } .ds-btn-chip-sm { display:flex; height:24px; width:24px; align-items:center; justify-content:center; border-radius:9999px; background:#fff; color:#111827; } .ds-btn-dark:hover .ds-btn-chip-sm svg { transform:rotate(-45deg); } .ds-btn-chip-sm svg { transition:transform .5s cubic-bezier(0.25,0.1,0.25,1); }"
+    },
+    {
+      "name": "Ghost Button (Open Source)",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "The lone squared, softly-lifted secondary button carrying the starburst mark and a version chip.",
+      "html": "<a href=\"#\" class=\"ds-btn-ghost\"><svg viewBox=\"0 0 100 100\" width=\"22\" height=\"22\" fill=\"#E8704E\"><path d=\"M50 0 58 34 92 20 66 46 100 50 66 54 92 80 58 66 50 100 42 66 8 80 34 54 0 50 34 46 8 20 42 34Z\"/></svg><span class=\"ds-btn-ghost-label\">Free &amp; open source</span><span class=\"ds-chip\">v1.2.1</span></a>",
+      "css": ".ds-btn-ghost { display:inline-flex; align-items:center; gap:10px; padding:10px 16px; background:#fff; border-radius:4px; text-decoration:none; box-shadow:0 2px 8px rgba(0,0,0,0.08); transition:box-shadow .3s ease; } .ds-btn-ghost:hover { box-shadow:0 4px 16px rgba(0,0,0,0.12); } .ds-btn-ghost:focus-visible { outline:2px solid #111827; outline-offset:2px; } .ds-btn-ghost-label { font-family:'Satoshi Variable',system-ui,sans-serif; font-size:14px; font-weight:500; color:#111827; } .ds-chip { padding:2px 8px; border-radius:4px; background:#111827; color:#fff; font-size:11px; font-family:'Satoshi Variable',system-ui,sans-serif; }"
+    },
+    {
+      "name": "Section Badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "A numbered ink dot beside a hairline-bordered label pill. Reserved for the two real showcase sections.",
+      "html": "<div class=\"ds-badge\"><span class=\"ds-badge-num\">1</span><span class=\"ds-badge-label\">Introducing Quiro</span></div>",
+      "css": ".ds-badge { display:inline-flex; align-items:center; gap:12px; } .ds-badge-num { display:flex; height:28px; width:28px; align-items:center; justify-content:center; border-radius:9999px; background:#111827; color:#fff; font-family:'Satoshi Variable',system-ui,sans-serif; font-size:12px; font-weight:600; } .ds-badge-label { padding:6px 16px; border-radius:9999px; border:1px solid #E5E7EB; color:#111827; font-family:'Satoshi Variable',system-ui,sans-serif; font-size:13px; font-weight:500; }"
+    },
+    {
+      "name": "Media Card",
+      "kind": "card",
+      "refersTo": "media-card",
+      "description": "A flat, rounded media tile with a per-card dark backdrop and a corner pill that expands on hover to reveal a label. Caption sits below the media.",
+      "html": "<div class=\"ds-media\"><div class=\"ds-media-frame\"><span class=\"ds-media-pill\"><span class=\"ds-media-pill-label\">Learn more</span><svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M7 17L17 7M7 7h10v10\"/></svg></span></div><p class=\"ds-media-desc\">Every cursor movement smoothed, eased and magnified automatically.</p><h3 class=\"ds-media-title\">Cursor effects</h3></div>",
+      "css": ".ds-media { width:100%; } .ds-media-frame { position:relative; aspect-ratio:329/246; width:100%; overflow:hidden; border-radius:16px; background:#1a1d2e; } .ds-media-img { height:100%; width:100%; object-fit:cover; } .ds-media-pill { position:absolute; bottom:16px; left:16px; display:flex; height:36px; align-items:center; justify-content:flex-end; gap:8px; overflow:hidden; width:36px; padding-right:11px; border-radius:9999px; background:#fff; color:#111827; transition:width .3s ease; } .ds-media-frame:hover .ds-media-pill { width:148px; } .ds-media-pill-label { white-space:nowrap; font-family:'Satoshi Variable',system-ui,sans-serif; font-size:13px; font-weight:500; opacity:0; transition:opacity .3s ease .1s; } .ds-media-frame:hover .ds-media-pill-label { opacity:1; } .ds-media-pill svg { flex-shrink:0; transform:rotate(-45deg); transition:transform .3s ease; } .ds-media-frame:hover .ds-media-pill svg { transform:rotate(0deg); } .ds-media-desc { margin-top:16px; font-family:'Satoshi Variable',system-ui,sans-serif; font-size:14px; line-height:1.6; color:#4B5563; } .ds-media-title { margin-top:4px; font-family:'Satoshi Variable',system-ui,sans-serif; font-size:15px; font-weight:600; color:#111827; }"
+    },
+    {
+      "name": "Nav Bar",
+      "kind": "nav",
+      "refersTo": null,
+      "description": "A floating white pill bar: logo chip, links, a live London clock, and the dark download CTA.",
+      "html": "<nav class=\"ds-nav\"><a href=\"#\" class=\"ds-nav-logo\">Q</a><div class=\"ds-nav-links\"><a href=\"#\">Features</a><a href=\"#\">Showcase</a><a href=\"#\">Releases</a><a href=\"#\">GitHub</a></div><span class=\"ds-nav-clock\">14:32 in London</span></nav>",
+      "css": ".ds-nav { display:flex; align-items:center; gap:20px; padding:5px; background:#fff; border-radius:9999px; font-family:'Satoshi Variable',system-ui,sans-serif; } .ds-nav-logo { display:flex; height:40px; width:40px; align-items:center; justify-content:center; border-radius:9999px; background:#EFEFEF; color:#111827; font-weight:600; text-decoration:none; box-shadow:0 0 0 1px rgba(0,0,0,0.05); } .ds-nav-links { display:flex; gap:24px; } .ds-nav-links a { font-size:14px; color:#111827; text-decoration:none; transition:color .3s ease; } .ds-nav-links a:hover { color:#6B7280; } .ds-nav-clock { font-size:13px; color:#4B5563; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Cinematic Minimalism",
+    "overview": "Quiro's landing page is a neutral stage lit by a single cinematic ember. The canvas is a near-white grey, the sections alternate white and a paler grey, and the ink is a deep near-black. Into that calm stage, one warm orange carries every moment that asks for action. The product footage is the star; the interface stays a quiet frame around it. It rejects the generic SaaS template, the corporate stock-photo look, and the cluttered feature-dump. A single variable typeface carries the whole hierarchy through weight and tightened tracking. Motion is refined and tactile, always in service of the product.",
+    "keyCharacteristics": [
+      "Near-white tonal stage; one saturated orange as the only heat.",
+      "Product footage and the shader hero are the imagery; the UI is the frame.",
+      "Single variable typeface, hierarchy by weight and tightened tracking.",
+      "Flat by default; depth from tonal layering, not shadows.",
+      "One idea per fold, download as the through-line."
+    ],
+    "rules": [
+      { "name": "The One Ember Rule", "body": "Orange is the only chromatic color in the system, and it appears on <=10% of any screen. Its rarity is what makes it read as action. Never introduce a second accent hue to balance it.", "section": "colors" },
+      { "name": "The Tonal Ladder Rule", "body": "Depth comes from three greys stacked (#F5F5F5 -> #EFEFEF -> #FFFFFF), not from borders or shadows. Sections separate by tone, not by lines.", "section": "colors" },
+      { "name": "The One Family Rule", "body": "Satoshi carries the entire hierarchy. Contrast comes from the weight axis (500 vs 600) and size, never from a new family.", "section": "typography" },
+      { "name": "The Tight-Crown Rule", "body": "Display and Headline type is tracked in (-0.03em / -0.02em); everything at body size and below stays at normal tracking.", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "Surfaces are flat at rest. A shadow appears only as a response to state, never to make a static panel look elevated. If a section needs separation, drop it one step on the tonal ladder.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do keep Director's Orange (#F26522) for actions only; deepen to #E05A1A on hover, never at rest.",
+      "Do build depth with the tonal ladder (#F5F5F5 -> #EFEFEF -> #FFFFFF); separate sections by tone, not by borders or shadows.",
+      "Do carry the whole type hierarchy in Satoshi; get contrast from weight (500 vs 600) and size, and tighten tracking only on Display/Headline crowns.",
+      "Do lead with product footage and the shader hero. Real recordings are the argument; the UI is the frame around them.",
+      "Do give every interactive control a visible :focus-visible ring and a prefers-reduced-motion alternative.",
+      "Do hold body copy to >=4.5:1 and large text to >=3:1; keep the lightest grey (#6B7280) for footer/meta only."
+    ],
+    "donts": [
+      "Don't ship the generic SaaS template: no gradient hero, no endless identical feature-card grid, no big-number hero-metric row.",
+      "Don't drift corporate / stock-photo: no smiling-people stock imagery, no enterprise navy, no jargon.",
+      "Don't feature-dump: no wall of specs above the fold.",
+      "Don't introduce a second accent hue, gradient text, or background-clip: text; orange is the only chromatic voice.",
+      "Don't add ambient shadows to make panels look elevated, or borders thicker than 1px (and never a colored side-stripe).",
+      "Don't extend numbered section badges beyond the two real showcase steps."
+    ]
+  }
+}
