@@ -338,12 +338,108 @@ jobs:
             release-upload-mac/SHA256SUMS-macos.txt
           if-no-files-found: error
 
+  build-linux:
+    name: Build Linux x64 (AppImage)
+    needs: prepare-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-release.outputs.source_sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Two Linux-only build prerequisites:
+      #  - libfuse2: electron-builder's AppImage packaging shells out to
+      #    appimagetool, which needs FUSE 2 (ubuntu-latest ships FUSE 3 only).
+      #  - X11 dev headers: the build config sets npmRebuild +
+      #    buildDependenciesFromSource, so install-app-deps may compile
+      #    uiohook-napi (libuiohook) from source, which needs the X11/XKB dev
+      #    packages below or the rebuild fails.
+      - name: Install AppImage build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libfuse2 \
+            libx11-dev libxtst-dev libxt-dev libxinerama-dev \
+            libx11-xcb-dev libxkbcommon-dev libxkbcommon-x11-dev libxkbfile-dev
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Copy WASM assets
+        run: npm run copy:wasm -w @quiro/desktop
+
+      - name: Remove stale uiohook build output
+        run: rm -rf node_modules/uiohook-napi/build
+
+      - name: Install app dependencies
+        working-directory: apps/desktop
+        run: npx electron-builder install-app-deps
+
+      # NOTE: the platform native helpers (WGC capture, GPU export, cursor
+      # monitor, HUD guard, whisper runtime) are Windows/macOS-only builds, so
+      # the Linux package ships without them. The app degrades to its portal /
+      # WebCodecs / FFmpeg fallbacks on Linux; features backed by those helpers
+      # (native capture, captions) are not available in this build yet.
+      - name: Build app (Vite + TypeScript)
+        working-directory: apps/desktop
+        run: npm run build:app -w @quiro/desktop
+
+      - name: Build Linux package (AppImage, x64)
+        working-directory: apps/desktop
+        run: npx electron-builder --linux AppImage --x64 --publish never
+
+      - name: Collect and checksum Linux artifacts
+        run: |
+          set -euo pipefail
+          shopt -s nullglob globstar
+          UPLOAD_DIR="release-upload-linux"
+          rm -rf "$UPLOAD_DIR"
+          mkdir -p "$UPLOAD_DIR"
+
+          files=(apps/desktop/release/**/*.AppImage apps/desktop/release/**/*.AppImage.blockmap apps/desktop/release/**/latest-linux.yml)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No Linux release files found."
+            exit 1
+          fi
+
+          for f in "${files[@]}"; do
+            name="$(basename "$f")"
+            if [ -e "$UPLOAD_DIR/$name" ]; then
+              echo "Duplicate asset: $name" && exit 1
+            fi
+            cp "$f" "$UPLOAD_DIR/$name"
+          done
+
+          (cd "$UPLOAD_DIR" && sha256sum -- *.AppImage *.AppImage.blockmap latest-linux.yml | sort > SHA256SUMS-linux-x64.txt)
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-x64-release
+          path: |
+            release-upload-linux/*.AppImage
+            release-upload-linux/*.AppImage.blockmap
+            release-upload-linux/latest-linux.yml
+            release-upload-linux/SHA256SUMS-linux-x64.txt
+          if-no-files-found: error
+
   publish-release-assets:
     name: Publish release assets
     needs:
       - prepare-release
       - build-windows-x64
       - build-macos
+      - build-linux
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -358,6 +454,12 @@ jobs:
         with:
           name: macos-release
           path: release-assets/macos
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-x64-release
+          path: release-assets/linux-x64
 
       - name: Stage release assets
         shell: bash
@@ -377,6 +479,10 @@ jobs:
             release-assets/macos/*.zip.blockmap
             release-assets/macos/latest-mac.yml
             release-assets/macos/SHA256SUMS-macos.txt
+            release-assets/linux-x64/*.AppImage
+            release-assets/linux-x64/*.AppImage.blockmap
+            release-assets/linux-x64/latest-linux.yml
+            release-assets/linux-x64/SHA256SUMS-linux-x64.txt
           )
 
           if [ ${#assets[@]} -eq 0 ]; then
@@ -402,6 +508,7 @@ jobs:
           # 1. Checksums must match — catches artifact corruption in transit.
           sha256sum -c SHA256SUMS-windows-x64.txt
           sha256sum -c SHA256SUMS-macos.txt
+          sha256sum -c SHA256SUMS-linux-x64.txt
 
           # 2. The updater metadata must advertise exactly the tagged version,
           #    otherwise shipped clients would update to the wrong build.
