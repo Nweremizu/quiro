@@ -82,3 +82,20 @@ Known CI gotchas — these fail **only in CI** (clean `npm ci`), pass in local d
 
 - **macOS Electron-install race.** `test.yml` installs with `npm ci --ignore-scripts`, so Electron's binary isn't extracted at install. vitest runs test files in parallel, so the first tests to `import "electron"` (`electron/ai/*`) race to extract into `node_modules/electron/dist` and collide creating the macOS-only `Electron Framework` symlink → `EEXIST` / "Electron failed to install correctly". Fixed by a serial `node node_modules/electron/install.js` step before the tests — **keep it**. Windows has no such symlink, so it never broke there.
 - **`apps/web` two `@types/react` copies.** Web uses React 19 types while the root hoists `@types/react@18` for desktop (see repo-layout note). Under clean install, `motion` and the global JSX namespace resolve the root v18 while web source uses v19, so `@quiro/web` typecheck fails with `Provider cannot be used as a JSX component` / `ReactNode not assignable to ReactNode`. `motion` doesn't declare `@types/react`, so npm `overrides` can't fix it — it's a TS resolution issue. Fixed by pinning `react`/`react-dom` type resolution to the web copy via `paths` in `apps/web/tsconfig.json` — **keep those entries**. Next force-aliases react at runtime, so `next build` is unaffected. To reproduce locally you must do a clean `npm ci` (a stale local `node_modules` dedupes and hides it).
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues in `Nweremizu/quiro`, via the `gh` CLI. External PRs are **not** a
+triage surface. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical vocabulary — `needs-triage`, `needs-info`, `ready-for-agent`,
+`ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` at the repo root, both created lazily
+by `/domain-modeling`. See `docs/agents/domain.md`.

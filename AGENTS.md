@@ -68,3 +68,20 @@ The editor had severe playback stutter caused by React re-rendering the whole `E
 5. High-frequency input is coalesced: the `Scrubber` slider and timeline playhead scrub commit at most once per animation frame; zoom-focus dragging in `playback.tsx` updates the overlay locally and commits region state only on pointer-up.
 
 Debug tooling (dev-only, safe to leave in): `src/lib/playbackSessionDebug.ts` logs per-playback-session stats (presented-frame gaps, decoder drops, long tasks, per-phase ticker timing, `react:*` Profiler probe costs) to the console; toggle with `window.__PLAYBACK_DEBUG = false/true`. `PerfOverlay` (Ctrl+Shift+P) shows live FPS/CPU/IPC. After any change to playback, preview rendering, or window.tsx state flow, play a clip and check the session summary — `stalls ≥80ms` should stay at none and `react:settings-panel` should stay near zero during playback.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues in `Nweremizu/quiro`, via the `gh` CLI. External PRs are **not** a
+triage surface. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical vocabulary — `needs-triage`, `needs-info`, `ready-for-agent`,
+`ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` at the repo root, both created lazily
+by `/domain-modeling`. See `docs/agents/domain.md`.
