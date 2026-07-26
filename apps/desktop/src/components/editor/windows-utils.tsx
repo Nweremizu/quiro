@@ -32,6 +32,7 @@ export type SmokeExportConfig = {
   projectPath?: string | null;
   quality?: ExportQuality;
   fps?: ExportMp4FrameRate;
+  format?: "mp4" | "gif";
 };
 
 export const EXPORT_BLOB_STREAM_CHUNK_BYTES = 16 * 1024 * 1024;
@@ -266,6 +267,7 @@ export function getSmokeExportConfig(search: string): SmokeExportConfig {
       ? parseSmokeExportQuality(params.get("smokeQuality"))
       : undefined,
     fps: enabled ? parseSmokeExportFps(params.get("smokeFps")) : undefined,
+    format: enabled && params.get("smokeFormat") === "gif" ? "gif" : "mp4",
   };
 }
 

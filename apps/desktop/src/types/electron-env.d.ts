@@ -517,6 +517,8 @@ interface Window {
       bitrate: number;
       encodingMode: 'fast' | 'balanced' | 'quality';
       inputMode?: 'rawvideo' | 'h264-stream';
+      format?: 'video' | 'gif';
+      loop?: boolean;
     }) => Promise<{
       success: boolean;
       sessionId?: string;

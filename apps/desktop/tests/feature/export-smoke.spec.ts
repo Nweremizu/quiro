@@ -55,4 +55,32 @@ test.describe("export smoke", () => {
       )
       .toBeGreaterThan(0);
   });
+
+  test("exports a GIF through the FFmpeg palette path", async () => {
+    test.setTimeout(180_000);
+    outputPath = path.join(os.tmpdir(), `quiro-export-smoke-${Date.now()}.gif`);
+    instance = await launchQuiroElectron({
+      QUIRO_SMOKE_EXPORT: "1",
+      QUIRO_SMOKE_EXPORT_INPUT: fixtureVideoPath,
+      QUIRO_SMOKE_EXPORT_OUTPUT: outputPath,
+      QUIRO_SMOKE_EXPORT_FORMAT: "gif",
+    });
+
+    await expect
+      .poll(
+        async () => {
+          try {
+            return (await fs.stat(outputPath as string)).size;
+          } catch {
+            return 0;
+          }
+        },
+        { timeout: 150_000 },
+      )
+      .toBeGreaterThan(0);
+
+    // Confirm it is a real GIF, not an empty/garbage file.
+    const header = (await fs.readFile(outputPath)).subarray(0, 6).toString("ascii");
+    expect(header).toMatch(/^GIF8[79]a$/);
+  });
 });

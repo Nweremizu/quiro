@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildEditedTrackSourceAudioFilter,
+  buildNativeGifExportArgs,
   buildNativeH264StreamExportArgs,
   buildNativeVideoExportArgs,
   buildTrimmedSourceAudioFilter,
@@ -73,6 +74,29 @@ describe("native video export helpers", () => {
       "+faststart",
       "out.mp4",
     ]);
+  });
+
+  it("builds GIF palette args with rawvideo input and loop control", () => {
+    const looped = buildNativeGifExportArgs(
+      { width: 320, height: 180, frameRate: 15, loop: true },
+      "out.gif",
+    );
+    expect(looped).toContain("rawvideo");
+    expect(looped).toContain("rgba");
+    expect(looped).toContain("320x180");
+    // Single-pass palettegen/paletteuse over one stdin read.
+    expect(looped.join(" ")).toContain("palettegen");
+    expect(looped.join(" ")).toContain("paletteuse");
+    // Top-down canvas bytes → must NOT vflip.
+    expect(looped).not.toContain("vflip");
+    expect(looped[looped.indexOf("-loop") + 1]).toBe("0");
+    expect(looped[looped.length - 1]).toBe("out.gif");
+
+    const once = buildNativeGifExportArgs(
+      { width: 320, height: 180, frameRate: 15, loop: false },
+      "out.gif",
+    );
+    expect(once[once.indexOf("-loop") + 1]).toBe("-1");
   });
 
   it("builds trim and edited-track audio filters", () => {

@@ -157,6 +157,51 @@ export function buildNativeVideoExportArgs(
   return args;
 }
 
+export interface NativeGifExportStartOptions {
+  width: number;
+  height: number;
+  frameRate: number;
+  loop: boolean;
+}
+
+/**
+ * Builds FFmpeg arguments for a high-quality GIF export from a rawvideo RGBA
+ * stream on stdin. Uses a single-pass `split` filtergraph so palettegen and
+ * paletteuse run over one pass of stdin (no temp file, no second read from the
+ * renderer). Frames arrive top-down from the renderer's 2D composite canvas
+ * (getImageData), so — unlike the H.264 rawvideo path — there is no `vflip`.
+ */
+export function buildNativeGifExportArgs(
+  options: NativeGifExportStartOptions,
+  outputPath: string
+): string[] {
+  // gif muxer: 0 = loop forever, -1 = play once (no loop).
+  const loopArg = options.loop ? '0' : '-1';
+  return [
+    '-y',
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-f',
+    'rawvideo',
+    '-pix_fmt',
+    'rgba',
+    '-s:v',
+    `${options.width}x${options.height}`,
+    '-framerate',
+    String(options.frameRate),
+    '-i',
+    'pipe:0',
+    '-vf',
+    'split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle',
+    '-loop',
+    loopArg,
+    '-f',
+    'gif',
+    outputPath,
+  ];
+}
+
 function formatFfmpegSeconds(milliseconds: number): string {
   return (milliseconds / 1000).toFixed(3);
 }

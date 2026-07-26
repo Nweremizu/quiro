@@ -138,6 +138,7 @@ export class GifExporter {
   private streamingDecoder: StreamingVideoDecoder | null = null;
   private renderer: FrameRenderer | null = null;
   private gif: GIF | null = null;
+  private nativeSessionId: string | null = null;
   private cancelled = false;
   private exportStartTimeMs = 0;
   private progressSampleStartTimeMs = 0;
@@ -229,123 +230,41 @@ export class GifExporter {
       });
       await this.renderer.initialize();
 
-      // Initialize GIF encoder
-      // Loop: 0 = infinite loop, 1 = play once (no loop)
-      const repeat = getGifRepeat(this.config.loop);
-      const cores = navigator.hardwareConcurrency || 4;
-      const WORKER_COUNT = Math.max(1, Math.min(8, cores - 1));
-
-      this.gif = new GIF({
-        workers: WORKER_COUNT,
-        quality: 10,
-        width: this.config.width,
-        height: this.config.height,
-        workerScript: GIF_WORKER_URL,
-        repeat,
-        background: "#000000",
-        transparent: null,
-        dither: "FloydSteinberg",
-      });
-
       // Calculate effective duration and frame count (excluding trim regions)
       const effectiveDuration = this.streamingDecoder.getEffectiveDuration(
         this.config.trimRegions,
         this.config.speedRegions,
       );
       const totalFrames = Math.ceil(effectiveDuration * this.config.frameRate);
-
-      // Calculate frame delay in milliseconds (gif.js uses ms)
-      const frameDelay = Math.round(1000 / this.config.frameRate);
+      const frameDurationUs = 1_000_000 / this.config.frameRate;
 
       console.log("[GifExporter] Original duration:", videoInfo.duration, "s");
       console.log("[GifExporter] Effective duration:", effectiveDuration, "s");
       console.log("[GifExporter] Total frames to export:", totalFrames);
       console.log("[GifExporter] Frame rate:", this.config.frameRate, "FPS");
-      console.log("[GifExporter] Frame delay:", frameDelay, "ms");
       console.log(
         "[GifExporter] Loop:",
         this.config.loop ? "infinite" : "once",
       );
-      console.log(
-        "[GifExporter] Using streaming decode (web-demuxer + VideoDecoder)",
-      );
 
-      let frameIndex = 0;
-      const frameDurationUs = 1_000_000 / this.config.frameRate;
-
-      // Stream decode and process frames — no seeking!
-      await this.streamingDecoder.decodeAll(
-        this.config.frameRate,
-        this.config.trimRegions,
-        this.config.speedRegions,
-        async (
-          videoFrame,
-          _exportTimestampUs,
-          sourceTimestampMs,
-          cursorTimestampMs,
-        ) => {
-          if (this.cancelled) {
-            return;
-          }
-
-          const sourceTimestampUs = sourceTimestampMs * 1000;
-          const cursorTimestampUs = cursorTimestampMs * 1000;
-          await this.renderer!.renderFrame(
-            videoFrame,
-            sourceTimestampUs,
-            cursorTimestampUs,
-            frameDurationUs,
-            frameIndex * frameDurationUs,
-          );
-
-          this.addRenderedGifFrame(frameDelay);
-          frameIndex++;
-          this.reportProgress(frameIndex, totalFrames);
-        },
-      );
-
-      if (this.cancelled) {
-        return { success: false, error: "Export cancelled" };
-      }
-
-      // Update progress to show we're now in the finalizing phase
-      if (this.config.onProgress) {
-        this.config.onProgress({
-          currentFrame: totalFrames,
+      // Primary path: stream rendered frames to bundled FFmpeg (palettegen/
+      // paletteuse) — hardware-agnostic C encode, far faster and higher quality
+      // than the pure-JS gif.js fallback. Falls back to gif.js only when the
+      // native session can't start (e.g. FFmpeg unavailable).
+      if (this.canUseNativeGifEncode()) {
+        const nativeResult = await this.exportViaFfmpeg(
           totalFrames,
-          percentage: 100,
-          estimatedTimeRemaining: 0,
-          phase: "finalizing",
-          renderFps: this.lastRenderFps,
-        });
+          frameDurationUs,
+        );
+        if (nativeResult) {
+          return nativeResult;
+        }
+        console.warn(
+          "[GifExporter] Native FFmpeg GIF path unavailable — falling back to gif.js",
+        );
       }
 
-      // Render the GIF
-      const blob = await new Promise<Blob>((resolve) => {
-        this.gif!.on("finished", (blob: Blob) => {
-          resolve(blob);
-        });
-
-        // Track rendering progress
-        this.gif!.on("progress", (progress: number) => {
-          if (this.config.onProgress) {
-            this.config.onProgress({
-              currentFrame: totalFrames,
-              totalFrames,
-              percentage: 100,
-              estimatedTimeRemaining: 0,
-              phase: "finalizing",
-              renderFps: this.lastRenderFps,
-              renderProgress: Math.round(progress * 100),
-            });
-          }
-        });
-
-        // gif.js doesn't have a typed 'error' event, but we can catch errors in the try/catch
-        this.gif!.render();
-      });
-
-      return { success: true, blob };
+      return await this.exportViaGifJs(totalFrames, frameDurationUs);
     } catch (error) {
       console.error("GIF Export error:", error);
       return {
@@ -357,9 +276,208 @@ export class GifExporter {
     }
   }
 
-  private addRenderedGifFrame(frameDelay: number) {
+  private canUseNativeGifEncode(): boolean {
+    return (
+      typeof window !== "undefined" &&
+      !!window.electronAPI?.nativeVideoExportStart &&
+      !!window.electronAPI?.nativeVideoExportWriteFrame &&
+      !!window.electronAPI?.nativeVideoExportFinish
+    );
+  }
+
+  /**
+   * Streams rendered RGBA frames to the main-process FFmpeg GIF session.
+   * Returns an ExportResult on success or hard failure, or `null` if the
+   * session could not be started so the caller can fall back to gif.js.
+   */
+  private async exportViaFfmpeg(
+    totalFrames: number,
+    frameDurationUs: number,
+  ): Promise<ExportResult | null> {
+    console.log("[GifExporter] Encoding via native FFmpeg (palettegen)");
+    const start = await window.electronAPI.nativeVideoExportStart({
+      width: this.config.width,
+      height: this.config.height,
+      frameRate: this.config.frameRate,
+      bitrate: 0,
+      encodingMode: "balanced",
+      format: "gif",
+      loop: this.config.loop,
+    });
+
+    if (!start.success || !start.sessionId) {
+      return null;
+    }
+    this.nativeSessionId = start.sessionId;
+    const sessionId = start.sessionId;
+
+    let frameIndex = 0;
+    await this.streamingDecoder!.decodeAll(
+      this.config.frameRate,
+      this.config.trimRegions,
+      this.config.speedRegions,
+      async (videoFrame, _exportTimestampUs, sourceTimestampMs, cursorTimestampMs) => {
+        if (this.cancelled) {
+          return;
+        }
+
+        await this.renderer!.renderFrame(
+          videoFrame,
+          sourceTimestampMs * 1000,
+          cursorTimestampMs * 1000,
+          frameDurationUs,
+          frameIndex * frameDurationUs,
+        );
+
+        const frameBytes = this.readRenderedFrameBytes();
+        const writeResult = await window.electronAPI.nativeVideoExportWriteFrame(
+          sessionId,
+          frameBytes,
+        );
+        if (!writeResult.success) {
+          throw new Error(writeResult.error || "Failed to write GIF frame");
+        }
+
+        frameIndex++;
+        this.reportProgress(frameIndex, totalFrames);
+      },
+    );
+
+    if (this.cancelled) {
+      await window.electronAPI.nativeVideoExportCancel?.(sessionId);
+      this.nativeSessionId = null;
+      return { success: false, error: "Export cancelled" };
+    }
+
+    this.reportFinalizing(totalFrames);
+
+    const finish = await window.electronAPI.nativeVideoExportFinish(sessionId, {
+      audioMode: "none",
+    });
+    this.nativeSessionId = null;
+
+    if (!finish.success || !finish.tempPath) {
+      return {
+        success: false,
+        error: finish.error || "GIF finalization failed",
+      };
+    }
+
+    return { success: true, tempFilePath: finish.tempPath };
+  }
+
+  /** Reads the composite canvas as top-down RGBA bytes (w*h*4). */
+  private readRenderedFrameBytes(): Uint8Array {
     const canvas = this.renderer!.getCanvas();
-    this.gif!.addFrame(canvas, { delay: frameDelay, copy: true });
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      throw new Error("Composite canvas 2D context unavailable");
+    }
+    const imageData = ctx.getImageData(
+      0,
+      0,
+      this.config.width,
+      this.config.height,
+    );
+    return new Uint8Array(
+      imageData.data.buffer,
+      imageData.data.byteOffset,
+      imageData.data.byteLength,
+    );
+  }
+
+  private reportFinalizing(totalFrames: number): void {
+    if (this.config.onProgress) {
+      this.config.onProgress({
+        currentFrame: totalFrames,
+        totalFrames,
+        percentage: 100,
+        estimatedTimeRemaining: 0,
+        phase: "finalizing",
+        renderFps: this.lastRenderFps,
+      });
+    }
+  }
+
+  /** Pure-JS fallback used only when FFmpeg is unavailable. */
+  private async exportViaGifJs(
+    totalFrames: number,
+    frameDurationUs: number,
+  ): Promise<ExportResult> {
+    // Loop: 0 = infinite loop, 1 = play once (no loop)
+    const repeat = getGifRepeat(this.config.loop);
+    const cores = navigator.hardwareConcurrency || 4;
+    const WORKER_COUNT = Math.max(1, Math.min(8, cores - 1));
+    const frameDelay = Math.round(1000 / this.config.frameRate);
+
+    this.gif = new GIF({
+      workers: WORKER_COUNT,
+      quality: 10,
+      width: this.config.width,
+      height: this.config.height,
+      workerScript: GIF_WORKER_URL,
+      repeat,
+      background: "#000000",
+      transparent: null,
+      dither: "FloydSteinberg",
+    });
+
+    let frameIndex = 0;
+    await this.streamingDecoder!.decodeAll(
+      this.config.frameRate,
+      this.config.trimRegions,
+      this.config.speedRegions,
+      async (videoFrame, _exportTimestampUs, sourceTimestampMs, cursorTimestampMs) => {
+        if (this.cancelled) {
+          return;
+        }
+
+        await this.renderer!.renderFrame(
+          videoFrame,
+          sourceTimestampMs * 1000,
+          cursorTimestampMs * 1000,
+          frameDurationUs,
+          frameIndex * frameDurationUs,
+        );
+
+        this.gif!.addFrame(this.renderer!.getCanvas(), {
+          delay: frameDelay,
+          copy: true,
+        });
+        frameIndex++;
+        this.reportProgress(frameIndex, totalFrames);
+      },
+    );
+
+    if (this.cancelled) {
+      return { success: false, error: "Export cancelled" };
+    }
+
+    this.reportFinalizing(totalFrames);
+
+    const blob = await new Promise<Blob>((resolve) => {
+      this.gif!.on("finished", (blob: Blob) => {
+        resolve(blob);
+      });
+
+      this.gif!.on("progress", (progress: number) => {
+        if (this.config.onProgress) {
+          this.config.onProgress({
+            currentFrame: totalFrames,
+            totalFrames,
+            percentage: 100,
+            estimatedTimeRemaining: 0,
+            phase: "finalizing",
+            renderFps: this.lastRenderFps,
+            renderProgress: Math.round(progress * 100),
+          });
+        }
+      });
+
+      this.gif!.render();
+    });
+
+    return { success: true, blob };
   }
 
   private reportProgress(currentFrame: number, totalFrames: number) {
@@ -408,6 +526,10 @@ export class GifExporter {
     if (this.gif) {
       this.gif.abort();
     }
+    if (this.nativeSessionId && typeof window !== "undefined") {
+      void window.electronAPI?.nativeVideoExportCancel?.(this.nativeSessionId);
+      this.nativeSessionId = null;
+    }
     this.cleanup();
   }
 
@@ -430,6 +552,26 @@ export class GifExporter {
       this.renderer = null;
     }
 
+    // gif.js never terminates its web workers on a successful render — it only
+    // does so on abort() — so a completed export would otherwise leak up to
+    // WORKER_COUNT live workers per run, eventually exhausting the renderer and
+    // forcing an app restart. Terminate them explicitly here.
+    if (this.gif) {
+      const workers = this.gif as unknown as {
+        freeWorkers?: Worker[];
+        activeWorkers?: Worker[];
+      };
+      for (const worker of [
+        ...(workers.freeWorkers ?? []),
+        ...(workers.activeWorkers ?? []),
+      ]) {
+        try {
+          worker.terminate();
+        } catch {
+          // Worker may already be gone.
+        }
+      }
+    }
     this.gif = null;
   }
 }

@@ -141,6 +141,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     bitrate: number;
     encodingMode: "fast" | "balanced" | "quality";
     inputMode?: "rawvideo" | "h264-stream";
+    format?: "video" | "gif";
+    loop?: boolean;
   }) => {
     return ipcRenderer.invoke("native-video-export-start", options);
   },

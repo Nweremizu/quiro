@@ -31,6 +31,7 @@ import {
 } from "@electron/ipc/export/native";
 import { getFfmpegBinaryPath } from "@electron/ipc/ffmpeg/binary";
 import {
+  buildNativeGifExportArgs,
   buildNativeH264StreamExportArgs,
   buildNativeVideoExportArgs,
   getNativeVideoInputByteSize,
@@ -89,22 +90,47 @@ export function registerExportHandlers() {
         bitrate: number;
         encodingMode: NativeExportEncodingMode;
         inputMode?: "rawvideo" | "h264-stream";
+        format?: "video" | "gif";
+        loop?: boolean;
       },
     ) => {
       try {
-        if (options.width % 2 !== 0 || options.height % 2 !== 0) {
+        const format = options.format ?? "video";
+        // GIF is palette-based and tolerates odd dimensions; the even-dimension
+        // constraint only matters for yuv420p H.264.
+        if (
+          format !== "gif" &&
+          (options.width % 2 !== 0 || options.height % 2 !== 0)
+        ) {
           throw new Error("Native export requires even output dimensions");
         }
 
         const ffmpegPath = getFfmpegBinaryPath();
-        const inputMode = options.inputMode ?? "rawvideo";
+        const inputMode = format === "gif" ? "rawvideo" : options.inputMode ?? "rawvideo";
         const sessionId = `quiro-export-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        const outputPath = path.join(app.getPath("temp"), `${sessionId}.mp4`);
+        const outputExt = format === "gif" ? "gif" : "mp4";
+        const outputPath = path.join(
+          app.getPath("temp"),
+          `${sessionId}.${outputExt}`,
+        );
 
         let encoderName: string;
         let ffmpegArgs: string[];
 
-        if (inputMode === "h264-stream") {
+        if (format === "gif") {
+          // Rendered RGBA frames in, palettegen/paletteuse out — no encoder
+          // probe (there is no video codec) and no audio mux on finish.
+          encoderName = "gif-palette";
+          ffmpegArgs = buildNativeGifExportArgs(
+            {
+              width: options.width,
+              height: options.height,
+              frameRate: options.frameRate,
+              loop: options.loop ?? true,
+            },
+            outputPath,
+          );
+        } else if (inputMode === "h264-stream") {
           // Pre-encoded H.264 Annex B from browser VideoEncoder — just stream-copy into MP4
           encoderName = "h264-stream-copy";
           ffmpegArgs = buildNativeH264StreamExportArgs({

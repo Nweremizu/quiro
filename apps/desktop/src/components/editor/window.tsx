@@ -5504,16 +5504,41 @@ export default function EditorWindow() {
           exporterRef.current = gifExporter as unknown as VideoExporter;
           const result = await gifExporter.export();
 
-          if (result.success && result.blob) {
+          if (result.success && (result.tempFilePath || result.blob)) {
             const timestamp = Date.now();
             const fileName = `export-${timestamp}.gif`;
             markExportAsSaving();
 
-            const { saveResult, pendingSave } = await saveBlobExport(
-              result.blob,
-              fileName,
-              smokeExportConfig.enabled ? smokeExportConfig.outputPath : null,
-            );
+            let saveResult: {
+              success: boolean;
+              path?: string;
+              message?: string;
+              canceled?: boolean;
+            };
+            let pendingSave: PendingExportSave;
+
+            if (result.tempFilePath) {
+              // Native FFmpeg path already wrote the finished GIF to a temp
+              // file; move it into place without a renderer-side Blob.
+              saveResult = await window.electronAPI.finalizeExportedVideo({
+                tempPath: result.tempFilePath,
+                fileName,
+                outputPath:
+                  smokeExportConfig.enabled && smokeExportConfig.outputPath
+                    ? smokeExportConfig.outputPath
+                    : null,
+              });
+              pendingSave = { fileName, tempFilePath: result.tempFilePath };
+            } else {
+              // gif.js fallback surfaces an in-memory Blob.
+              const blobSave = await saveBlobExport(
+                result.blob!,
+                fileName,
+                smokeExportConfig.enabled ? smokeExportConfig.outputPath : null,
+              );
+              saveResult = blobSave.saveResult;
+              pendingSave = blobSave.pendingSave;
+            }
 
             if (saveResult.canceled) {
               pendingExportSaveRef.current = pendingSave;
@@ -6039,11 +6064,31 @@ export default function EditorWindow() {
     }
 
     smokeExportStartedRef.current = true;
-    void handleExport({
-      format: "mp4",
-      quality: "good",
-      encodingMode: smokeExportConfig.encodingMode ?? "balanced",
-    });
+    if (smokeExportConfig.format === "gif") {
+      const smokeVideo = videoPlaybackRef.current?.video;
+      const gifDimensions = calculateOutputDimensions(
+        smokeVideo?.videoWidth || 1920,
+        smokeVideo?.videoHeight || 1080,
+        gifSizePreset,
+        GIF_SIZE_PRESETS,
+      );
+      void handleExport({
+        format: "gif",
+        gifConfig: {
+          frameRate: gifFrameRate,
+          loop: gifLoop,
+          sizePreset: gifSizePreset,
+          width: gifDimensions.width,
+          height: gifDimensions.height,
+        },
+      });
+    } else {
+      void handleExport({
+        format: "mp4",
+        quality: "good",
+        encodingMode: smokeExportConfig.encodingMode ?? "balanced",
+      });
+    }
   }, [
     cursorTelemetrySourcePath,
     error,
@@ -6053,8 +6098,12 @@ export default function EditorWindow() {
     duration,
     smokeExportConfig.enabled,
     smokeExportConfig.encodingMode,
+    smokeExportConfig.format,
     smokeExportConfig.outputPath,
     smokeExportConfig.projectPath,
+    gifFrameRate,
+    gifLoop,
+    gifSizePreset,
     videoPath,
     videoSourcePath,
   ]);
@@ -7040,15 +7089,7 @@ export default function EditorWindow() {
                         const currentMs =
                           playbackTimeStore.get()?.timelineMs ??
                           timelinePlayheadTime * 1000;
-                        const kfs = timelineRef.current?.keyframes ?? [];
-                        const prev = [...kfs]
-                          .reverse()
-                          .find((k) => k.time < currentMs - 50);
-                        handleSeek(
-                          prev
-                            ? prev.time / 1000
-                            : Math.max(0, currentMs / 1000 - 5),
-                        );
+                        handleSeek(Math.max(0, currentMs / 1000 - 5));
                       }}
                     >
                       <IconPlayerTrackPrevFilled className="w-3.5 h-3.5" />
@@ -7086,12 +7127,8 @@ export default function EditorWindow() {
                         const currentMs =
                           playbackTimeStore.get()?.timelineMs ??
                           timelinePlayheadTime * 1000;
-                        const kfs = timelineRef.current?.keyframes ?? [];
-                        const next = kfs.find((k) => k.time > currentMs + 50);
                         handleSeek(
-                          next
-                            ? next.time / 1000
-                            : Math.min(duration, currentMs / 1000 + 5),
+                          Math.min(duration, currentMs / 1000 + 5),
                         );
                       }}
                     >
