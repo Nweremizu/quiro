@@ -322,6 +322,15 @@ const Scrubber = ({
         bounce: 0.1,
       };
 
+  // number-flow's default transformTiming is a 900ms linear-spring curve,
+  // tuned for occasional value jumps. During a drag it re-triggers on every
+  // rAF-coalesced update, so the digits perpetually chase the pointer instead
+  // of tracking it. `animated={!isDragging}` renders drag updates instantly;
+  // this shorter, snappier timing is just for the settle on release/keyboard.
+  const numberTransformTiming: EffectTiming = shouldReduceMotion
+    ? { duration: 0 }
+    : { duration: 220, easing: "cubic-bezier(0.22, 1, 0.36, 1)" };
+
   return (
     <div className={cn("relative w-full select-none", className)}>
       <div
@@ -450,6 +459,8 @@ const Scrubber = ({
                 }}
                 prefix={prefix}
                 suffix={suffix}
+                animated={!isDragging}
+                transformTiming={numberTransformTiming}
               />
             ) : (
               <NumberFlow
@@ -460,6 +471,8 @@ const Scrubber = ({
                 }}
                 prefix={prefix}
                 suffix={suffix}
+                animated={!isDragging}
+                transformTiming={numberTransformTiming}
               />
             )}
           </div>
