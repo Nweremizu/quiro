@@ -278,7 +278,7 @@ export function SettingsSection({
         >
           <KeyboardShortcutsDialog
             triggerLabel={t("editor.keyboardShortcuts.customize")}
-            triggerClassName="h-8 rounded-md border border-border bg-transparent px-3 text-xs text-foreground hover:bg-foreground/[0.04] hover:text-foreground"
+            triggerClassName="h-8 rounded-md border border-border bg-transparent px-3 text-xs text-foreground hover:bg-foreground/[0.04] hover:text-foreground flex gap-2 items-center"
           />
         </SettingRow>
       </SettingsGroup>
