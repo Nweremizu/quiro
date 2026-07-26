@@ -1,6 +1,29 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { getKeyStatus, getProvider, hasApiKey, runAiComplete } from "./client";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { providerIdForModel } from "./types";
+
+// `hasKey()` reads three sources: env var, stored prefs, and a synced Claude
+// OAuth session. Isolate the tests from the two machine-state sources so they
+// exercise only env-var behavior — otherwise they fail on any dev machine that
+// is logged into Claude Code (OAuth) or has a stored key, while passing in CI.
+vi.mock("./claudeOAuth", () => ({
+  hasClaudeOAuthSync: () => false,
+  getClaudeAccessToken: async () => null,
+}));
+vi.mock("./aiSettings", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./aiSettings")>();
+  return {
+    ...actual,
+    getCachedAiPreferences: () => ({
+      anthropicKey: "",
+      minimaxKey: "",
+      selectedModel: "claude-opus-4-8",
+    }),
+  };
+});
+
+const { getKeyStatus, getProvider, hasApiKey, runAiComplete } = await import(
+  "./client"
+);
 
 describe("ai/client router (S0-2 + multi-provider)", () => {
   const originalAnthropic = process.env.ANTHROPIC_API_KEY;
