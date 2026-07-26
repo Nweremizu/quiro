@@ -2,7 +2,6 @@ export const SHORTCUT_ACTIONS = [
 	"addZoom",
 	"splitClip",
 	"addAnnotation",
-	"addKeyframe",
 	"deleteSelected",
 	"playPause",
 ] as const;
@@ -76,7 +75,6 @@ export const DEFAULT_SHORTCUTS: ShortcutsConfig = {
 	addZoom: { key: "z" },
 	splitClip: { key: "c" },
 	addAnnotation: { key: "a" },
-	addKeyframe: { key: "f" },
 	deleteSelected: { key: "d", ctrl: true },
 	playPause: { key: " " },
 };
@@ -85,7 +83,6 @@ export const SHORTCUT_LABELS: Record<ShortcutAction, string> = {
 	addZoom: "Add Zoom",
 	splitClip: "Split Clip",
 	addAnnotation: "Add Annotation",
-	addKeyframe: "Add Keyframe",
 	deleteSelected: "Delete Selected",
 	playPause: "Play / Pause",
 };

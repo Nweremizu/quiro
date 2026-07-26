@@ -15,7 +15,6 @@ import {
   type WheelEvent,
 } from "react";
 import { toast } from "sonner";
-import { v4 as uuidv4 } from "uuid";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -53,7 +52,6 @@ import type {
 } from "@/types/editor";
 import Item from "./Item";
 import glassStyles from "./ItemGlass.module.css";
-import KeyframeMarkers from "./KeyframeMarkers";
 import Row from "./Row";
 import TimelineWrapper from "./TimelineWrapper";
 import {
@@ -192,7 +190,6 @@ export interface TimelineEditorHandle {
   splitClip: () => void;
   addAnnotation: (trackIndex?: number) => void;
   addAudio: (trackIndex?: number) => Promise<void>;
-  keyframes: { id: string; time: number }[];
 }
 
 interface TimelineScaleConfig {
@@ -328,13 +325,11 @@ function PlaybackCursor({
   videoDurationMs,
   onSeek,
   timelineRef,
-  keyframes = [],
 }: {
   currentTimeMs: number;
   videoDurationMs: number;
   onSeek?: (time: number) => void;
   timelineRef: React.RefObject<HTMLDivElement>;
-  keyframes?: { id: string; time: number }[];
 }) {
   const { sidebarWidth, direction, range, valueToPixels, pixelsToValue } =
     useTimelineContext();
@@ -368,23 +363,10 @@ function PlaybackCursor({
 
       // Allow dragging outside to 0 or max, but clamp the value
       const relativeMs = pixelsToValue(clickX);
-      let absoluteMs = Math.max(
+      const absoluteMs = Math.max(
         0,
         Math.min(range.start + relativeMs, videoDurationMs),
       );
-
-      // Snap to nearby keyframe if within threshold (150ms)
-      const snapThresholdMs = 150;
-      const nearbyKeyframe = keyframes.find(
-        (kf) =>
-          Math.abs(kf.time - absoluteMs) <= snapThresholdMs &&
-          kf.time >= range.start &&
-          kf.time <= range.end,
-      );
-
-      if (nearbyKeyframe) {
-        absoluteMs = nearbyKeyframe.time;
-      }
 
       onSeek(absoluteMs / 1000);
     };
@@ -433,7 +415,6 @@ function PlaybackCursor({
     range.end,
     videoDurationMs,
     pixelsToValue,
-    keyframes,
   ]);
 
   if (videoDurationMs <= 0 || effectiveTimeMs < 0) {
@@ -708,7 +689,6 @@ function Timeline({
   selectedAudioId,
   selectAllBlocksActive = false,
   onClearBlockSelection,
-  keyframes = [],
   audioPeaks,
 }: {
   items: TimelineRenderItem[];
@@ -733,7 +713,6 @@ function Timeline({
   selectedAudioId?: string | null;
   selectAllBlocksActive?: boolean;
   onClearBlockSelection?: () => void;
-  keyframes?: { id: string; time: number }[];
   audioPeaks?: AudioPeaksData | null;
 }) {
   const {
@@ -1061,7 +1040,6 @@ function Timeline({
         videoDurationMs={videoDurationMs}
         onSeek={onSeek}
         timelineRef={localTimelineRef}
-        keyframes={keyframes}
       />
       {canShowGhostPlayhead && (
         <div
@@ -1362,12 +1340,6 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
     const [range, setRange] = useState<Range>(() =>
       createInitialRange(totalMs),
     );
-    const [keyframes, setKeyframes] = useState<{ id: string; time: number }[]>(
-      [],
-    );
-    const [selectedKeyframeId, setSelectedKeyframeId] = useState<string | null>(
-      null,
-    );
     const [selectAllBlocksActive, setSelectAllBlocksActive] = useState(false);
     const [customAspectWidth, setCustomAspectWidth] = useState(
       initialEditorPreferences.customAspectWidth,
@@ -1383,7 +1355,6 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
     const timelineContainerRef = useRef<HTMLDivElement>(null);
     const { shortcuts: keyShortcuts, isMac } = useShortcuts();
     const audioPeaks = useAudioPeaks(videoPath);
-    const density = getTimelineDensityConfig(densityMode);
 
     useEffect(() => {
       setRange(createInitialRange(totalMs));
@@ -1441,35 +1412,6 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
         });
       });
     }, []);
-
-    // Add keyframe at current playhead position
-    const addKeyframe = useCallback(() => {
-      if (totalMs === 0) return;
-      const time = Math.max(0, Math.min(getPlayheadMs(), totalMs));
-      if (keyframes.some((kf) => Math.abs(kf.time - time) < 1)) return;
-      setKeyframes((prev) => [...prev, { id: uuidv4(), time }]);
-    }, [getPlayheadMs, totalMs, keyframes]);
-
-    // Delete selected keyframe
-    const deleteSelectedKeyframe = useCallback(() => {
-      if (!selectedKeyframeId) return;
-      setKeyframes((prev) => prev.filter((kf) => kf.id !== selectedKeyframeId));
-      setSelectedKeyframeId(null);
-    }, [selectedKeyframeId]);
-
-    // Move keyframe to new time position
-    const handleKeyframeMove = useCallback(
-      (id: string, newTime: number) => {
-        setKeyframes((prev) =>
-          prev.map((kf) =>
-            kf.id === id
-              ? { ...kf, time: Math.max(0, Math.min(newTime, totalMs)) }
-              : kf,
-          ),
-        );
-      },
-      [totalMs],
-    );
 
     // Delete selected zoom item
     const deleteSelectedZoom = useCallback(() => {
@@ -1533,7 +1475,6 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
       audioIds.forEach((id) => onAudioDelete?.(id));
 
       clearSelectedBlocks();
-      setSelectedKeyframeId(null);
     }, [
       annotationRegions,
       audioRegions,
@@ -2191,14 +2132,10 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
           }
 
           e.preventDefault();
-          setSelectedKeyframeId(null);
           setSelectAllBlocksActive(true);
           return;
         }
 
-        if (matchesShortcut(e, keyShortcuts.addKeyframe, isMac)) {
-          addKeyframe();
-        }
         if (matchesShortcut(e, keyShortcuts.addZoom, isMac)) {
           handleAddZoom();
         }
@@ -2245,8 +2182,6 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
           if (selectAllBlocksActive) {
             e.preventDefault();
             deleteAllBlocks();
-          } else if (selectedKeyframeId) {
-            deleteSelectedKeyframe();
           } else if (selectedZoomId) {
             deleteSelectedZoom();
           } else if (selectedClipId) {
@@ -2263,18 +2198,15 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
       window.addEventListener("keydown", handleKeyDown);
       return () => window.removeEventListener("keydown", handleKeyDown);
     }, [
-      addKeyframe,
       handleAddZoom,
       handleSplitClip,
       handleAddAnnotation,
       deleteAllBlocks,
-      deleteSelectedKeyframe,
       deleteSelectedZoom,
       deleteSelectedClip,
       deleteSelectedSpeed,
       deleteSelectedAnnotation,
       deleteSelectedAudio,
-      selectedKeyframeId,
       selectedZoomId,
       selectedClipId,
       selectedSpeedId,
@@ -2308,7 +2240,6 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
         splitClip: handleSplitClip,
         addAnnotation: handleAddAnnotation,
         addAudio: handleAddAudio,
-        keyframes,
       }),
       [
         handleAddAnnotation,
@@ -2316,7 +2247,6 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
         handleAddZoom,
         handleSuggestZooms,
         handleSplitClip,
-        keyframes,
       ],
     );
 
@@ -2751,7 +2681,6 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
             isTimelineFocusedRef.current = true;
           }}
           onClick={() => {
-            setSelectedKeyframeId(null);
             setSelectAllBlocksActive(false);
           }}
           onWheel={handleTimelineWheel}
@@ -2767,15 +2696,6 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
             resolveTargetRowId={getResolvedDropRowId}
             allRegionSpans={allRegionSpans}
           >
-            <KeyframeMarkers
-              keyframes={keyframes}
-              selectedKeyframeId={selectedKeyframeId}
-              setSelectedKeyframeId={setSelectedKeyframeId}
-              onKeyframeMove={handleKeyframeMove}
-              videoDurationMs={totalMs}
-              timelineRef={timelineContainerRef}
-              topPx={density.keyframeTopPx}
-            />
             <Timeline
               items={timelineItems}
               videoDurationMs={totalMs}
@@ -2797,7 +2717,6 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
               selectedAudioId={selectedAudioId}
               selectAllBlocksActive={selectAllBlocksActive}
               onClearBlockSelection={clearSelectedBlocks}
-              keyframes={keyframes}
               audioPeaks={audioPeaks}
             />
           </TimelineWrapper>

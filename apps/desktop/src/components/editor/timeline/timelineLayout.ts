@@ -40,7 +40,6 @@ const TIMELINE_DENSITY_CONFIG: Record<
     primaryLabelClassName: string;
     secondaryLabelClassName: string;
     showSecondaryItemLabel: boolean;
-    keyframeTopPx: number;
     /** Height of the whole timeline panel in the editor window.
      * Rows flex-stretch to fill the panel, so this — not rowMinHeightPx —
      * is what makes density modes visually distinct. */
@@ -58,7 +57,6 @@ const TIMELINE_DENSITY_CONFIG: Record<
     primaryLabelClassName: "text-[9px]",
     secondaryLabelClassName: "text-[8px]",
     showSecondaryItemLabel: false,
-    keyframeTopPx: 24,
     panelHeightPercent: 13,
     panelMinHeightPx: 110,
   },
@@ -72,7 +70,6 @@ const TIMELINE_DENSITY_CONFIG: Record<
     primaryLabelClassName: "text-[11px]",
     secondaryLabelClassName: "text-[9px]",
     showSecondaryItemLabel: true,
-    keyframeTopPx: TIMELINE_AXIS_HEIGHT_PX,
     panelHeightPercent: 18,
     panelMinHeightPx: 200,
   },
@@ -86,7 +83,6 @@ const TIMELINE_DENSITY_CONFIG: Record<
     primaryLabelClassName: "text-[13px]",
     secondaryLabelClassName: "text-[11px]",
     showSecondaryItemLabel: true,
-    keyframeTopPx: 44,
     panelHeightPercent: 20,
     panelMinHeightPx: 230,
   },
