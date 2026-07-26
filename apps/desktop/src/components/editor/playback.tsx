@@ -2093,6 +2093,11 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
         cursorContainerRef.current = null;
         videoSpriteRef.current = null;
       };
+      // Deps stay narrow on purpose: this effect's cleanup destroys the Pixi app
+      // and every container ref, so re-running it rebuilds the whole renderer.
+      // Including syncPreviewMotionBlurQuality would do that on every identity
+      // change of that callback.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [initializePixiRenderer, onError]);
 
     useEffect(() => {
@@ -2201,6 +2206,11 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 
         videoSpriteRef.current = null;
       };
+      // Deps stay narrow on purpose: this effect's cleanup destroys the video
+      // texture and detaches the mask, so re-running it rebuilds video playback.
+      // layoutVideoContent and onPlayStateChange change identity far more often
+      // than the texture should be recreated.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pixiReady, videoReady, onTimeUpdate, updateOverlayForRegion]);
 
     useEffect(() => {

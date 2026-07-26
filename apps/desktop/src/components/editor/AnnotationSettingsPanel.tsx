@@ -22,7 +22,7 @@ import { type CustomFont, getCustomFonts } from "@/lib/customFonts";
 import { cn } from "@/lib/utils";
 import { useScopedT } from "../../contexts/I18nContext";
 import { AddCustomFontDialog } from "./AddCustomFontDialog";
-import { getArrowComponent } from "./ArrowSvgs";
+import { getArrowComponent } from "./arrowComponents";
 import { SectionLabel } from "./settings-panel/SectionLabel";
 import { InfoTooltip } from "./settings-panel/shared";
 import type {

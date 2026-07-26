@@ -198,9 +198,9 @@ import VideoPlayback, { VideoPlaybackRef } from "@/components/editor/playback";
 import {
   APP_HEADER_ICON_BUTTON_CLASS,
   FeedbackDialog,
-  openExternalLink,
   QUIRO_ISSUES_URL,
 } from "@/components/editor/help";
+import { openExternalLink } from "@/lib/openExternalLink";
 import { Button } from "@/components/ui/button";
 import { ShortcutTooltip } from "@/components/ui/shortcut-tooltip";
 import Scrubber from "@/components/ui/scrubber";
