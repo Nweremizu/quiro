@@ -1,13 +1,65 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Delete02Icon as Trash2 } from "@/components/icons";
 import { cn } from "@/lib/utils";
-import type { ZoomDepth, ZoomMode, ZoomPresetId } from "@/types/editor";
+import type {
+  ZoomDepth,
+  ZoomMode,
+  ZoomPresetId,
+  ZoomTransitionEasing,
+} from "@/types/editor";
 import {
   TEMPORAL_MOTION_BLUR_DEFAULT_SAMPLE_COUNT,
   TEMPORAL_MOTION_BLUR_DEFAULT_SHUTTER_FRACTION,
 } from "@/lib/exporter/temporal-motion-blur";
+import { ZOOM_TRANSITION_EASINGS } from "../../videoPlayback/mathUtils";
+
+// Derived from the curve map so a new curve cannot appear in the renderer
+// without appearing in the picker.
+const EASING_OPTIONS = Object.keys(
+  ZOOM_TRANSITION_EASINGS,
+) as ZoomTransitionEasing[];
+
+function EasingSelect({
+  label,
+  value,
+  onChange,
+  tSettings,
+}: {
+  label: string;
+  value: ZoomTransitionEasing;
+  onChange?: (easing: ZoomTransitionEasing) => void;
+  tSettings: (key: string, fallback?: string) => string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg bg-foreground/[0.03] px-2.5 py-1.5">
+      <span className="text-[10px] text-muted-foreground">{label}</span>
+      <Select
+        value={value}
+        onValueChange={(next) => onChange?.(next as ZoomTransitionEasing)}
+      >
+        <SelectTrigger className="h-6 w-24 border-foreground/10 bg-foreground/[0.03] text-[10px]">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {EASING_OPTIONS.map((easing) => (
+            <SelectItem key={easing} value={easing} className="text-[10px]">
+              {tSettings(`effects.zoomEasingOptions.${easing}`, easing)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
 
 interface ZoomSectionProps {
   tSettings: (key: string, fallback?: string) => string;
@@ -22,6 +74,12 @@ interface ZoomSectionProps {
   resetZoomSection: () => void;
   zoomClassicMode: boolean;
   onZoomClassicModeChange?: (v: boolean) => void;
+  zoomInEasing: ZoomTransitionEasing;
+  onZoomInEasingChange?: (easing: ZoomTransitionEasing) => void;
+  zoomOutEasing: ZoomTransitionEasing;
+  onZoomOutEasingChange?: (easing: ZoomTransitionEasing) => void;
+  connectedZoomEasing: ZoomTransitionEasing;
+  onConnectedZoomEasingChange?: (easing: ZoomTransitionEasing) => void;
   onZoomDelete?: (id: string) => void;
   ZOOM_DEPTH_OPTIONS: Array<{ depth: ZoomDepth; label: string }>;
   renderExtensionPanelsForSections: (
@@ -43,6 +101,12 @@ export function ZoomSection({
   resetZoomSection,
   zoomClassicMode,
   onZoomClassicModeChange,
+  zoomInEasing,
+  onZoomInEasingChange,
+  zoomOutEasing,
+  onZoomOutEasingChange,
+  connectedZoomEasing,
+  onConnectedZoomEasingChange,
   onZoomDelete,
   ZOOM_DEPTH_OPTIONS,
   renderExtensionPanelsForSections,
@@ -183,6 +247,30 @@ export function ZoomSection({
           )}
         </div>
       )}
+
+      <div className="space-y-1.5">
+        <EasingSelect
+          label={tSettings("effects.zoomInEasing", "Zoom In Curve")}
+          value={zoomInEasing}
+          onChange={onZoomInEasingChange}
+          tSettings={tSettings}
+        />
+        <EasingSelect
+          label={tSettings("effects.zoomOutEasing", "Zoom Out Curve")}
+          value={zoomOutEasing}
+          onChange={onZoomOutEasingChange}
+          tSettings={tSettings}
+        />
+        <EasingSelect
+          label={tSettings(
+            "effects.connectedZoomEasing",
+            "Connected Pan Curve",
+          )}
+          value={connectedZoomEasing}
+          onChange={onConnectedZoomEasingChange}
+          tSettings={tSettings}
+        />
+      </div>
 
       <div className="rounded-lg border border-foreground/10 bg-foreground/[0.03] px-3 py-2">
         <div className="text-[10px] text-muted-foreground">

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { ZoomRegion } from "@/types/editor";
-import { clamp01, cubicBezier, easeOutExpo, easeOutZoom } from "./mathUtils";
+import type { ZoomRegion, ZoomTransitionEasing } from "@/types/editor";
+import {
+  clamp01,
+  cubicBezier,
+  easeOutExpo,
+  easeOutZoom,
+  ZOOM_TRANSITION_EASINGS,
+} from "./mathUtils";
 import {
   clampDeltaMs,
   createSpringState,
@@ -643,13 +649,21 @@ describe("buildCameraMotionOptions", () => {
     connectZooms: true,
     zoomInDurationMs: 800,
     zoomOutDurationMs: 400,
+    zoomInEasing: "snappy",
+    zoomOutEasing: "smooth",
+    connectedZoomEasing: "linear",
   };
 
   it("carries every camera-motion setting through to the options", () => {
+    // Spelled out rather than compared to the fixture, so dropping a field
+    // from both the builder and the fixture cannot pass silently.
     expect(buildCameraMotionOptions(settings)).toEqual({
       connectZooms: true,
       zoomInDurationMs: 800,
       zoomOutDurationMs: 400,
+      zoomInEasing: "snappy",
+      zoomOutEasing: "smooth",
+      connectedZoomEasing: "linear",
     });
   });
 
@@ -659,8 +673,11 @@ describe("buildCameraMotionOptions", () => {
     const configLike = { ...settings, exportQuality: "high", width: 1920 };
     expect(Object.keys(buildCameraMotionOptions(configLike)).sort()).toEqual([
       "connectZooms",
+      "connectedZoomEasing",
       "zoomInDurationMs",
+      "zoomInEasing",
       "zoomOutDurationMs",
+      "zoomOutEasing",
     ]);
   });
 
@@ -670,5 +687,210 @@ describe("buildCameraMotionOptions", () => {
     const options = buildCameraMotionOptions({ connectZooms: false });
     expect(options.zoomInDurationMs).toBeUndefined();
     expect(options.zoomOutDurationMs).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// mathUtils / zoomRegionUtils — zoom transition easing curves
+// ---------------------------------------------------------------------------
+
+describe("ZOOM_TRANSITION_EASINGS", () => {
+  const ids: ZoomTransitionEasing[] = [
+    "quiro",
+    "glide",
+    "smooth",
+    "snappy",
+    "linear",
+  ];
+
+  // REGRESSION GUARD. "quiro" is the shipped default for both zoom directions,
+  // and until now the curve was hardcoded as easeOutZoom. If these ever drift,
+  // every existing project silently changes how its zooms move.
+  it("quiro is bit-identical to the previously hardcoded zoom curve", () => {
+    for (let t = 0; t <= 1; t += 0.001) {
+      expect(ZOOM_TRANSITION_EASINGS.quiro(t)).toBe(easeOutZoom(t));
+    }
+  });
+
+  // REGRESSION GUARD. "glide" is the shipped default for connected zoom-to-zoom
+  // pans, previously hardcoded as this exact bezier inside zoomRegionUtils.
+  it("glide is bit-identical to the previously hardcoded connected-pan curve", () => {
+    for (let t = 0; t <= 1; t += 0.001) {
+      expect(ZOOM_TRANSITION_EASINGS.glide(t)).toBe(
+        cubicBezier(0.1, 0.0, 0.2, 1.0, t),
+      );
+    }
+  });
+
+  it.each(ids)("%s starts at 0 and ends at 1", (id) => {
+    expect(ZOOM_TRANSITION_EASINGS[id](0)).toBeCloseTo(0, 6);
+    expect(ZOOM_TRANSITION_EASINGS[id](1)).toBeCloseTo(1, 6);
+  });
+
+  it.each(ids)("%s is monotonic and never overshoots", (id) => {
+    let previous = -Infinity;
+    for (let t = 0; t <= 1; t += 0.005) {
+      const value = ZOOM_TRANSITION_EASINGS[id](t);
+      expect(value).toBeGreaterThanOrEqual(previous - 1e-9);
+      expect(value).toBeGreaterThanOrEqual(-1e-9);
+      expect(value).toBeLessThanOrEqual(1 + 1e-9);
+      previous = value;
+    }
+  });
+
+  it("gives each name the arrival character it advertises", () => {
+    const at = (id: ZoomTransitionEasing) => ZOOM_TRANSITION_EASINGS[id](0.5);
+
+    // Snappy arrives decisively; smooth is a gentle symmetric ease-in-out.
+    expect(at("snappy")).toBeGreaterThan(at("smooth"));
+    // Snappy must also out-run the house curve, or the name is a lie.
+    expect(at("snappy")).toBeGreaterThan(at("quiro"));
+    // Linear is the reference: exactly half way at half time.
+    expect(at("linear")).toBeCloseTo(0.5, 6);
+    // Smooth is symmetric, so it also crosses at the midpoint.
+    expect(at("smooth")).toBeCloseTo(0.5, 2);
+  });
+
+  // The point of offering five curves is that a user can tell them apart. Two
+  // curves within a hair of each other are two wasted menu entries.
+  it("keeps every pair of curves visibly distinct", () => {
+    const samples = Array.from({ length: 201 }, (_, i) => i / 200);
+    const separation = (a: ZoomTransitionEasing, b: ZoomTransitionEasing) =>
+      Math.max(
+        ...samples.map((t) =>
+          Math.abs(ZOOM_TRANSITION_EASINGS[a](t) - ZOOM_TRANSITION_EASINGS[b](t)),
+        ),
+      );
+
+    for (const a of ids) {
+      for (const b of ids) {
+        if (a >= b) continue;
+        expect({ pair: `${a}/${b}`, separation: separation(a, b) > 0.15 }).toEqual(
+          { pair: `${a}/${b}`, separation: true },
+        );
+      }
+    }
+  });
+});
+
+describe("computeRegionStrength easing", () => {
+  const region: ZoomRegion = {
+    id: "r",
+    startMs: 0,
+    endMs: 6000,
+    depth: 3,
+    focus: { cx: 0.5, cy: 0.5 },
+  };
+
+  it("defaults to the shipped curve when no easing is supplied", () => {
+    for (let timeMs = 0; timeMs <= 6000; timeMs += 25) {
+      expect(computeRegionStrength(region, timeMs)).toBe(
+        computeRegionStrength(region, timeMs, {
+          zoomInEasing: "quiro",
+          zoomOutEasing: "quiro",
+        }),
+      );
+    }
+  });
+
+  it("falls back instead of throwing on an unrecognised curve name", () => {
+    // Easing values arrive from persisted JSON. Before they were wired up an
+    // unknown name was inert; now it would be invoked every frame, so a stale
+    // preferences file must not be able to crash the ticker or an export.
+    const bogus = "bouncy" as ZoomTransitionEasing;
+    expect(() =>
+      computeRegionStrength(region, 700, {
+        zoomInEasing: bogus,
+        zoomOutEasing: bogus,
+      }),
+    ).not.toThrow();
+    expect(
+      computeRegionStrength(region, 700, {
+        zoomInEasing: bogus,
+        zoomOutEasing: bogus,
+      }),
+    ).toBe(computeRegionStrength(region, 700));
+  });
+
+  it("applies the zoom-in easing to the ramp up", () => {
+    const linear = computeRegionStrength(region, 700, {
+      zoomInEasing: "linear",
+    });
+    const quiro = computeRegionStrength(region, 700, { zoomInEasing: "quiro" });
+    expect(quiro).toBeGreaterThan(linear);
+  });
+
+  it("applies zoom-in and zoom-out easings independently", () => {
+    // Changing only the zoom-out easing must not move the ramp up, and vice
+    // versa. This is what makes 'punch in fast, drift out slow' possible.
+    const rampUpMs = 700;
+    expect(
+      computeRegionStrength(region, rampUpMs, {
+        zoomInEasing: "quiro",
+        zoomOutEasing: "linear",
+      }),
+    ).toBe(
+      computeRegionStrength(region, rampUpMs, {
+        zoomInEasing: "quiro",
+        zoomOutEasing: "snappy",
+      }),
+    );
+
+    const rampDownMs = 5900;
+    expect(
+      computeRegionStrength(region, rampDownMs, {
+        zoomInEasing: "linear",
+        zoomOutEasing: "quiro",
+      }),
+    ).toBe(
+      computeRegionStrength(region, rampDownMs, {
+        zoomInEasing: "snappy",
+        zoomOutEasing: "quiro",
+      }),
+    );
+  });
+});
+
+describe("connected zoom pan easing", () => {
+  const regions: ZoomRegion[] = [
+    { id: "a", startMs: 0, endMs: 2000, depth: 2, focus: { cx: 0.2, cy: 0.2 } },
+    {
+      id: "b",
+      startMs: 2600,
+      endMs: 5000,
+      depth: 5,
+      focus: { cx: 0.8, cy: 0.8 },
+    },
+  ];
+
+  // The connected pan used a second, separate hardcoded curve. Wiring only the
+  // zoom-in/out path would leave chained zooms silently ignoring the setting.
+  it("honours connectedZoomEasing during the pan between two zooms", () => {
+    const timeMs = 2400; // inside the connected transition window
+    const linear = findDominantRegion(regions, timeMs, {
+      connectZooms: true,
+      connectedZoomEasing: "linear",
+    });
+    const glide = findDominantRegion(regions, timeMs, {
+      connectZooms: true,
+      connectedZoomEasing: "glide",
+    });
+
+    expect(linear.transition).not.toBeNull();
+    expect(glide.transition).not.toBeNull();
+    expect(glide.transition?.progress).not.toBe(linear.transition?.progress);
+  });
+
+  it("defaults the connected pan to the shipped glide curve", () => {
+    for (let timeMs = 2200; timeMs <= 3200; timeMs += 20) {
+      expect(
+        findDominantRegion(regions, timeMs, { connectZooms: true }),
+      ).toEqual(
+        findDominantRegion(regions, timeMs, {
+          connectZooms: true,
+          connectedZoomEasing: "glide",
+        }),
+      );
+    }
   });
 });

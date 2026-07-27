@@ -1,3 +1,5 @@
+import type { ZoomTransitionEasing } from "@/types/editor";
+
 export function clamp01(value: number) {
 	return Math.max(0, Math.min(1, value));
 }
@@ -84,3 +86,28 @@ export function easeOutCubic(t: number) {
 	const x = clamp01(t);
 	return 1 - Math.pow(1 - x, 3);
 }
+
+/**
+ * The five selectable zoom transition curves.
+ *
+ * `quiro` and `glide` are the shipped defaults and are pinned by regression
+ * tests to the curves that were previously hardcoded — `quiro` to easeOutZoom
+ * for zoom in/out, `glide` to the connected zoom-to-zoom pan. Changing either
+ * changes how every existing project moves.
+ *
+ * The other three are provisional: the control points are a starting point for
+ * the tuning sweep, not a settled taste decision.
+ */
+export const ZOOM_TRANSITION_EASINGS: Record<ZoomTransitionEasing, (t: number) => number> = {
+	// Explosive start, long soft landing. The house curve.
+	quiro: (t) => cubicBezier(0.16, 1, 0.3, 1, t),
+	// Eases away, accelerates, then coasts in. Used for connected pans.
+	glide: (t) => cubicBezier(0.1, 0.0, 0.2, 1.0, t),
+	// Symmetric ease-in-out, gentle at both ends. Matches the character of the
+	// easeInOutCubic helper; a shallower curve reads as linear.
+	smooth: (t) => cubicBezier(0.65, 0, 0.35, 1, t),
+	// Faster off the mark than quiro — over half the move in the first 5% of
+	// the time. The one that reads as a decision rather than a glide.
+	snappy: (t) => cubicBezier(0.05, 1, 0.1, 1, t),
+	linear: (t) => clamp01(t),
+};

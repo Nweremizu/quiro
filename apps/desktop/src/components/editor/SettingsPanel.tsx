@@ -69,7 +69,10 @@ import {
   DEFAULT_CROP_REGION,
   DEFAULT_CURSOR_CLICK_BOUNCE_DURATION,
   DEFAULT_CURSOR_CLICK_EFFECT,
+  DEFAULT_CONNECTED_ZOOM_EASING,
   DEFAULT_CURSOR_MOTION_BLUR,
+  DEFAULT_ZOOM_IN_EASING,
+  DEFAULT_ZOOM_OUT_EASING,
   DEFAULT_CURSOR_STYLE,
   DEFAULT_CURSOR_SWAY,
   DEFAULT_PADDING,
@@ -505,6 +508,12 @@ function SettingsPanelImpl({
   onCameraSpringMassMultiplierChange,
   zoomClassicMode = false,
   onZoomClassicModeChange,
+  zoomInEasing = DEFAULT_ZOOM_IN_EASING,
+  onZoomInEasingChange,
+  zoomOutEasing = DEFAULT_ZOOM_OUT_EASING,
+  onZoomOutEasingChange,
+  connectedZoomEasing = DEFAULT_CONNECTED_ZOOM_EASING,
+  onConnectedZoomEasingChange,
   cursorMotionBlur = DEFAULT_CURSOR_MOTION_BLUR,
   onCursorMotionBlurChange,
   cursorClickBounce = 1,
@@ -1420,6 +1429,12 @@ function SettingsPanelImpl({
           resetZoomSection={resetZoomSection}
           zoomClassicMode={zoomClassicMode}
           onZoomClassicModeChange={onZoomClassicModeChange}
+          zoomInEasing={zoomInEasing}
+          onZoomInEasingChange={onZoomInEasingChange}
+          zoomOutEasing={zoomOutEasing}
+          onZoomOutEasingChange={onZoomOutEasingChange}
+          connectedZoomEasing={connectedZoomEasing}
+          onConnectedZoomEasingChange={onConnectedZoomEasingChange}
           onZoomDelete={onZoomDelete}
           ZOOM_DEPTH_OPTIONS={ZOOM_DEPTH_OPTIONS}
           renderExtensionPanelsForSections={renderExtensionPanelsForSections}

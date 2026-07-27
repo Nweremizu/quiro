@@ -1,12 +1,21 @@
-import type { ZoomFocus, ZoomRegion } from "@/types/editor";
-import { ZOOM_DEPTH_SCALES } from "@/types/editor";
+import type {
+  ZoomFocus,
+  ZoomRegion,
+  ZoomTransitionEasing,
+} from "@/types/editor";
+import {
+  DEFAULT_CONNECTED_ZOOM_EASING,
+  DEFAULT_ZOOM_IN_EASING,
+  DEFAULT_ZOOM_OUT_EASING,
+  ZOOM_DEPTH_SCALES,
+} from "@/types/editor";
 import {
   TRANSITION_WINDOW_MS,
   ZOOM_IN_TRANSITION_WINDOW_MS,
   ZOOM_OUT_EARLY_START_MS,
 } from "./constants";
 import { clampFocusToScale } from "./focusUtils";
-import { clamp01, cubicBezier, easeOutZoom } from "./mathUtils";
+import { clamp01, ZOOM_TRANSITION_EASINGS } from "./mathUtils";
 
 const CHAINED_ZOOM_PAN_GAP_MS = 1350;
 const CONNECTED_ZOOM_PAN_DURATION_MS = 1000;
@@ -17,7 +26,28 @@ export type CameraMotionOptions = {
   connectZooms?: boolean;
   zoomInDurationMs?: number;
   zoomOutDurationMs?: number;
+  zoomInEasing?: ZoomTransitionEasing;
+  zoomOutEasing?: ZoomTransitionEasing;
+  connectedZoomEasing?: ZoomTransitionEasing;
 };
+
+/**
+ * Falls back on an unrecognised curve name rather than trusting the type.
+ *
+ * Easing values reach here from persisted JSON, and until these curves were
+ * wired up an unknown value was inert. Now it would be called every frame, so
+ * a stale or hand-edited preferences file must not be able to throw inside the
+ * ticker.
+ */
+function resolveEasing(
+  easing: ZoomTransitionEasing | undefined,
+  fallback: ZoomTransitionEasing,
+) {
+  return (
+    (easing && ZOOM_TRANSITION_EASINGS[easing]) ??
+    ZOOM_TRANSITION_EASINGS[fallback]
+  );
+}
 
 /**
  * The single place camera-motion options are assembled.
@@ -38,6 +68,9 @@ export function buildCameraMotionOptions(
     connectZooms: settings.connectZooms,
     zoomInDurationMs: settings.zoomInDurationMs,
     zoomOutDurationMs: settings.zoomOutDurationMs,
+    zoomInEasing: settings.zoomInEasing,
+    zoomOutEasing: settings.zoomOutEasing,
+    connectedZoomEasing: settings.connectedZoomEasing,
   };
 }
 
@@ -60,16 +93,15 @@ function lerp(start: number, end: number, amount: number) {
   return start + (end - start) * amount;
 }
 
-function easeConnectedPan(value: number) {
-  return cubicBezier(0.1, 0.0, 0.2, 1.0, value);
-}
-
 export function computeRegionStrength(
   region: ZoomRegion,
   timeMs: number,
   options: Pick<
     CameraMotionOptions,
-    "zoomInDurationMs" | "zoomOutDurationMs"
+    | "zoomInDurationMs"
+    | "zoomOutDurationMs"
+    | "zoomInEasing"
+    | "zoomOutEasing"
   > = {},
 ) {
   const zoomInDurationMs = Math.max(
@@ -100,7 +132,7 @@ export function computeRegionStrength(
 
   if (adjustedTimeMs < zoomInEnd) {
     const progress = (adjustedTimeMs - leadInStart) / zoomInDurationMs;
-    return easeOutZoom(progress);
+    return resolveEasing(options.zoomInEasing, DEFAULT_ZOOM_IN_EASING)(progress);
   }
 
   if (adjustedTimeMs <= zoomOutStart) {
@@ -108,7 +140,9 @@ export function computeRegionStrength(
   }
 
   const progress = clamp01((adjustedTimeMs - zoomOutStart) / zoomOutDurationMs);
-  return 1 - easeOutZoom(progress);
+  return (
+    1 - resolveEasing(options.zoomOutEasing, DEFAULT_ZOOM_OUT_EASING)(progress)
+  );
 }
 
 function getLinearFocus(
@@ -258,6 +292,7 @@ function getConnectedRegionHold(
 function getConnectedRegionTransition(
   connectedPairs: ConnectedRegionPair[],
   timeMs: number,
+  options: Pick<CameraMotionOptions, "connectedZoomEasing">,
 ) {
   for (const pair of connectedPairs) {
     const { currentRegion, nextRegion, transitionStart, transitionEnd } = pair;
@@ -266,7 +301,10 @@ function getConnectedRegionTransition(
       continue;
     }
 
-    const transitionProgress = easeConnectedPan(
+    const transitionProgress = resolveEasing(
+      options.connectedZoomEasing,
+      DEFAULT_CONNECTED_ZOOM_EASING,
+    )(
       clamp01(
         (timeMs - transitionStart) /
           Math.max(1, transitionEnd - transitionStart),
@@ -321,6 +359,7 @@ export function findDominantRegion(
     const connectedTransition = getConnectedRegionTransition(
       connectedPairs,
       timeMs,
+      options,
     );
     if (connectedTransition) {
       return connectedTransition;

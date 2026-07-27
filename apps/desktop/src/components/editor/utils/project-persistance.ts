@@ -411,7 +411,7 @@ export function normalizeExportMp4FrameRate(
   return typeof value === "number" && isValidMp4FrameRate(value) ? value : 30;
 }
 
-function normalizeZoomTransitionEasing(
+export function normalizeZoomTransitionEasing(
   value: unknown,
   fallback: ZoomTransitionEasing,
 ): ZoomTransitionEasing {

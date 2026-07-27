@@ -3,6 +3,7 @@ import {
   normalizeExportMp4FrameRate,
   normalizeExportPipelineModel,
   normalizeProjectEditor,
+  normalizeZoomTransitionEasing,
   type ProjectEditorState,
 } from "./project-persistance";
 import {
@@ -325,10 +326,20 @@ function normalizeEditorControls(
     connectedZoomGapMs: raw.connectedZoomGapMs ?? fallback.connectedZoomGapMs,
     connectedZoomDurationMs:
       raw.connectedZoomDurationMs ?? fallback.connectedZoomDurationMs,
-    zoomInEasing: raw.zoomInEasing ?? fallback.zoomInEasing,
-    zoomOutEasing: raw.zoomOutEasing ?? fallback.zoomOutEasing,
-    connectedZoomEasing:
-      raw.connectedZoomEasing ?? fallback.connectedZoomEasing,
+    // Validated rather than passed through: preferences are untrusted JSON, and
+    // these values are now read every frame by the camera.
+    zoomInEasing: normalizeZoomTransitionEasing(
+      raw.zoomInEasing,
+      fallback.zoomInEasing,
+    ),
+    zoomOutEasing: normalizeZoomTransitionEasing(
+      raw.zoomOutEasing,
+      fallback.zoomOutEasing,
+    ),
+    connectedZoomEasing: normalizeZoomTransitionEasing(
+      raw.connectedZoomEasing,
+      fallback.connectedZoomEasing,
+    ),
     showCursor: raw.showCursor ?? fallback.showCursor,
     loopCursor: raw.loopCursor ?? fallback.loopCursor,
     cursorStyle: raw.cursorStyle ?? fallback.cursorStyle,
