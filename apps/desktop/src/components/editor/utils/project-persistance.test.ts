@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { ZoomRegion } from "@/types/editor";
 import {
   normalizeProjectEditor,
   normalizeProjectSnapshots,
@@ -80,5 +81,36 @@ describe("project persistence normalization", () => {
     expect(toFileUrl("C:\\Recordings\\clip 1.mp4")).toBe(
       "file:///C:/Recordings/clip%201.mp4",
     );
+  });
+});
+
+describe("normalizeProjectEditor — instant zoom", () => {
+  const region: ZoomRegion = {
+    id: "z1",
+    startMs: 1000,
+    endMs: 4000,
+    depth: 3,
+    focus: { cx: 0.5, cy: 0.5 },
+  };
+
+  it("defaults instant to off for projects saved before the flag existed", () => {
+    const [normalized] = normalizeProjectEditor({
+      zoomRegions: [region],
+    }).zoomRegions;
+    expect(normalized.instant).toBe(false);
+  });
+
+  it("round-trips an instant zoom", () => {
+    const [normalized] = normalizeProjectEditor({
+      zoomRegions: [{ ...region, instant: true }],
+    }).zoomRegions;
+    expect(normalized.instant).toBe(true);
+  });
+
+  it("coerces a non-boolean instant value to off rather than trusting it", () => {
+    const [normalized] = normalizeProjectEditor({
+      zoomRegions: [{ ...region, instant: "yes" as unknown as boolean }],
+    }).zoomRegions;
+    expect(normalized.instant).toBe(false);
   });
 });

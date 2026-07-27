@@ -73,6 +73,8 @@ interface ZoomSectionProps {
   onZoomPresetChange?: (presetId: ZoomPresetId) => void;
   resetZoomSection: () => void;
   zoomClassicMode: boolean;
+  selectedZoomInstant: boolean;
+  onZoomInstantChange?: (instant: boolean) => void;
   onZoomClassicModeChange?: (v: boolean) => void;
   zoomInEasing: ZoomTransitionEasing;
   onZoomInEasingChange?: (easing: ZoomTransitionEasing) => void;
@@ -101,6 +103,8 @@ export function ZoomSection({
   resetZoomSection,
   zoomClassicMode,
   onZoomClassicModeChange,
+  selectedZoomInstant,
+  onZoomInstantChange,
   zoomInEasing,
   onZoomInEasingChange,
   zoomOutEasing,
@@ -191,6 +195,25 @@ export function ZoomSection({
                   )}
             </p>
           </div>
+          <div className="rounded-lg bg-foreground/[0.03] px-2.5 py-1.5">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[10px] text-muted-foreground">
+                {tSettings("zoom.instant", "Instant")}
+              </span>
+              <Switch
+                checked={selectedZoomInstant}
+                onCheckedChange={(v) => onZoomInstantChange?.(v)}
+                className="scale-75 data-[state=checked]:bg-primary"
+              />
+            </div>
+            <p className="mt-1 text-[10px] leading-4 text-muted-foreground/70">
+              {tSettings(
+                "zoom.instantDescription",
+                "Cut straight to this zoom instead of easing in. The zoom out is unaffected.",
+              )}
+            </p>
+          </div>
+
           <div className="grid grid-cols-6 gap-1.5">
             {ZOOM_DEPTH_OPTIONS.map((option) => {
               const isActive = selectedZoomDepth === option.depth;
@@ -228,15 +251,23 @@ export function ZoomSection({
         </button>
       </div>
 
-      <div className="flex items-center justify-between rounded-lg bg-foreground/[0.03] px-2.5 py-1.5">
-        <span className="text-[10px] text-muted-foreground">
-          {tSettings("effects.classicZoom", "Classic Animation")}
-        </span>
-        <Switch
-          checked={zoomClassicMode}
-          onCheckedChange={(v) => onZoomClassicModeChange?.(v)}
-          className="data-[state=checked]:bg-primary scale-75"
-        />
+      <div className="rounded-lg bg-foreground/[0.03] px-2.5 py-1.5">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[10px] text-muted-foreground">
+            {tSettings("effects.classicZoom", "Classic Animation")}
+          </span>
+          <Switch
+            checked={zoomClassicMode}
+            onCheckedChange={(v) => onZoomClassicModeChange?.(v)}
+            className="data-[state=checked]:bg-primary scale-75"
+          />
+        </div>
+        <p className="mt-1 text-[10px] leading-4 text-muted-foreground/70">
+          {tSettings(
+            "effects.classicZoomDescription",
+            "Drop the camera spring for every zoom. Zooms still ease in — for a hard cut, turn on Instant for that zoom.",
+          )}
+        </p>
       </div>
 
       {!zoomClassicMode && (

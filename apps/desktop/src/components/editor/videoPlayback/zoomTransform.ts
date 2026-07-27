@@ -40,6 +40,16 @@ interface TransformParams {
   focusY: number;
   isPlaying: boolean;
   motionBlurAmount?: number;
+  /**
+   * Skip the blur pass and re-baseline the velocity state for this frame.
+   *
+   * An instant zoom produces the largest camera delta in the project in a
+   * single frame. Blur derived from that delta smears exactly the frame that
+   * is supposed to read as a hard cut, so callers suppress it while an instant
+   * region is held. Resetting rather than merely zeroing also protects the
+   * following frame, which would otherwise measure the jump as velocity.
+   */
+  suppressMotionBlur?: boolean;
   motionBlurTuning?: ZoomMotionBlurTuning;
   transformOverride?: AppliedTransform;
   motionBlurState?: MotionBlurState;
@@ -499,6 +509,7 @@ export function applyZoomTransform({
   focusY,
   isPlaying,
   motionBlurAmount = 0,
+  suppressMotionBlur = false,
   motionBlurTuning,
   transformOverride,
   motionBlurState,
@@ -535,6 +546,7 @@ export function applyZoomTransform({
   if (
     motionBlurState &&
     motionBlurFilter &&
+    !suppressMotionBlur &&
     motionBlurAmount > 0 &&
     isPlaying
   ) {

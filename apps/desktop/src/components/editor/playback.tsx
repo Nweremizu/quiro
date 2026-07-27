@@ -149,6 +149,7 @@ import { getWebcamMediaTargetTimeSeconds } from "./videoPlayback/webcamSync";
 import {
   buildCameraMotionOptions,
   findDominantRegion,
+  isInstantZoomCut,
 } from "./videoPlayback/zoomRegionUtils";
 import {
   applyZoomTransform,
@@ -172,6 +173,8 @@ type PlaybackAnimationState = {
   progress: number;
   x: number;
   y: number;
+  /** True only on the frame an instant zoom lands. See isInstantZoomCut. */
+  instantCut: boolean;
 };
 
 function createPlaybackAnimationState(): PlaybackAnimationState {
@@ -183,6 +186,7 @@ function createPlaybackAnimationState(): PlaybackAnimationState {
     progress: 0,
     x: 0,
     y: 0,
+    instantCut: false,
   };
 }
 
@@ -2243,6 +2247,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
           focusY: focus.cy,
           isPlaying: isPlayingRef.current,
           motionBlurAmount: zoomMotionBlurRef.current,
+          suppressMotionBlur: state.instantCut,
           motionBlurTuning: zoomMotionBlurTuningRef.current,
           transformOverride: transform,
           motionBlurState: motionBlurStateRef.current,
@@ -2352,10 +2357,12 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 
         const state = animationStateRef.current;
 
+        const instantCut = isInstantZoomCut(region, strength, state.progress);
         state.scale = targetScaleFactor;
         state.focusX = targetFocus.cx;
         state.focusY = targetFocus.cy;
         state.progress = targetProgress;
+        state.instantCut = instantCut;
 
         // Push zoom state to extension host only when values change
         const prevZoom = prevZoomStateRef.current;
@@ -2408,7 +2415,12 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
         const useSpring =
           isPlayingRef.current &&
           !isSeekingRef.current &&
-          !zoomClassicModeRef.current;
+          !zoomClassicModeRef.current &&
+          // An instant zoom has to skip the spring on its landing frame, or
+          // the spring glides the cut over several hundred ms and "instant"
+          // is not instant. Only this frame — the rest of the hold springs
+          // normally so cursor-follow motion stays smooth.
+          !state.instantCut;
 
         let appliedScale: number;
         let appliedX: number;

@@ -4089,6 +4089,18 @@ export default function EditorWindow() {
     [selectedZoomId],
   );
 
+  const handleZoomInstantChange = useCallback(
+    (instant: boolean) => {
+      if (!selectedZoomId) return;
+      setZoomRegions((prev) =>
+        prev.map((region) =>
+          region.id === selectedZoomId ? { ...region, instant } : region,
+        ),
+      );
+    },
+    [selectedZoomId],
+  );
+
   const handleZoomPresetChange = useCallback(
     (presetId: ZoomPresetId) => {
       if (!selectedZoomId) return;
@@ -6672,6 +6684,13 @@ export default function EditorWindow() {
                     : null
                 }
                 onZoomDepthChange={handleZoomDepthChange}
+                selectedZoomInstant={
+                  selectedZoomId
+                    ? (zoomRegions.find((z) => z.id === selectedZoomId)
+                        ?.instant ?? false)
+                    : false
+                }
+                onZoomInstantChange={handleZoomInstantChange}
                 selectedZoomId={selectedZoomId}
                 selectedZoomMode={
                   selectedZoomId

@@ -6,7 +6,9 @@
     "modeAuto": "자동",
     "modeManual": "수동",
     "modeManualDescription": "이 확대에 고정 초점을 설정합니다",
-    "modeAutoDescription": "카메라가 커서를 자동으로 따라갑니다"
+    "modeAutoDescription": "카메라가 커서를 자동으로 따라갑니다",
+    "instant": "즉시",
+    "instantDescription": "부드럽게 들어가지 않고 이 줌으로 바로 컷합니다. 축소에는 영향이 없습니다."
   },
   "trim": {
     "deleteRegion": "트림 구간 삭제"
@@ -100,7 +102,8 @@
     "paddingBottom": "아래",
     "paddingLeft": "왼쪽",
     "paddingRight": "오른쪽",
-    "removeBackground": "배경 제거"
+    "removeBackground": "배경 제거",
+    "classicZoomDescription": "모든 줌에서 카메라 스프링을 끕니다. 줌은 여전히 서서히 들어갑니다 — 하드 컷을 원하면 해당 줌에서 즉시를 켜세요."
   },
   "sections": {
     "scene": "장면",

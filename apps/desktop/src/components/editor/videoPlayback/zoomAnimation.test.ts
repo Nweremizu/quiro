@@ -22,6 +22,7 @@ import {
   type CameraMotionOptions,
   computeRegionStrength,
   findDominantRegion,
+  isInstantZoomCut,
 } from "./zoomRegionUtils";
 
 // ---------------------------------------------------------------------------
@@ -892,5 +893,197 @@ describe("connected zoom pan easing", () => {
         }),
       );
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// zoomRegionUtils — instant zoom
+// ---------------------------------------------------------------------------
+
+describe("instant zoom", () => {
+  const base: ZoomRegion = {
+    id: "r",
+    startMs: 2000,
+    endMs: 8000,
+    depth: 3,
+    focus: { cx: 0.5, cy: 0.5 },
+  };
+  const instant: ZoomRegion = { ...base, instant: true };
+
+  it("is off by default, leaving the ramp untouched", () => {
+    for (let timeMs = 0; timeMs <= 9000; timeMs += 25) {
+      expect(computeRegionStrength(base, timeMs)).toBe(
+        computeRegionStrength({ ...base, instant: false }, timeMs),
+      );
+    }
+  });
+
+  it("holds at zero right up to the region start", () => {
+    expect(computeRegionStrength(instant, 1999)).toBe(0);
+  });
+
+  it("lands at full strength exactly on the region start", () => {
+    expect(computeRegionStrength(instant, 2000)).toBe(1);
+  });
+
+  it("never ramps in — strength is only ever 0 or 1 before the zoom out", () => {
+    for (let timeMs = 0; timeMs <= 7000; timeMs += 5) {
+      const strength = computeRegionStrength(instant, timeMs);
+      expect(strength === 0 || strength === 1).toBe(true);
+    }
+  });
+
+  it("ramps out normally under its own duration and easing", () => {
+    // Cut in, drift out: the zoom-out must still be a real ramp, and must
+    // still honour the zoom-out easing independently.
+    const partial = computeRegionStrength(instant, 7800, {
+      zoomOutEasing: "linear",
+    });
+    expect(partial).toBeGreaterThan(0);
+    expect(partial).toBeLessThan(1);
+
+    expect(
+      computeRegionStrength(instant, 7800, { zoomOutEasing: "linear" }),
+    ).not.toBe(
+      computeRegionStrength(instant, 7800, { zoomOutEasing: "snappy" }),
+    );
+  });
+
+  it("leaves the zoom-out identical to a non-instant region", () => {
+    // Only the ramp in is bypassed; nothing about the tail changes.
+    for (let timeMs = 7600; timeMs <= 9000; timeMs += 10) {
+      expect(computeRegionStrength(instant, timeMs)).toBe(
+        computeRegionStrength(base, timeMs),
+      );
+    }
+  });
+
+  it("ignores the zoom-in easing entirely", () => {
+    for (let timeMs = 1000; timeMs <= 7000; timeMs += 25) {
+      expect(
+        computeRegionStrength(instant, timeMs, { zoomInEasing: "linear" }),
+      ).toBe(computeRegionStrength(instant, timeMs, { zoomInEasing: "quiro" }));
+    }
+  });
+
+  it("surfaces the instant region through findDominantRegion at its start", () => {
+    const result = findDominantRegion([instant], 2000);
+    expect(result.region?.id).toBe("r");
+    expect(result.strength).toBe(1);
+  });
+
+  it("still lands instantly when the region is shorter than a normal ramp", () => {
+    const brief: ZoomRegion = {
+      id: "b",
+      startMs: 1000,
+      endMs: 1400,
+      depth: 4,
+      focus: { cx: 0.5, cy: 0.5 },
+      instant: true,
+    };
+    expect(computeRegionStrength(brief, 999)).toBe(0);
+    expect(computeRegionStrength(brief, 1000)).toBe(1);
+  });
+});
+
+describe("instant zoom — regressions found in review", () => {
+  const instant: ZoomRegion = {
+    id: "i",
+    startMs: 2000,
+    endMs: 8000,
+    depth: 3,
+    focus: { cx: 0.5, cy: 0.5 },
+    instant: true,
+  };
+
+  // The timeline allows regions down to 100ms. The zoom-out lead is 500ms and
+  // the animation lead 200ms, so a short region used to begin ramping out
+  // before the cut had landed and never reached full depth at all.
+  it.each([100, 150, 200, 250, 299, 300, 500])(
+    "reaches full depth on a %ims region",
+    (durationMs) => {
+      const brief: ZoomRegion = {
+        ...instant,
+        startMs: 1000,
+        endMs: 1000 + durationMs,
+      };
+      expect(computeRegionStrength(brief, 999)).toBe(0);
+      expect(computeRegionStrength(brief, 1000)).toBe(1);
+    },
+  );
+
+  // connectZooms defaults on. A connected pan eases the camera into the next
+  // region and starts it early — the exact thing instant exists to avoid.
+  it("never glides into an instant region via a connected pan", () => {
+    const previous: ZoomRegion = {
+      id: "p",
+      startMs: 0,
+      endMs: 1800,
+      depth: 2,
+      focus: { cx: 0.2, cy: 0.2 },
+    };
+    const chained: ZoomRegion = { ...instant, startMs: 2000, endMs: 6000 };
+
+    // Inside what would have been the connected pan window.
+    for (let timeMs = 1800; timeMs < 2000; timeMs += 10) {
+      const result = findDominantRegion([previous, chained], timeMs, {
+        connectZooms: true,
+      });
+      expect(result.transition).toBeNull();
+      if (result.region?.id === "i") {
+        throw new Error(`instant region active ${2000 - timeMs}ms early`);
+      }
+    }
+
+    expect(
+      findDominantRegion([previous, chained], 2000, { connectZooms: true })
+        .strength,
+    ).toBe(1);
+  });
+
+  it("still chains normally when the next region is not instant", () => {
+    const previous: ZoomRegion = {
+      id: "p",
+      startMs: 0,
+      endMs: 1800,
+      depth: 2,
+      focus: { cx: 0.2, cy: 0.2 },
+    };
+    const glided: ZoomRegion = { ...instant, instant: false, startMs: 2600 };
+    // The pan window opens at endMs + the 200ms animation lead, so sample
+    // inside it rather than in the gap before it.
+    const result = findDominantRegion([previous, glided], 2500, {
+      connectZooms: true,
+    });
+    expect(result.transition).not.toBeNull();
+  });
+});
+
+describe("isInstantZoomCut", () => {
+  const instant: ZoomRegion = {
+    id: "i",
+    startMs: 0,
+    endMs: 5000,
+    depth: 3,
+    focus: { cx: 0.5, cy: 0.5 },
+    instant: true,
+  };
+
+  it("fires on the landing frame only", () => {
+    expect(isInstantZoomCut(instant, 1, 0)).toBe(true);
+    // Next frame: already at full strength, so the camera may move freely.
+    expect(isInstantZoomCut(instant, 1, 1)).toBe(false);
+  });
+
+  it("does not fire for a non-instant region", () => {
+    expect(isInstantZoomCut({ ...instant, instant: false }, 1, 0)).toBe(false);
+  });
+
+  it("does not fire while ramping out", () => {
+    expect(isInstantZoomCut(instant, 0.4, 1)).toBe(false);
+  });
+
+  it("does not fire when there is no region", () => {
+    expect(isInstantZoomCut(null, 1, 0)).toBe(false);
   });
 });

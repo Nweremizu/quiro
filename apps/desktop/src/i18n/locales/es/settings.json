@@ -6,7 +6,9 @@
     "modeAuto": "Auto",
     "modeManual": "Manual",
     "modeManualDescription": "Establece un punto de enfoque fijo para este zoom",
-    "modeAutoDescription": "La cámara sigue el cursor automáticamente"
+    "modeAutoDescription": "La cámara sigue el cursor automáticamente",
+    "instant": "Instantáneo",
+    "instantDescription": "Corta directamente a este zoom en lugar de entrar suavemente. El alejamiento no cambia."
   },
   "trim": {
     "deleteRegion": "Eliminar región de recorte"
@@ -100,7 +102,8 @@
     "paddingBottom": "Inferior",
     "paddingLeft": "Izquierdo",
     "paddingRight": "Derecho",
-    "removeBackground": "Quitar fondo"
+    "removeBackground": "Quitar fondo",
+    "classicZoomDescription": "Quita el resorte de cámara en todos los zooms. Los zooms siguen entrando suavemente: para un corte seco, activa Instantáneo en ese zoom."
   },
   "sections": {
     "scene": "Escena",

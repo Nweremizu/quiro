@@ -22,6 +22,12 @@ export interface ZoomRegion {
   enabled?: boolean;
   presetId?: ZoomPresetId;
   endFocus?: ZoomFocus;
+  /**
+   * Land at full depth on the region's start frame instead of easing in, for
+   * cutting to a detail on a beat. Orthogonal to Classic Animation, which
+   * bypasses the camera spring but keeps the easing ramp.
+   */
+  instant?: boolean;
 }
 
 export interface CursorTelemetryPoint {

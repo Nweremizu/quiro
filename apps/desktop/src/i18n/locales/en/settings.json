@@ -6,7 +6,9 @@
     "modeAuto": "Auto",
     "modeManual": "Manual",
     "modeManualDescription": "Set a fixed focus point for this zoom",
-    "modeAutoDescription": "Camera recenters when the cursor nears the edge of the zoomed view"
+    "modeAutoDescription": "Camera recenters when the cursor nears the edge of the zoomed view",
+    "instant": "Instant",
+    "instantDescription": "Cut straight to this zoom instead of easing in. The zoom out is unaffected."
   },
   "trim": {
     "deleteRegion": "Delete Trim Region"
@@ -125,7 +127,8 @@
     "paddingBottom": "Bottom",
     "paddingLeft": "Left",
     "paddingRight": "Right",
-    "removeBackground": "Remove background"
+    "removeBackground": "Remove background",
+    "classicZoomDescription": "Drop the camera spring for every zoom. Zooms still ease in — for a hard cut, turn on Instant for that zoom."
   },
   "sections": {
     "scene": "Scene",

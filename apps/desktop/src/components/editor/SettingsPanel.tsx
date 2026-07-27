@@ -188,6 +188,8 @@ interface SettingsPanelProps {
   cameraSpringMassMultiplier?: number;
   onCameraSpringMassMultiplierChange?: (multiplier: number) => void;
   zoomClassicMode?: boolean;
+  selectedZoomInstant?: boolean;
+  onZoomInstantChange?: (instant: boolean) => void;
   onZoomClassicModeChange?: (enabled: boolean) => void;
   cursorMotionBlur?: number;
   onCursorMotionBlurChange?: (amount: number) => void;
@@ -508,6 +510,8 @@ function SettingsPanelImpl({
   onCameraSpringMassMultiplierChange,
   zoomClassicMode = false,
   onZoomClassicModeChange,
+  selectedZoomInstant = false,
+  onZoomInstantChange,
   zoomInEasing = DEFAULT_ZOOM_IN_EASING,
   onZoomInEasingChange,
   zoomOutEasing = DEFAULT_ZOOM_OUT_EASING,
@@ -1429,6 +1433,8 @@ function SettingsPanelImpl({
           resetZoomSection={resetZoomSection}
           zoomClassicMode={zoomClassicMode}
           onZoomClassicModeChange={onZoomClassicModeChange}
+          selectedZoomInstant={selectedZoomInstant}
+          onZoomInstantChange={onZoomInstantChange}
           zoomInEasing={zoomInEasing}
           onZoomInEasingChange={onZoomInEasingChange}
           zoomOutEasing={zoomOutEasing}

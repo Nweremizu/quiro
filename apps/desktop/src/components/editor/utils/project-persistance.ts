@@ -730,6 +730,7 @@ export function normalizeProjectEditor(
                 : undefined,
             enabled:
               typeof region.enabled === "boolean" ? region.enabled : true,
+            instant: region.instant === true,
             presetId: normalizeZoomPresetId(region.presetId),
             endFocus: region.endFocus
               ? {

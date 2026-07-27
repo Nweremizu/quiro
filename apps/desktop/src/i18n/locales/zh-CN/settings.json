@@ -6,7 +6,9 @@
     "modeAuto": "自动",
     "modeManual": "手动",
     "modeManualDescription": "为此缩放设置固定焦点",
-    "modeAutoDescription": "镜头会自动跟随光标"
+    "modeAutoDescription": "镜头会自动跟随光标",
+    "instant": "瞬间",
+    "instantDescription": "直接切到该缩放，而不是缓入。缩小不受影响。"
   },
   "trim": {
     "deleteRegion": "删除修剪区域"
@@ -117,7 +119,8 @@
     "paddingBottom": "下",
     "paddingLeft": "左",
     "paddingRight": "右",
-    "removeBackground": "移除背景"
+    "removeBackground": "移除背景",
+    "classicZoomDescription": "为所有缩放关闭相机弹簧。缩放仍会缓入——需要硬切时，请为该缩放开启「瞬间」。"
   },
   "sections": {
     "scene": "场景",

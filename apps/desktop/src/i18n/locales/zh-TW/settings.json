@@ -6,7 +6,9 @@
     "modeAuto": "自動",
     "modeManual": "手動",
     "modeManualDescription": "為此縮放設定固定的對焦點",
-    "modeAutoDescription": "相機會自動跟隨游標"
+    "modeAutoDescription": "相機會自動跟隨游標",
+    "instant": "瞬間",
+    "instantDescription": "直接切到該縮放，而不是緩入。縮小不受影響。"
   },
   "trim": {
     "deleteRegion": "刪除修剪區域"
@@ -100,7 +102,8 @@
     "paddingBottom": "下",
     "paddingLeft": "左",
     "paddingRight": "右",
-    "removeBackground": "移除背景"
+    "removeBackground": "移除背景",
+    "classicZoomDescription": "為所有縮放關閉相機彈簧。縮放仍會緩入——需要硬切時，請為該縮放開啟「瞬間」。"
   },
   "sections": {
     "scene": "場景",

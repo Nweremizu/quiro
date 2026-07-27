@@ -93,6 +93,25 @@ function lerp(start: number, end: number, amount: number) {
   return start + (end - start) * amount;
 }
 
+/**
+ * True only on the frame an instant zoom lands.
+ *
+ * Edge-triggered on purpose. Two things key off it, and both are wrong if it
+ * stays true for the whole region: the camera spring has to be snapped past
+ * (otherwise the spring glides the cut and "instant" is not instant), and
+ * motion blur has to be dropped (otherwise the largest camera delta in the
+ * project smears the frame meant to read as a cut). During the rest of the
+ * hold the camera can legitimately move — cursor-follow and pan-and-zoom both
+ * do — and that motion should spring and blur normally.
+ */
+export function isInstantZoomCut(
+  region: ZoomRegion | null,
+  strength: number,
+  previousProgress: number,
+) {
+  return region?.instant === true && strength >= 1 && previousProgress < 1;
+}
+
 export function computeRegionStrength(
   region: ZoomRegion,
   timeMs: number,
@@ -117,6 +136,29 @@ export function computeRegionStrength(
     region.startMs + ZOOM_IN_OVERLAP_MS - ZOOM_IN_TRANSITION_WINDOW_MS;
   let zoomOutStart = region.endMs - ZOOM_OUT_EARLY_START_MS;
   let zoomInEnd = leadInStart + zoomInDurationMs;
+
+  // Instant zoom: no ramp in, so no anticipation lead either — the cut has to
+  // land on the frame the region starts, not 200ms before it. The zoom out is
+  // deliberately left alone so cut-in / drift-out is the default shape.
+  if (region.instant) {
+    if (timeMs < region.startMs) {
+      return 0;
+    }
+    // A region shorter than the zoom-out lead would otherwise start its ramp
+    // out before the cut had landed, so the cut would never reach full depth.
+    // The hold always begins where the cut lands.
+    const instantZoomOutStart = Math.max(zoomOutStart, region.startMs);
+    if (adjustedTimeMs <= instantZoomOutStart) {
+      return 1;
+    }
+    const outProgress = clamp01(
+      (adjustedTimeMs - instantZoomOutStart) / zoomOutDurationMs,
+    );
+    return (
+      1 -
+      resolveEasing(options.zoomOutEasing, DEFAULT_ZOOM_OUT_EASING)(outProgress)
+    );
+  }
 
   if (zoomInEnd > zoomOutStart) {
     const midpoint = (zoomInEnd + zoomOutStart) / 2;
@@ -188,6 +230,13 @@ function getConnectedRegionPairs(regions: ZoomRegion[]) {
     const gapMs = nextRegion.startMs - currentRegion.endMs;
 
     if (gapMs > CHAINED_ZOOM_PAN_GAP_MS) {
+      continue;
+    }
+
+    // You cannot glide into a cut. A connected pan would ease the camera into
+    // the next region and start it early, which is exactly what instant
+    // exists to avoid — so an instant region never chains from its neighbour.
+    if (nextRegion.instant) {
       continue;
     }
 

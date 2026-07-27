@@ -6,7 +6,9 @@
     "modeAuto": "Auto",
     "modeManual": "Handmatig",
     "modeManualDescription": "Stel een vast focuspunt in voor deze zoom",
-    "modeAutoDescription": "De camera volgt de cursor automatisch"
+    "modeAutoDescription": "De camera volgt de cursor automatisch",
+    "instant": "Direct",
+    "instantDescription": "Snijd meteen naar deze zoom in plaats van geleidelijk in te zoomen. Het uitzoomen verandert niet."
   },
   "trim": {
     "deleteRegion": "Trimgebied verwijderen"
@@ -100,7 +102,8 @@
     "paddingBottom": "Onder",
     "paddingLeft": "Links",
     "paddingRight": "Rechts",
-    "removeBackground": "Achtergrond verwijderen"
+    "removeBackground": "Achtergrond verwijderen",
+    "classicZoomDescription": "Schakel de cameraveer uit voor elke zoom. Zooms zoomen nog steeds geleidelijk in — zet Direct aan op die zoom voor een harde cut."
   },
   "sections": {
     "scene": "Scène",

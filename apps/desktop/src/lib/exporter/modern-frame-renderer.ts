@@ -60,6 +60,7 @@ import {
   buildCameraMotionOptions,
   type CameraMotionOptions,
   findDominantRegion,
+  isInstantZoomCut,
 } from "@/components/editor/videoPlayback/zoomRegionUtils";
 import {
   applyZoomTransform,
@@ -187,6 +188,8 @@ interface AnimationState {
   progress: number;
   x: number;
   y: number;
+  /** True only on the frame an instant zoom lands. See isInstantZoomCut. */
+  instantCut: boolean;
 }
 
 interface LayoutCache {
@@ -354,6 +357,7 @@ function createAnimationState(): AnimationState {
     progress: 0,
     x: 0,
     y: 0,
+    instantCut: false,
   };
 }
 
@@ -3016,6 +3020,7 @@ export class FrameRenderer {
       motionBlurAmount: useVelocityMotionBlur
         ? (this.config.zoomMotionBlur ?? 0)
         : 0,
+      suppressMotionBlur: this.animationState.instantCut,
       motionBlurTuning: this.config.zoomMotionBlurTuning,
       transformOverride: {
         scale: this.animationState.appliedScale,
@@ -3286,6 +3291,7 @@ export class FrameRenderer {
       focusY: this.animationState.focusY,
       isPlaying: true,
       motionBlurAmount: this.config.zoomMotionBlur ?? 0,
+      suppressMotionBlur: this.animationState.instantCut,
       motionBlurTuning: this.config.zoomMotionBlurTuning,
       transformOverride: {
         scale: this.animationState.appliedScale,
@@ -3753,7 +3759,9 @@ export class FrameRenderer {
     state.scale = targetScaleFactor;
     state.focusX = targetFocus.cx;
     state.focusY = targetFocus.cy;
+    const instantCut = isInstantZoomCut(region, strength, state.progress);
     state.progress = targetProgress;
+    state.instantCut = instantCut;
 
     const projectedTransform = computeZoomTransform({
       stageSize: this.layoutCache.stageSize,
@@ -3778,7 +3786,9 @@ export class FrameRenderer {
       massMultiplier: this.config.cameraSpringMassMultiplier,
     });
 
-    if (this.config.zoomClassicMode) {
+    // An instant zoom skips the spring on its landing frame, or the spring
+    // glides the cut. Only that frame — the rest of the hold springs normally.
+    if (this.config.zoomClassicMode || state.instantCut) {
       state.appliedScale = projectedTransform.scale;
       state.x = projectedTransform.x;
       state.y = projectedTransform.y;

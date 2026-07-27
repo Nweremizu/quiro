@@ -6,7 +6,9 @@
     "modeAuto": "Automatique",
     "modeManual": "Manuel",
     "modeManualDescription": "Définir un point de focus fixe pour ce zoom",
-    "modeAutoDescription": "La caméra suit automatiquement le curseur"
+    "modeAutoDescription": "La caméra suit automatiquement le curseur",
+    "instant": "Instantané",
+    "instantDescription": "Coupe directement sur ce zoom au lieu d'y entrer en douceur. Le dézoom reste inchangé."
   },
   "trim": {
     "deleteRegion": "Supprimer la zone de découpe"
@@ -100,7 +102,8 @@
     "paddingBottom": "Bas",
     "paddingLeft": "Gauche",
     "paddingRight": "Droite",
-    "removeBackground": "Supprimer l’arrière-plan"
+    "removeBackground": "Supprimer l’arrière-plan",
+    "classicZoomDescription": "Supprime le ressort de caméra pour tous les zooms. Les zooms entrent toujours en douceur : pour une coupe franche, activez Instantané sur ce zoom."
   },
   "sections": {
     "scene": "Scène",
