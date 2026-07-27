@@ -5,6 +5,7 @@ import {
 	clampDeltaMs,
 	createSpringState,
 	getCursorSpringConfig,
+	getZoomSpringConfig,
 	resetSpringState,
 	stepSpringValue,
 } from "./motionSmoothing";
@@ -169,4 +170,63 @@ describe("getCursorSpringConfig", () => {
 		expect(stiffer.stiffness).toBeCloseTo(base.stiffness * 2, 5);
 		expect(softer.damping).toBeCloseTo(base.damping * 0.5, 5);
 	});
+});
+
+// ---------------------------------------------------------------------------
+// The overshoot guard earns its place (#28)
+//
+// Audited after the five easing curves went live. Two scenarios do NOT trigger
+// it — a smooth one-way ramp, and an abrupt square flip of the target — because
+// an overdamped spring approaches a *stationary* target monotonically. The one
+// that does is a target which reverses direction while the spring is still
+// lagging behind it: the value ends up on the far side of the target and, left
+// alone, counter-oscillates.
+//
+// These tests reproduce that geometry. They fail if the guard is removed.
+// ---------------------------------------------------------------------------
+
+describe("overshoot guard on a reversing target", () => {
+	const overdamped = [0.25, 0.5, 1]
+		.map((smoothness) =>
+			getZoomSpringConfig(smoothness, {
+				stiffnessMultiplier: 1,
+				dampingMultiplier: 1.13,
+				massMultiplier: 1.12,
+			}),
+		)
+		.filter((c) => c.damping / (2 * Math.sqrt(c.stiffness * c.mass)) >= 1);
+
+	/** Target ramps up and back down, reversing direction each half period. */
+	function triangleTarget(frame: number, periodFrames: number) {
+		const phase = (frame % periodFrames) / periodFrames;
+		const tri = phase < 0.5 ? phase * 2 : 2 - phase * 2;
+		return 1 + 3 * tri;
+	}
+
+	it("covers at least one overdamped config", () => {
+		expect(overdamped.length).toBeGreaterThanOrEqual(1);
+	});
+
+	it.each([20, 40, 80, 160])(
+		"never leaves the value on the far side of the target (period %i frames)",
+		(periodFrames) => {
+			for (const config of overdamped) {
+				const state = createSpringState(1);
+				// Initialise at rest ON the starting target: the first call always
+				// snaps, so seeding it with the destination would test nothing.
+				stepSpringValue(state, triangleTarget(0, periodFrames), 1000 / 60, config);
+
+				for (let frame = 1; frame < 600; frame += 1) {
+					const target = triangleTarget(frame, periodFrames);
+					const before = state.value;
+					const value = stepSpringValue(state, target, 1000 / 60, config);
+
+					const crossed =
+						(before <= target && value > target) ||
+						(before >= target && value < target);
+					expect({ frame, crossed }).toEqual({ frame, crossed: false });
+				}
+			}
+		},
+	);
 });
