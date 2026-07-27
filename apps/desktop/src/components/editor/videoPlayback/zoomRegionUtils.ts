@@ -13,11 +13,33 @@ const CONNECTED_ZOOM_PAN_DURATION_MS = 1000;
 const ZOOM_IN_OVERLAP_MS = 1000;
 const ZOOM_ANIMATION_LEAD_MS = 200;
 
-type DominantRegionOptions = {
+export type CameraMotionOptions = {
   connectZooms?: boolean;
   zoomInDurationMs?: number;
   zoomOutDurationMs?: number;
 };
+
+/**
+ * The single place camera-motion options are assembled.
+ *
+ * Callers pass an object they already own and it is narrowed to just the
+ * camera-motion fields — the export renderers hand over their whole render
+ * config, the preview a memoised object built from its props. Adding a camera
+ * parameter is a change here, not a hunt across four call sites.
+ *
+ * Deliberately applies no defaults. `computeRegionStrength` already falls back
+ * for a missing duration; defaulting here as well would put the same value in
+ * two places and let them drift.
+ */
+export function buildCameraMotionOptions(
+  settings: CameraMotionOptions,
+): CameraMotionOptions {
+  return {
+    connectZooms: settings.connectZooms,
+    zoomInDurationMs: settings.zoomInDurationMs,
+    zoomOutDurationMs: settings.zoomOutDurationMs,
+  };
+}
 
 type ConnectedRegionPair = {
   currentRegion: ZoomRegion;
@@ -46,7 +68,7 @@ export function computeRegionStrength(
   region: ZoomRegion,
   timeMs: number,
   options: Pick<
-    DominantRegionOptions,
+    CameraMotionOptions,
     "zoomInDurationMs" | "zoomOutDurationMs"
   > = {},
 ) {
@@ -153,7 +175,7 @@ function getActiveRegion(
   regions: ZoomRegion[],
   timeMs: number,
   connectedPairs: ConnectedRegionPair[],
-  options: DominantRegionOptions,
+  options: CameraMotionOptions,
 ) {
   const activeRegions = regions
     .map((region) => {
@@ -284,7 +306,7 @@ function getConnectedRegionTransition(
 export function findDominantRegion(
   regions: ZoomRegion[],
   timeMs: number,
-  options: DominantRegionOptions = {},
+  options: CameraMotionOptions = {},
 ): {
   region: ZoomRegion | null;
   strength: number;

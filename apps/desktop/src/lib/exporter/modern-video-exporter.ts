@@ -31,7 +31,10 @@ import {
   stepSpringValue,
 } from "@/components/editor/videoPlayback/motionSmoothing";
 import { getCursorStyleSizeMultiplier } from "@/components/editor/videoPlayback/uploadedCursorAssets";
-import { findDominantRegion } from "@/components/editor/videoPlayback/zoomRegionUtils";
+import {
+  buildCameraMotionOptions,
+  findDominantRegion,
+} from "@/components/editor/videoPlayback/zoomRegionUtils";
 import {
   computeFocusFromTransform,
   computeZoomTransform,
@@ -2145,6 +2148,7 @@ export class ModernVideoExporter {
     const springX = createSpringState(0);
     const springY = createSpringState(0);
     const zoomSpringConfig = getZoomSpringConfig(this.config.zoomSmoothness);
+    const cameraMotionOptions = buildCameraMotionOptions(this.config);
     const frameDurationMs = 1000 / Math.max(1, this.config.frameRate);
     const samples: NativeStaticLayoutZoomSample[] = [];
     let lastContentTimeMs: number | null = null;
@@ -2157,9 +2161,7 @@ export class ModernVideoExporter {
       const { region, strength, blendedScale, transition } = findDominantRegion(
         zoomRegions,
         timeMs,
-        {
-          connectZooms: this.config.connectZooms,
-        },
+        cameraMotionOptions,
       );
 
       let targetScale = 1;

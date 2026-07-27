@@ -11,7 +11,12 @@ import {
   type SpringState,
   stepSpringValue,
 } from "./motionSmoothing";
-import { computeRegionStrength, findDominantRegion } from "./zoomRegionUtils";
+import {
+  buildCameraMotionOptions,
+  type CameraMotionOptions,
+  computeRegionStrength,
+  findDominantRegion,
+} from "./zoomRegionUtils";
 
 // ---------------------------------------------------------------------------
 // motionSmoothing — spring state helpers
@@ -626,5 +631,44 @@ describe("spring damping regimes", () => {
     }
 
     expect(s.value).toBeCloseTo(1, 2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// zoomRegionUtils — camera-motion options builder
+// ---------------------------------------------------------------------------
+
+describe("buildCameraMotionOptions", () => {
+  const settings: CameraMotionOptions = {
+    connectZooms: true,
+    zoomInDurationMs: 800,
+    zoomOutDurationMs: 400,
+  };
+
+  it("carries every camera-motion setting through to the options", () => {
+    expect(buildCameraMotionOptions(settings)).toEqual({
+      connectZooms: true,
+      zoomInDurationMs: 800,
+      zoomOutDurationMs: 400,
+    });
+  });
+
+  it("narrows a wide render config to only the camera-motion fields", () => {
+    // Both export renderers and the native static-layout precompute pass their
+    // whole render config; nothing else may reach findDominantRegion.
+    const configLike = { ...settings, exportQuality: "high", width: 1920 };
+    expect(Object.keys(buildCameraMotionOptions(configLike)).sort()).toEqual([
+      "connectZooms",
+      "zoomInDurationMs",
+      "zoomOutDurationMs",
+    ]);
+  });
+
+  it("leaves a missing duration undefined so the region math still defaults it", () => {
+    // Defaulting here as well as in computeRegionStrength would be two sources
+    // of truth for the same value.
+    const options = buildCameraMotionOptions({ connectZooms: false });
+    expect(options.zoomInDurationMs).toBeUndefined();
+    expect(options.zoomOutDurationMs).toBeUndefined();
   });
 });

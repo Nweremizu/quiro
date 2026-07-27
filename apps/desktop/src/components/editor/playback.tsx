@@ -146,7 +146,10 @@ import { layoutVideoContent as layoutVideoContentUtil } from "./videoPlayback/la
 import { updateOverlayIndicator } from "./videoPlayback/overlayUtils";
 import { createVideoEventHandlers } from "./videoPlayback/videoEventHandlers";
 import { getWebcamMediaTargetTimeSeconds } from "./videoPlayback/webcamSync";
-import { findDominantRegion } from "./videoPlayback/zoomRegionUtils";
+import {
+  buildCameraMotionOptions,
+  findDominantRegion,
+} from "./videoPlayback/zoomRegionUtils";
 import {
   applyZoomTransform,
   computeFocusFromTransform,
@@ -550,10 +553,19 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
     const lastWebcamSyncTimeRef = useRef<number | null>(null);
     const lastBackgroundSyncTimeRef = useRef<number | null>(null);
     const bgVideoRef = useRef<HTMLVideoElement | null>(null);
-    const connectZoomsRef = useRef(connectZooms);
-    const zoomInDurationMsRef = useRef(zoomInDurationMs);
+    // VideoPlayback re-renders every frame during playback (it subscribes to
+    // the live time store), so this is memoised rather than rebuilt per render.
+    const cameraMotionOptions = useMemo(
+      () =>
+        buildCameraMotionOptions({
+          connectZooms,
+          zoomInDurationMs,
+          zoomOutDurationMs,
+        }),
+      [connectZooms, zoomInDurationMs, zoomOutDurationMs],
+    );
+    const cameraMotionOptionsRef = useRef(cameraMotionOptions);
     const zoomInOverlapMsRef = useRef(zoomInOverlapMs);
-    const zoomOutDurationMsRef = useRef(zoomOutDurationMs);
     const connectedZoomGapMsRef = useRef(connectedZoomGapMs);
     const connectedZoomDurationMsRef = useRef(connectedZoomDurationMs);
     const zoomInEasingRef = useRef(zoomInEasing);
@@ -1596,20 +1608,12 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
     }, [pixiReady]);
 
     useEffect(() => {
-      connectZoomsRef.current = connectZooms;
-    }, [connectZooms]);
-
-    useEffect(() => {
-      zoomInDurationMsRef.current = zoomInDurationMs;
-    }, [zoomInDurationMs]);
+      cameraMotionOptionsRef.current = cameraMotionOptions;
+    }, [cameraMotionOptions]);
 
     useEffect(() => {
       zoomInOverlapMsRef.current = zoomInOverlapMs;
     }, [zoomInOverlapMs]);
-
-    useEffect(() => {
-      zoomOutDurationMsRef.current = zoomOutDurationMs;
-    }, [zoomOutDurationMs]);
 
     useEffect(() => {
       connectedZoomGapMsRef.current = connectedZoomGapMs;
@@ -2266,11 +2270,11 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
         playbackSessionDebug.recordRenderTick(tickStart);
 
         const { region, strength, blendedScale, transition } =
-          findDominantRegion(zoomRegionsRef.current, currentTimeRef.current, {
-            connectZooms: connectZoomsRef.current,
-            zoomInDurationMs: zoomInDurationMsRef.current,
-            zoomOutDurationMs: zoomOutDurationMsRef.current,
-          });
+          findDominantRegion(
+            zoomRegionsRef.current,
+            currentTimeRef.current,
+            cameraMotionOptionsRef.current,
+          );
 
         const defaultFocus = DEFAULT_FOCUS;
         let targetScaleFactor = 1;

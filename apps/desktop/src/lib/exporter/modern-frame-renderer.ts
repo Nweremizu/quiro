@@ -56,7 +56,11 @@ import {
   stepSpringValue,
 } from "@/components/editor/videoPlayback/motionSmoothing";
 import { getWebcamMediaTargetTimeSeconds } from "@/components/editor/videoPlayback/webcamSync";
-import { findDominantRegion } from "@/components/editor/videoPlayback/zoomRegionUtils";
+import {
+  buildCameraMotionOptions,
+  type CameraMotionOptions,
+  findDominantRegion,
+} from "@/components/editor/videoPlayback/zoomRegionUtils";
 import {
   applyZoomTransform,
   computeFocusFromTransform,
@@ -494,6 +498,7 @@ export class FrameRenderer {
   private temporalCompositeCanvas: ExportCompositeCanvasState | null = null;
   private outputCanvasOverride: HTMLCanvasElement | null = null;
   private config: FrameRenderConfig;
+  private cameraMotionOptions: CameraMotionOptions;
   private animationState: AnimationState;
   private motionBlurState: MotionBlurState;
   private springScale: SpringState;
@@ -527,6 +532,9 @@ export class FrameRenderer {
 
   constructor(config: FrameRenderConfig) {
     this.config = config;
+    // Config never changes after construction, so this is built once rather
+    // than per frame.
+    this.cameraMotionOptions = buildCameraMotionOptions(config);
     this.animationState = createAnimationState();
     this.motionBlurState = createMotionBlurState();
     this.springScale = createSpringState(1);
@@ -3662,11 +3670,7 @@ export class FrameRenderer {
     const { region, strength, blendedScale, transition } = findDominantRegion(
       this.config.zoomRegions,
       timeMs,
-      {
-        connectZooms: this.config.connectZooms,
-        zoomInDurationMs: this.config.zoomInDurationMs,
-        zoomOutDurationMs: this.config.zoomOutDurationMs,
-      },
+      this.cameraMotionOptions,
     );
 
     let targetScaleFactor = 1;
