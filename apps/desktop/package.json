@@ -33,7 +33,8 @@
     "build:cursor-monitor": "node scripts/build-cursor-monitor.mjs",
     "build:hud-topmost-guard": "node scripts/build-hud-topmost-guard.mjs",
     "generate:icons": "tsx scripts/generate-icon.ts",
-    "rename:exporter-files": "node scripts/rename-exporter-filenames.mjs"
+    "rename:exporter-files": "node scripts/rename-exporter-filenames.mjs",
+    "compare:camera-tuning": "tsx scripts/compare-camera-tuning.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.105.0",
