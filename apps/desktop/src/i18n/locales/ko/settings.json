@@ -103,7 +103,9 @@
     "paddingLeft": "왼쪽",
     "paddingRight": "오른쪽",
     "removeBackground": "배경 제거",
-    "classicZoomDescription": "모든 줌에서 카메라 스프링을 끕니다. 줌은 여전히 서서히 들어갑니다 — 하드 컷을 원하면 해당 줌에서 즉시를 켜세요."
+    "classicZoomDescription": "모든 줌에서 카메라 스프링을 끕니다. 줌은 여전히 서서히 들어갑니다 — 하드 컷을 원하면 해당 줌에서 즉시를 켜세요.",
+    "zoomDrift": "드리프트",
+    "zoomDriftHint": "줌을 유지하는 동안 느린 시차 이동을 넣어, 긴 장면이 잘라낸 화면이 아니라 카메라처럼 보이게 합니다. 수동 줌에만 적용됩니다."
   },
   "sections": {
     "scene": "장면",

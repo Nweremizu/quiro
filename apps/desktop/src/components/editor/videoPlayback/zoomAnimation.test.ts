@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ZOOM_DEPTH_SCALES } from "@/types/editor";
 import type { ZoomRegion, ZoomTransitionEasing } from "@/types/editor";
 import {
   clamp01,
@@ -21,6 +22,7 @@ import {
   buildCameraMotionOptions,
   type CameraMotionOptions,
   computeRegionStrength,
+  computeZoomDriftOffset,
   findDominantRegion,
   isInstantZoomCut,
 } from "./zoomRegionUtils";
@@ -653,6 +655,7 @@ describe("buildCameraMotionOptions", () => {
     zoomInEasing: "snappy",
     zoomOutEasing: "smooth",
     connectedZoomEasing: "linear",
+    zoomDrift: 0.4,
   };
 
   it("carries every camera-motion setting through to the options", () => {
@@ -665,6 +668,7 @@ describe("buildCameraMotionOptions", () => {
       zoomInEasing: "snappy",
       zoomOutEasing: "smooth",
       connectedZoomEasing: "linear",
+      zoomDrift: 0.4,
     });
   });
 
@@ -675,6 +679,7 @@ describe("buildCameraMotionOptions", () => {
     expect(Object.keys(buildCameraMotionOptions(configLike)).sort()).toEqual([
       "connectZooms",
       "connectedZoomEasing",
+      "zoomDrift",
       "zoomInDurationMs",
       "zoomInEasing",
       "zoomOutDurationMs",
@@ -1085,5 +1090,236 @@ describe("isInstantZoomCut", () => {
 
   it("does not fire when there is no region", () => {
     expect(isInstantZoomCut(null, 1, 0)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// zoomRegionUtils — drift while zoomed
+// ---------------------------------------------------------------------------
+
+describe("computeZoomDriftOffset", () => {
+  const held: ZoomRegion = {
+    id: "hold-1",
+    startMs: 0,
+    endMs: 10000,
+    depth: 3,
+    focus: { cx: 0.5, cy: 0.5 },
+    mode: "manual",
+  };
+  const mid = 5000;
+  const scale = 1.8;
+
+  it("is zero when drift is disabled, which is the default", () => {
+    expect(computeZoomDriftOffset(held, mid, scale, 0)).toEqual({
+      dx: 0,
+      dy: 0,
+    });
+    expect(computeZoomDriftOffset(held, mid, scale, undefined)).toEqual({
+      dx: 0,
+      dy: 0,
+    });
+  });
+
+  it("moves the focus when enabled", () => {
+    const offset = computeZoomDriftOffset(held, mid, scale, 1);
+    expect(Math.hypot(offset.dx, offset.dy)).toBeGreaterThan(0);
+  });
+
+  it("is zero inside a cursor-follow region", () => {
+    // Auto regions already move continuously; drift on top is noise.
+    expect(
+      computeZoomDriftOffset({ ...held, mode: "auto" }, mid, scale, 1),
+    ).toEqual({ dx: 0, dy: 0 });
+    expect(
+      computeZoomDriftOffset({ ...held, mode: undefined }, mid, scale, 1),
+    ).toEqual({ dx: 0, dy: 0 });
+  });
+
+  it("is zero for a pan-and-zoom region, which is already camera work", () => {
+    expect(
+      computeZoomDriftOffset(
+        { ...held, presetId: "pan-and-zoom" },
+        mid,
+        scale,
+        1,
+      ),
+    ).toEqual({ dx: 0, dy: 0 });
+  });
+
+  it("is zero below the minimum hold duration", () => {
+    const brief: ZoomRegion = { ...held, startMs: 0, endMs: 900 };
+    for (let timeMs = 0; timeMs <= 900; timeMs += 25) {
+      expect(computeZoomDriftOffset(brief, timeMs, scale, 1)).toEqual({
+        dx: 0,
+        dy: 0,
+      });
+    }
+  });
+
+  it("measures the hold, not the region, when deciding it is long enough", () => {
+    // A region is mostly ramp. With the default 1522ms zoom in and a 500ms
+    // zoom-out lead, a 1.6s region has no hold at all — it must not drift,
+    // even though the region itself clears the minimum.
+    const mostlyRamp: ZoomRegion = { ...held, startMs: 0, endMs: 1600 };
+    for (let timeMs = 0; timeMs <= 1600; timeMs += 25) {
+      expect(computeZoomDriftOffset(mostlyRamp, timeMs, scale, 1)).toEqual({
+        dx: 0,
+        dy: 0,
+      });
+    }
+  });
+
+  it("never drifts while the zoom in is still running", () => {
+    // Drift exists for the static hold. Running during the ramp would fight
+    // the very motion it is waiting for.
+    for (let timeMs = 0; timeMs < 1522; timeMs += 10) {
+      expect(computeZoomDriftOffset(held, timeMs, scale, 1)).toEqual({
+        dx: 0,
+        dy: 0,
+      });
+    }
+  });
+
+  it("starts drifting once the hold has begun", () => {
+    const justInside = computeZoomDriftOffset(held, 2600, scale, 1);
+    expect(Math.hypot(justInside.dx, justInside.dy)).toBeGreaterThan(0);
+  });
+
+  it("follows a custom zoom-in duration rather than assuming the default", () => {
+    // A short zoom in means the hold starts sooner.
+    expect(computeZoomDriftOffset(held, 900, scale, 1, 300)).not.toEqual({
+      dx: 0,
+      dy: 0,
+    });
+    expect(computeZoomDriftOffset(held, 900, scale, 1, 4000)).toEqual({
+      dx: 0,
+      dy: 0,
+    });
+  });
+
+  it("starts the hold at the cut for an instant zoom", () => {
+    const cut: ZoomRegion = { ...held, instant: true };
+    expect(computeZoomDriftOffset(cut, 700, scale, 1)).not.toEqual({
+      dx: 0,
+      dy: 0,
+    });
+  });
+
+  it("is zero outside the region", () => {
+    expect(computeZoomDriftOffset(held, -1, scale, 1)).toEqual({
+      dx: 0,
+      dy: 0,
+    });
+    expect(computeZoomDriftOffset(held, 10001, scale, 1)).toEqual({
+      dx: 0,
+      dy: 0,
+    });
+  });
+
+  it("ramps from nothing at both ends of the hold", () => {
+    // Hold runs from startMs + zoomInDurationMs to endMs - the zoom-out lead.
+    // The default zoom-in duration is 1015.05 * 1.5, which is not exactly
+    // representable, so assert the claim — amplitude starts at nothing —
+    // rather than a hardcoded boundary value.
+    const holdStart = 1015.05 * 1.5;
+    const holdEnd = 10000 - 500;
+    const atStart = computeZoomDriftOffset(held, holdStart, scale, 1);
+    expect(Math.hypot(atStart.dx, atStart.dy)).toBeLessThan(1e-9);
+    expect(computeZoomDriftOffset(held, holdEnd, scale, 1)).toEqual({
+      dx: 0,
+      dy: 0,
+    });
+
+    // And grows in, rather than snapping on.
+    const early = computeZoomDriftOffset(held, holdStart + 60, scale, 1);
+    const later = computeZoomDriftOffset(held, holdStart + 400, scale, 1);
+    expect(Math.hypot(early.dx, early.dy)).toBeLessThan(
+      Math.hypot(later.dx, later.dy),
+    );
+  });
+
+  it("is deterministic — same inputs, same output, forever", () => {
+    // Re-exporting a project must produce identical frames.
+    for (let timeMs = 0; timeMs <= 10000; timeMs += 137) {
+      expect(computeZoomDriftOffset(held, timeMs, scale, 0.7)).toEqual(
+        computeZoomDriftOffset(held, timeMs, scale, 0.7),
+      );
+    }
+  });
+
+  it("gives different regions different phase, so they do not move in lockstep", () => {
+    const a = computeZoomDriftOffset(held, mid, scale, 1);
+    const b = computeZoomDriftOffset({ ...held, id: "hold-2" }, mid, scale, 1);
+    expect(a).not.toEqual(b);
+  });
+
+  it("scales with the strength setting", () => {
+    const weak = computeZoomDriftOffset(held, mid, scale, 0.25);
+    const strong = computeZoomDriftOffset(held, mid, scale, 1);
+    expect(Math.hypot(strong.dx, strong.dy)).toBeGreaterThan(
+      Math.hypot(weak.dx, weak.dy),
+    );
+  });
+
+  it("shrinks as the zoom goes deeper, so on-screen travel stays comparable", () => {
+    const shallow = computeZoomDriftOffset(held, mid, 1.25, 1);
+    const deep = computeZoomDriftOffset(held, mid, 5, 1);
+    expect(Math.hypot(deep.dx, deep.dy)).toBeLessThan(
+      Math.hypot(shallow.dx, shallow.dy),
+    );
+  });
+
+  it("stays small enough to read as drift rather than a pan", () => {
+    let peak = 0;
+    for (let timeMs = 0; timeMs <= 10000; timeMs += 10) {
+      const o = computeZoomDriftOffset(held, timeMs, 1, 1);
+      peak = Math.max(peak, Math.hypot(o.dx, o.dy));
+    }
+    expect(peak).toBeGreaterThan(0.01);
+    expect(peak).toBeLessThan(0.08);
+  });
+});
+
+describe("drift through findDominantRegion", () => {
+  const held: ZoomRegion = {
+    id: "hold-1",
+    startMs: 0,
+    endMs: 10000,
+    depth: 3,
+    focus: { cx: 0.5, cy: 0.5 },
+    mode: "manual",
+  };
+
+  it("leaves focus untouched when drift is off", () => {
+    const result = findDominantRegion([held], 5000);
+    expect(result.region?.focus).toEqual({ cx: 0.5, cy: 0.5 });
+  });
+
+  it("moves focus when drift is on", () => {
+    const result = findDominantRegion([held], 5000, { zoomDrift: 1 });
+    expect(result.region?.focus).not.toEqual({ cx: 0.5, cy: 0.5 });
+  });
+
+  it("never drifts the frame past the video edge at any depth", () => {
+    // Drift rides on the existing focus clamp, so an edge-pinned focus at max
+    // strength must stay inside bounds.
+    for (const depth of [1, 2, 3, 4, 5, 6] as const) {
+      const edge: ZoomRegion = {
+        ...held,
+        depth,
+        focus: { cx: 1, cy: 0 },
+      };
+      for (let timeMs = 0; timeMs <= 10000; timeMs += 50) {
+        const focus = findDominantRegion([edge], timeMs, {
+          zoomDrift: 1,
+        }).region?.focus;
+        if (!focus) continue;
+        const margin = 1 / (2 * ZOOM_DEPTH_SCALES[depth]);
+        expect(focus.cx).toBeGreaterThanOrEqual(margin - 1e-9);
+        expect(focus.cx).toBeLessThanOrEqual(1 - margin + 1e-9);
+        expect(focus.cy).toBeGreaterThanOrEqual(margin - 1e-9);
+        expect(focus.cy).toBeLessThanOrEqual(1 - margin + 1e-9);
+      }
+    }
   });
 });

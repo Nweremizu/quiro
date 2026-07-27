@@ -1,5 +1,6 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
+import Scrubber from "@/components/ui/scrubber";
 import {
   Select,
   SelectContent,
@@ -73,6 +74,8 @@ interface ZoomSectionProps {
   onZoomPresetChange?: (presetId: ZoomPresetId) => void;
   resetZoomSection: () => void;
   zoomClassicMode: boolean;
+  zoomDrift: number;
+  onZoomDriftChange?: (value: number) => void;
   selectedZoomInstant: boolean;
   onZoomInstantChange?: (instant: boolean) => void;
   onZoomClassicModeChange?: (v: boolean) => void;
@@ -103,6 +106,8 @@ export function ZoomSection({
   resetZoomSection,
   zoomClassicMode,
   onZoomClassicModeChange,
+  zoomDrift,
+  onZoomDriftChange,
   selectedZoomInstant,
   onZoomInstantChange,
   zoomInEasing,
@@ -280,6 +285,22 @@ export function ZoomSection({
       )}
 
       <div className="space-y-1.5">
+        <Scrubber
+          label={tSettings("effects.zoomDrift", "Drift")}
+          value={zoomDrift}
+          defaultValue={0}
+          min={0}
+          max={1}
+          step={0.05}
+          decimals={2}
+          onValueChange={(value) => onZoomDriftChange?.(value)}
+        />
+        <p className="text-[10px] leading-4 text-muted-foreground/70">
+          {tSettings(
+            "effects.zoomDriftHint",
+            "Slow parallax while a zoom is held, so a long hold reads as a camera rather than a crop. Manual zooms only.",
+          )}
+        </p>
         <EasingSelect
           label={tSettings("effects.zoomInEasing", "Zoom In Curve")}
           value={zoomInEasing}

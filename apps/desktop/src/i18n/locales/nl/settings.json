@@ -103,7 +103,9 @@
     "paddingLeft": "Links",
     "paddingRight": "Rechts",
     "removeBackground": "Achtergrond verwijderen",
-    "classicZoomDescription": "Schakel de cameraveer uit voor elke zoom. Zooms zoomen nog steeds geleidelijk in — zet Direct aan op die zoom voor een harde cut."
+    "classicZoomDescription": "Schakel de cameraveer uit voor elke zoom. Zooms zoomen nog steeds geleidelijk in — zet Direct aan op die zoom voor een harde cut.",
+    "zoomDrift": "Drift",
+    "zoomDriftHint": "Trage parallax terwijl een zoom wordt vastgehouden, zodat een lange opname als camera leest in plaats van als uitsnede. Alleen handmatige zooms."
   },
   "sections": {
     "scene": "Scène",

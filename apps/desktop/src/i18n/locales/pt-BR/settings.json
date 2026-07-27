@@ -103,7 +103,9 @@
     "paddingLeft": "Esquerdo",
     "paddingRight": "Direito",
     "removeBackground": "Remover fundo",
-    "classicZoomDescription": "Remove a mola de câmera de todos os zooms. Os zooms ainda entram suavemente — para um corte seco, ative Instantâneo nesse zoom."
+    "classicZoomDescription": "Remove a mola de câmera de todos os zooms. Os zooms ainda entram suavemente — para um corte seco, ative Instantâneo nesse zoom.",
+    "zoomDrift": "Deriva",
+    "zoomDriftHint": "Paralaxe lenta enquanto um zoom é mantido, para que uma tomada longa pareça uma câmera e não um recorte. Apenas zooms manuais."
   },
   "sections": {
     "scene": "Cena",

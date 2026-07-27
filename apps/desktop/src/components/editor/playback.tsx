@@ -128,6 +128,7 @@ import {
   DEFAULT_ZOOM_IN_DURATION_MS,
   DEFAULT_ZOOM_IN_EASING,
   DEFAULT_ZOOM_IN_OVERLAP_MS,
+  DEFAULT_ZOOM_DRIFT,
   DEFAULT_ZOOM_MOTION_BLUR,
   DEFAULT_ZOOM_MOTION_BLUR_TUNING,
   DEFAULT_ZOOM_OUT_DURATION_MS,
@@ -386,6 +387,7 @@ interface VideoPlaybackProps {
   zoomSmoothness?: number;
   zoomClassicMode?: boolean;
   zoomMotionBlur?: number;
+  zoomDrift?: number;
   zoomMotionBlurTuning?: ZoomMotionBlurTuning;
   cursorMotionBlur?: number;
   cursorClickBounce?: number;
@@ -465,6 +467,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
       zoomSmoothness = 0.5,
       zoomClassicMode = false,
       zoomMotionBlur = DEFAULT_ZOOM_MOTION_BLUR,
+      zoomDrift = DEFAULT_ZOOM_DRIFT,
       zoomMotionBlurTuning = DEFAULT_ZOOM_MOTION_BLUR_TUNING,
       cursorMotionBlur = DEFAULT_CURSOR_MOTION_BLUR,
       cursorClickBounce = DEFAULT_CURSOR_CLICK_BOUNCE,
@@ -568,6 +571,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
           zoomInEasing,
           zoomOutEasing,
           connectedZoomEasing,
+          zoomDrift,
         }),
       [
         connectZooms,
@@ -576,6 +580,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
         zoomInEasing,
         zoomOutEasing,
         connectedZoomEasing,
+        zoomDrift,
       ],
     );
     const cameraMotionOptionsRef = useRef(cameraMotionOptions);

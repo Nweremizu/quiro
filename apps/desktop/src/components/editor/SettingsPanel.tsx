@@ -70,6 +70,7 @@ import {
   DEFAULT_CURSOR_CLICK_BOUNCE_DURATION,
   DEFAULT_CURSOR_CLICK_EFFECT,
   DEFAULT_CONNECTED_ZOOM_EASING,
+  DEFAULT_ZOOM_DRIFT,
   DEFAULT_CURSOR_MOTION_BLUR,
   DEFAULT_ZOOM_IN_EASING,
   DEFAULT_ZOOM_OUT_EASING,
@@ -188,6 +189,8 @@ interface SettingsPanelProps {
   cameraSpringMassMultiplier?: number;
   onCameraSpringMassMultiplierChange?: (multiplier: number) => void;
   zoomClassicMode?: boolean;
+  zoomDrift?: number;
+  onZoomDriftChange?: (value: number) => void;
   selectedZoomInstant?: boolean;
   onZoomInstantChange?: (instant: boolean) => void;
   onZoomClassicModeChange?: (enabled: boolean) => void;
@@ -510,6 +513,8 @@ function SettingsPanelImpl({
   onCameraSpringMassMultiplierChange,
   zoomClassicMode = false,
   onZoomClassicModeChange,
+  zoomDrift = DEFAULT_ZOOM_DRIFT,
+  onZoomDriftChange,
   selectedZoomInstant = false,
   onZoomInstantChange,
   zoomInEasing = DEFAULT_ZOOM_IN_EASING,
@@ -1026,6 +1031,7 @@ function SettingsPanelImpl({
   };
 
   const resetZoomSection = () => {
+    onZoomDriftChange?.(initialEditorPreferences.zoomDrift);
     onZoomMotionBlurTuningChange?.(
       initialEditorPreferences.zoomMotionBlurTuning,
     );
@@ -1433,6 +1439,8 @@ function SettingsPanelImpl({
           resetZoomSection={resetZoomSection}
           zoomClassicMode={zoomClassicMode}
           onZoomClassicModeChange={onZoomClassicModeChange}
+          zoomDrift={zoomDrift}
+          onZoomDriftChange={onZoomDriftChange}
           selectedZoomInstant={selectedZoomInstant}
           onZoomInstantChange={onZoomInstantChange}
           zoomInEasing={zoomInEasing}

@@ -114,3 +114,22 @@ describe("normalizeProjectEditor — instant zoom", () => {
     expect(normalized.instant).toBe(false);
   });
 });
+
+describe("normalizeProjectEditor — zoom drift", () => {
+  it("defaults to off for projects saved before drift existed", () => {
+    expect(normalizeProjectEditor({}).zoomDrift).toBe(0);
+  });
+
+  it("round-trips a drift strength", () => {
+    expect(normalizeProjectEditor({ zoomDrift: 0.6 }).zoomDrift).toBe(0.6);
+  });
+
+  it("clamps out-of-range values rather than trusting the file", () => {
+    expect(normalizeProjectEditor({ zoomDrift: 9 }).zoomDrift).toBe(1);
+    expect(normalizeProjectEditor({ zoomDrift: -3 }).zoomDrift).toBe(0);
+    expect(
+      normalizeProjectEditor({ zoomDrift: "lots" as unknown as number })
+        .zoomDrift,
+    ).toBe(0);
+  });
+});

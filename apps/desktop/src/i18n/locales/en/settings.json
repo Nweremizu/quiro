@@ -128,7 +128,9 @@
     "paddingLeft": "Left",
     "paddingRight": "Right",
     "removeBackground": "Remove background",
-    "classicZoomDescription": "Drop the camera spring for every zoom. Zooms still ease in — for a hard cut, turn on Instant for that zoom."
+    "classicZoomDescription": "Drop the camera spring for every zoom. Zooms still ease in — for a hard cut, turn on Instant for that zoom.",
+    "zoomDrift": "Drift",
+    "zoomDriftHint": "Slow parallax while a zoom is held, so a long hold reads as a camera rather than a crop. Manual zooms only."
   },
   "sections": {
     "scene": "Scene",

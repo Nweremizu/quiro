@@ -107,6 +107,7 @@ interface VideoExporterConfig extends ExportConfig {
   shadowIntensity: number;
   backgroundBlur: number;
   zoomMotionBlur?: number;
+  zoomDrift?: number;
   zoomMotionBlurTuning?: ZoomMotionBlurTuning;
   zoomTemporalMotionBlur?: number;
   zoomMotionBlurSampleCount?: number | null;
@@ -562,6 +563,7 @@ export class ModernVideoExporter {
         shadowIntensity: this.config.shadowIntensity,
         backgroundBlur: this.config.backgroundBlur,
         zoomMotionBlur: this.config.zoomMotionBlur,
+        zoomDrift: this.config.zoomDrift,
         zoomMotionBlurTuning: this.config.zoomMotionBlurTuning,
         zoomTemporalMotionBlur: this.config.zoomTemporalMotionBlur,
         zoomMotionBlurSampleCount: this.config.zoomMotionBlurSampleCount,

@@ -175,6 +175,8 @@ export const DEFAULT_CURSOR_CLICK_BOUNCE_DURATION = 350;
 export const DEFAULT_CURSOR_SWAY = 0.25;
 export const DEFAULT_ZOOM_SMOOTHNESS = 0.5;
 export const DEFAULT_ZOOM_MOTION_BLUR = 0.35;
+/** Slow parallax while a zoom is held. Off by default — see #24. */
+export const DEFAULT_ZOOM_DRIFT = 0;
 export interface ZoomMotionBlurTuning {
   panVelocityThreshold: number;
   zoomVelocityThreshold: number;

@@ -113,6 +113,7 @@ interface FrameRenderConfig {
   shadowIntensity: number;
   backgroundBlur: number;
   zoomMotionBlur?: number;
+  zoomDrift?: number;
   zoomMotionBlurTuning?: ZoomMotionBlurTuning;
   zoomTemporalMotionBlur?: number;
   zoomMotionBlurSampleCount?: number | null;

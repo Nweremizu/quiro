@@ -103,7 +103,9 @@
     "paddingLeft": "左",
     "paddingRight": "右",
     "removeBackground": "移除背景",
-    "classicZoomDescription": "為所有縮放關閉相機彈簧。縮放仍會緩入——需要硬切時，請為該縮放開啟「瞬間」。"
+    "classicZoomDescription": "為所有縮放關閉相機彈簧。縮放仍會緩入——需要硬切時，請為該縮放開啟「瞬間」。",
+    "zoomDrift": "漂移",
+    "zoomDriftHint": "保持縮放時加入緩慢視差，讓長鏡頭看起來像運鏡而不是裁切。僅適用於手動縮放。"
   },
   "sections": {
     "scene": "場景",

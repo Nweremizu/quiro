@@ -17,6 +17,21 @@ import {
 import { clampFocusToScale } from "./focusUtils";
 import { clamp01, ZOOM_TRANSITION_EASINGS } from "./mathUtils";
 
+// Drift tuning. Provisional — the character of the motion is a taste decision
+// the tuning sweep is expected to revisit. What is *not* provisional: it must
+// stay deterministic, bounded, and off by default.
+const DRIFT_MIN_HOLD_MS = 1500;
+const DRIFT_RAMP_MS = 600;
+const DRIFT_PERIOD_X_MS = 11000;
+const DRIFT_PERIOD_Y_MS = 7000;
+const DRIFT_MAX_OFFSET = 0.045;
+const DRIFT_VERTICAL_WEIGHT = 0.6;
+// Offsets the vertical phase from the horizontal one so the pair traces a slow
+// open path rather than a diagonal line.
+const DRIFT_VERTICAL_PHASE_OFFSET = 1.37;
+const TAU = Math.PI * 2;
+const NO_DRIFT = Object.freeze({ dx: 0, dy: 0 });
+
 const CHAINED_ZOOM_PAN_GAP_MS = 1350;
 const CONNECTED_ZOOM_PAN_DURATION_MS = 1000;
 const ZOOM_IN_OVERLAP_MS = 1000;
@@ -29,6 +44,7 @@ export type CameraMotionOptions = {
   zoomInEasing?: ZoomTransitionEasing;
   zoomOutEasing?: ZoomTransitionEasing;
   connectedZoomEasing?: ZoomTransitionEasing;
+  zoomDrift?: number;
 };
 
 /**
@@ -71,6 +87,7 @@ export function buildCameraMotionOptions(
     zoomInEasing: settings.zoomInEasing,
     zoomOutEasing: settings.zoomOutEasing,
     connectedZoomEasing: settings.connectedZoomEasing,
+    zoomDrift: settings.zoomDrift,
   };
 }
 
@@ -91,6 +108,94 @@ type ConnectedPanTransition = {
 
 function lerp(start: number, end: number, amount: number) {
   return start + (end - start) * amount;
+}
+
+/** FNV-1a, folded to 0..1. Gives each region a stable phase from its id. */
+function hashToUnitInterval(id: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < id.length; index += 1) {
+    hash ^= id.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return ((hash >>> 0) % 100000) / 100000;
+}
+
+/**
+ * Slow parallax while a zoom is held, so a long hold reads as a camera pointed
+ * at something rather than a cropped screenshot.
+ *
+ * Two slow sinusoids at incommensurate periods, phase-seeded from the region
+ * id so neighbouring zooms do not move in lockstep. Deterministic by
+ * construction — a pure function of the region, the time within it and the
+ * settings, with no RNG, no accumulated state and no wall-clock — because
+ * re-exporting a project has to produce identical frames.
+ *
+ * Returns an offset in focus space. The caller re-clamps, so drift inherits
+ * the existing bounds and can never reveal an edge.
+ */
+export function computeZoomDriftOffset(
+  region: ZoomRegion,
+  timeMs: number,
+  zoomScale: number,
+  driftStrength: number | undefined,
+  zoomInDurationMs: number = ZOOM_IN_TRANSITION_WINDOW_MS,
+) {
+  // Ordered cheapest-first: the common case is drift off, and this runs every
+  // frame for every region.
+  if (!driftStrength || driftStrength <= 0) {
+    return NO_DRIFT;
+  }
+  // Auto regions are already tracking the cursor; drift on top is just noise.
+  // pan-and-zoom is likewise already deliberate camera work.
+  if (region.mode !== "manual" || region.presetId === "pan-and-zoom") {
+    return NO_DRIFT;
+  }
+
+  // Measured over the *hold*, not the region. A region is mostly ramp: with
+  // the default 1522ms zoom in, a 1.6s region has no hold at all. Gating and
+  // ramping on region bounds would let drift run at full amplitude while the
+  // zoom was still moving, which is the motion it is supposed to wait for.
+  const holdStartMs = region.instant
+    ? region.startMs
+    : region.startMs + zoomInDurationMs;
+  const holdEndMs = region.endMs - ZOOM_OUT_EARLY_START_MS;
+  const holdMs = holdEndMs - holdStartMs;
+  if (holdMs < DRIFT_MIN_HOLD_MS) {
+    return NO_DRIFT;
+  }
+
+  const elapsedMs = timeMs - holdStartMs;
+  if (elapsedMs < 0 || elapsedMs > holdMs) {
+    return NO_DRIFT;
+  }
+
+  // Zero at both ends so drift neither snaps on nor fights the zoom out.
+  const ramp = Math.min(
+    1,
+    elapsedMs / DRIFT_RAMP_MS,
+    (holdMs - elapsedMs) / DRIFT_RAMP_MS,
+  );
+  if (ramp <= 0) {
+    return NO_DRIFT;
+  }
+
+  const phase = hashToUnitInterval(region.id);
+  // Divided by the zoom scale so on-screen travel stays comparable as the
+  // zoom goes deeper — the same focus-space offset covers more pixels at 5x.
+  const amplitude =
+    (DRIFT_MAX_OFFSET * clamp01(driftStrength) * ramp) / Math.max(1, zoomScale);
+
+  return {
+    dx: Math.sin(TAU * (elapsedMs / DRIFT_PERIOD_X_MS + phase)) * amplitude,
+    dy:
+      Math.sin(
+        TAU *
+          (elapsedMs / DRIFT_PERIOD_Y_MS +
+            phase * DRIFT_VERTICAL_PHASE_OFFSET),
+      ) *
+      amplitude *
+      DRIFT_VERTICAL_WEIGHT,
+  };
 }
 
 /**
@@ -202,6 +307,8 @@ function getResolvedFocus(
   region: ZoomRegion,
   zoomScale: number,
   timeMs?: number,
+  driftStrength?: number,
+  zoomInDurationMs?: number,
 ): ZoomFocus {
   if (
     region.presetId === "pan-and-zoom" &&
@@ -217,6 +324,24 @@ function getResolvedFocus(
       zoomScale,
     );
   }
+
+  if (driftStrength && Number.isFinite(timeMs)) {
+    const drift = computeZoomDriftOffset(
+      region,
+      timeMs as number,
+      zoomScale,
+      driftStrength,
+      zoomInDurationMs,
+    );
+    if (drift.dx !== 0 || drift.dy !== 0) {
+      // Clamped here, so drift can never push the frame past a video edge.
+      return clampFocusToScale(
+        { cx: region.focus.cx + drift.dx, cy: region.focus.cy + drift.dy },
+        zoomScale,
+      );
+    }
+  }
+
   return clampFocusToScale(region.focus, zoomScale);
 }
 
@@ -310,7 +435,16 @@ function getActiveRegion(
   return {
     region: {
       ...activeRegion,
-      focus: getResolvedFocus(activeRegion, activeScale, timeMs),
+      // Connected holds and pans deliberately do not drift: the camera there
+      // is either chained or already in motion, which is not the static-frame
+      // problem drift exists to solve.
+      focus: getResolvedFocus(
+        activeRegion,
+        activeScale,
+        timeMs,
+        options.zoomDrift,
+        options.zoomInDurationMs,
+      ),
     },
     strength: activeRegions[0].strength,
     blendedScale: null,

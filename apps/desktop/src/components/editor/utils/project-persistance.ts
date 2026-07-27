@@ -70,6 +70,7 @@ import {
   DEFAULT_ZOOM_DEPTH,
   DEFAULT_ZOOM_IN_EASING,
   DEFAULT_ZOOM_IN_OVERLAP_MS,
+  DEFAULT_ZOOM_DRIFT,
   DEFAULT_ZOOM_MOTION_BLUR,
   DEFAULT_ZOOM_MOTION_BLUR_TUNING,
   DEFAULT_ZOOM_OUT_EASING,
@@ -98,6 +99,7 @@ export interface ProjectEditorState {
   shadowIntensity: number;
   backgroundBlur: number;
   zoomMotionBlur: number;
+  zoomDrift: number;
   zoomMotionBlurTuning: ZoomMotionBlurTuning;
   zoomTemporalMotionBlur: number;
   zoomMotionBlurSampleCount: number | null;
@@ -1214,6 +1216,11 @@ export function normalizeProjectEditor(
         : 0.67,
     backgroundBlur: normalizedBackgroundBlur,
     zoomMotionBlur: normalizedZoomMotionBlur,
+    zoomDrift: isFiniteNumber(
+      (editor as Partial<ProjectEditorState>).zoomDrift,
+    )
+      ? clamp((editor as Partial<ProjectEditorState>).zoomDrift as number, 0, 1)
+      : DEFAULT_ZOOM_DRIFT,
     zoomMotionBlurTuning: normalizedZoomMotionBlurTuning,
     zoomTemporalMotionBlur: normalizedZoomTemporalMotionBlur,
     zoomMotionBlurSampleCount: normalizedZoomMotionBlurSampleCount,

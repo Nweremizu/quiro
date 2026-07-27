@@ -358,6 +358,9 @@ export default function EditorWindow() {
   const [backgroundBlur, setBackgroundBlur] = useState(
     initialEditorPreferences.backgroundBlur,
   );
+  const [zoomDrift, setZoomDrift] = useState(
+    initialEditorPreferences.zoomDrift,
+  );
   const [zoomMotionBlur, setZoomMotionBlur] = useState(
     initialEditorPreferences.zoomMotionBlur,
   );
@@ -966,6 +969,7 @@ export default function EditorWindow() {
       shadowIntensity,
       backgroundBlur,
       zoomMotionBlur,
+      zoomDrift,
       zoomMotionBlurTuning: { ...zoomMotionBlurTuning },
       zoomTemporalMotionBlur,
       zoomMotionBlurSampleCount,
@@ -1018,6 +1022,7 @@ export default function EditorWindow() {
       shadowIntensity,
       backgroundBlur,
       zoomMotionBlur,
+      zoomDrift,
       zoomMotionBlurTuning,
       zoomTemporalMotionBlur,
       zoomMotionBlurSampleCount,
@@ -1121,6 +1126,7 @@ export default function EditorWindow() {
       setShadowIntensity(snapshot.shadowIntensity);
       setBackgroundBlur(snapshot.backgroundBlur);
       setZoomMotionBlur(snapshot.zoomMotionBlur);
+      setZoomDrift(snapshot.zoomDrift);
       setZoomMotionBlurTuning({ ...snapshot.zoomMotionBlurTuning });
       setZoomTemporalMotionBlur(snapshot.zoomTemporalMotionBlur);
       setZoomMotionBlurSampleCount(snapshot.zoomMotionBlurSampleCount);
@@ -1377,6 +1383,7 @@ export default function EditorWindow() {
           shadowIntensity,
           backgroundBlur,
           zoomMotionBlur,
+          zoomDrift,
           zoomMotionBlurTuning,
           zoomTemporalMotionBlur,
           zoomMotionBlurSampleCount,
@@ -1544,6 +1551,7 @@ export default function EditorWindow() {
     zoomInEasing,
     zoomInOverlapMs,
     zoomMotionBlur,
+    zoomDrift,
     zoomMotionBlurTuning,
     zoomTemporalMotionBlur,
     zoomMotionBlurSampleCount,
@@ -1816,6 +1824,7 @@ export default function EditorWindow() {
         shadowIntensity: number;
         backgroundBlur: number;
         zoomMotionBlur: number;
+        zoomDrift: number;
         zoomMotionBlurTuning: ZoomMotionBlurTuning;
         zoomTemporalMotionBlur: number;
         zoomMotionBlurSampleCount: number | null;
@@ -1968,6 +1977,7 @@ export default function EditorWindow() {
         shadowIntensity,
         backgroundBlur,
         zoomMotionBlur,
+        zoomDrift,
         zoomMotionBlurTuning,
         zoomTemporalMotionBlur,
         zoomMotionBlurSampleCount,
@@ -2030,6 +2040,7 @@ export default function EditorWindow() {
       shadowIntensity,
       backgroundBlur,
       zoomMotionBlur,
+      zoomDrift,
       zoomMotionBlurTuning,
       zoomTemporalMotionBlur,
       zoomMotionBlurSampleCount,
@@ -2257,6 +2268,7 @@ export default function EditorWindow() {
       setShadowIntensity(normalizedEditor.shadowIntensity);
       setBackgroundBlur(normalizedEditor.backgroundBlur);
       setZoomMotionBlur(normalizedEditor.zoomMotionBlur);
+      setZoomDrift(normalizedEditor.zoomDrift);
       setZoomMotionBlurTuning({ ...normalizedEditor.zoomMotionBlurTuning });
       setZoomTemporalMotionBlur(normalizedEditor.zoomTemporalMotionBlur);
       setZoomMotionBlurSampleCount(normalizedEditor.zoomMotionBlurSampleCount);
@@ -2442,6 +2454,7 @@ export default function EditorWindow() {
       setShadowIntensity(normalizedEditor.shadowIntensity);
       setBackgroundBlur(normalizedEditor.backgroundBlur);
       setZoomMotionBlur(normalizedEditor.zoomMotionBlur);
+      setZoomDrift(normalizedEditor.zoomDrift);
       setZoomMotionBlurTuning(normalizedEditor.zoomMotionBlurTuning);
       setZoomTemporalMotionBlur(normalizedEditor.zoomTemporalMotionBlur);
       setZoomMotionBlurSampleCount(normalizedEditor.zoomMotionBlurSampleCount);
@@ -2862,6 +2875,7 @@ export default function EditorWindow() {
       shadowIntensity,
       backgroundBlur,
       zoomMotionBlur,
+      zoomDrift,
       zoomMotionBlurTuning,
       zoomTemporalMotionBlur,
       zoomMotionBlurSampleCount,
@@ -2914,6 +2928,7 @@ export default function EditorWindow() {
     shadowIntensity,
     backgroundBlur,
     zoomMotionBlur,
+    zoomDrift,
     zoomMotionBlurTuning,
     zoomTemporalMotionBlur,
     zoomMotionBlurSampleCount,
@@ -5459,6 +5474,7 @@ export default function EditorWindow() {
             shadowIntensity: effectiveShadowIntensity,
             backgroundBlur,
             zoomMotionBlur,
+            zoomDrift,
             zoomMotionBlurTuning,
             zoomTemporalMotionBlur,
             zoomMotionBlurSampleCount,
@@ -5660,6 +5676,7 @@ export default function EditorWindow() {
             shadowIntensity: effectiveShadowIntensity,
             backgroundBlur,
             zoomMotionBlur,
+            zoomDrift,
             zoomMotionBlurTuning,
             zoomTemporalMotionBlur,
             zoomMotionBlurSampleCount,
@@ -5929,6 +5946,7 @@ export default function EditorWindow() {
       shadowIntensity,
       backgroundBlur,
       zoomMotionBlur,
+      zoomDrift,
       zoomMotionBlurTuning,
       zoomTemporalMotionBlur,
       zoomMotionBlurSampleCount,
@@ -6683,6 +6701,8 @@ export default function EditorWindow() {
                     ? zoomRegions.find((z) => z.id === selectedZoomId)?.depth
                     : null
                 }
+                zoomDrift={zoomDrift}
+                onZoomDriftChange={setZoomDrift}
                 onZoomDepthChange={handleZoomDepthChange}
                 selectedZoomInstant={
                   selectedZoomId
@@ -7017,6 +7037,7 @@ export default function EditorWindow() {
                         zoomSmoothness={zoomSmoothness}
                         zoomClassicMode={zoomClassicMode}
                         zoomMotionBlur={zoomMotionBlur}
+                        zoomDrift={zoomDrift}
                         zoomMotionBlurTuning={zoomMotionBlurTuning}
                         cursorMotionBlur={cursorMotionBlur}
                         cursorClickBounce={cursorClickBounce}

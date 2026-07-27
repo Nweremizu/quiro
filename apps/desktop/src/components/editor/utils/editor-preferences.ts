@@ -18,6 +18,7 @@ type PersistedEditorControls = Pick<
   | "shadowIntensity"
   | "backgroundBlur"
   | "zoomMotionBlur"
+  | "zoomDrift"
   | "zoomMotionBlurTuning"
   | "zoomTemporalMotionBlur"
   | "zoomMotionBlurSampleCount"
@@ -101,6 +102,7 @@ export const DEFAULT_EDITOR_PREFERENCES: EditorPreferences = {
   shadowIntensity: DEFAULT_EDITOR_CONTROLS.shadowIntensity,
   backgroundBlur: DEFAULT_EDITOR_CONTROLS.backgroundBlur,
   zoomMotionBlur: DEFAULT_EDITOR_CONTROLS.zoomMotionBlur,
+  zoomDrift: DEFAULT_EDITOR_CONTROLS.zoomDrift,
   zoomMotionBlurTuning: DEFAULT_EDITOR_CONTROLS.zoomMotionBlurTuning,
   zoomTemporalMotionBlur: DEFAULT_EDITOR_CONTROLS.zoomTemporalMotionBlur,
   zoomMotionBlurSampleCount: DEFAULT_EDITOR_CONTROLS.zoomMotionBlurSampleCount,
@@ -310,6 +312,7 @@ function normalizeEditorControls(
     shadowIntensity: raw.shadowIntensity ?? fallback.shadowIntensity,
     backgroundBlur: raw.backgroundBlur ?? fallback.backgroundBlur,
     zoomMotionBlur: raw.zoomMotionBlur ?? fallback.zoomMotionBlur,
+    zoomDrift: raw.zoomDrift ?? fallback.zoomDrift,
     zoomMotionBlurTuning:
       raw.zoomMotionBlurTuning ?? fallback.zoomMotionBlurTuning,
     zoomTemporalMotionBlur:
@@ -399,6 +402,7 @@ function normalizeEditorControls(
     shadowIntensity: normalized.shadowIntensity,
     backgroundBlur: normalized.backgroundBlur,
     zoomMotionBlur: normalized.zoomMotionBlur,
+    zoomDrift: normalized.zoomDrift,
     zoomMotionBlurTuning: normalized.zoomMotionBlurTuning,
     zoomTemporalMotionBlur: normalized.zoomTemporalMotionBlur,
     zoomMotionBlurSampleCount: normalized.zoomMotionBlurSampleCount,
