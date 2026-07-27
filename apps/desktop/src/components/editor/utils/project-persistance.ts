@@ -23,10 +23,7 @@ import {
   type AspectRatio,
   isCustomAspectRatio,
 } from "@electron/utils/aspectRatioUtils";
-import {
-  CURSOR_MOTION_PRESETS,
-  resolveCursorMotionPresetId,
-} from "./cursor-motion-presets";
+import { CURSOR_MOTION_PRESETS } from "./cursor-motion-presets";
 import {
   type AnnotationRegion,
   type AnnotationKeyframe,
@@ -675,13 +672,13 @@ export function normalizeProjectEditor(
     : TEMPORAL_MOTION_BLUR_DEFAULT_SHUTTER_FRACTION;
   const normalizedZoomInDurationMs = isFiniteNumber(editor.zoomInDurationMs)
     ? clamp(editor.zoomInDurationMs, 60, 4000)
-    : DEFAULT_MOTION_PRESET.zoomInDurationMs;
+    : DEFAULT_MOTION_PRESET.values.zoomInDurationMs;
   const normalizedZoomInOverlapMs = isFiniteNumber(editor.zoomInOverlapMs)
     ? clamp(editor.zoomInOverlapMs, 0, normalizedZoomInDurationMs)
     : DEFAULT_ZOOM_IN_OVERLAP_MS;
   const normalizedZoomOutDurationMs = isFiniteNumber(editor.zoomOutDurationMs)
     ? clamp(editor.zoomOutDurationMs, 60, 4000)
-    : DEFAULT_MOTION_PRESET.zoomOutDurationMs;
+    : DEFAULT_MOTION_PRESET.values.zoomOutDurationMs;
   const normalizedConnectedZoomGapMs = isFiniteNumber(editor.connectedZoomGapMs)
     ? clamp(editor.connectedZoomGapMs, 0, 5000)
     : DEFAULT_CONNECTED_ZOOM_GAP_MS;
@@ -1154,25 +1151,25 @@ export function normalizeProjectEditor(
     zoomOutDurationMs: normalizedZoomOutDurationMs,
     cursorSize: isFiniteNumber(editor.cursorSize)
       ? clamp(editor.cursorSize, 0.5, 10)
-      : DEFAULT_MOTION_PRESET.cursorSize,
+      : DEFAULT_MOTION_PRESET.values.cursorSize,
     cursorSmoothing: isFiniteNumber(editor.cursorSmoothing)
       ? clamp(editor.cursorSmoothing, 0, 2)
-      : DEFAULT_MOTION_PRESET.cursorSmoothing,
+      : DEFAULT_MOTION_PRESET.values.cursorSmoothing,
     cursorSpringStiffnessMultiplier: isFiniteNumber(
       editor.cursorSpringStiffnessMultiplier,
     )
       ? clamp(editor.cursorSpringStiffnessMultiplier, 0.25, 3)
-      : DEFAULT_MOTION_PRESET.cursorSpringStiffnessMultiplier,
+      : DEFAULT_MOTION_PRESET.values.cursorSpringStiffnessMultiplier,
     cursorSpringDampingMultiplier: isFiniteNumber(
       editor.cursorSpringDampingMultiplier,
     )
       ? clamp(editor.cursorSpringDampingMultiplier, 0.25, 3)
-      : DEFAULT_MOTION_PRESET.cursorSpringDampingMultiplier,
+      : DEFAULT_MOTION_PRESET.values.cursorSpringDampingMultiplier,
     cursorSpringMassMultiplier: isFiniteNumber(
       editor.cursorSpringMassMultiplier,
     )
       ? clamp(editor.cursorSpringMassMultiplier, 0.25, 3)
-      : DEFAULT_MOTION_PRESET.cursorSpringMassMultiplier,
+      : DEFAULT_MOTION_PRESET.values.cursorSpringMassMultiplier,
     cursorMotionBlur: isFiniteNumber(
       (editor as Partial<ProjectEditorState>).cursorMotionBlur,
     )
@@ -1181,7 +1178,7 @@ export function normalizeProjectEditor(
           0,
           2,
         )
-      : DEFAULT_MOTION_PRESET.cursorMotionBlur,
+      : DEFAULT_MOTION_PRESET.values.cursorMotionBlur,
     cursorClickBounce: isFiniteNumber(
       (editor as Partial<ProjectEditorState>).cursorClickBounce,
     )
@@ -1190,7 +1187,7 @@ export function normalizeProjectEditor(
           0,
           5,
         )
-      : DEFAULT_MOTION_PRESET.cursorClickBounce,
+      : DEFAULT_MOTION_PRESET.values.cursorClickBounce,
     cursorClickBounceDuration: isFiniteNumber(
       (editor as Partial<ProjectEditorState>).cursorClickBounceDuration,
     )
@@ -1200,10 +1197,8 @@ export function normalizeProjectEditor(
           60,
           500,
         )
-      : DEFAULT_MOTION_PRESET.cursorClickBounceDuration,
+      : DEFAULT_MOTION_PRESET.values.cursorClickBounceDuration,
   };
-  const normalizedMotionPreset =
-    CURSOR_MOTION_PRESETS[resolveCursorMotionPresetId(normalizedMotionValues)];
 
   return {
     wallpaper:
@@ -1227,9 +1222,9 @@ export function normalizeProjectEditor(
     zoomMotionBlurShutterFraction: normalizedZoomMotionBlurShutterFraction,
     connectZooms:
       typeof editor.connectZooms === "boolean" ? editor.connectZooms : true,
-    zoomInDurationMs: normalizedMotionPreset.zoomInDurationMs,
+    zoomInDurationMs: normalizedMotionValues.zoomInDurationMs,
     zoomInOverlapMs: normalizedZoomInOverlapMs,
-    zoomOutDurationMs: normalizedMotionPreset.zoomOutDurationMs,
+    zoomOutDurationMs: normalizedMotionValues.zoomOutDurationMs,
     connectedZoomGapMs: normalizedConnectedZoomGapMs,
     connectedZoomDurationMs: normalizedConnectedZoomDurationMs,
     zoomInEasing: normalizeZoomTransitionEasing(
@@ -1249,14 +1244,14 @@ export function normalizeProjectEditor(
     loopCursor:
       typeof editor.loopCursor === "boolean" ? editor.loopCursor : false,
     cursorStyle: normalizedCursorStyle,
-    cursorSize: normalizedMotionPreset.cursorSize,
-    cursorSmoothing: normalizedMotionPreset.cursorSmoothing,
+    cursorSize: normalizedMotionValues.cursorSize,
+    cursorSmoothing: normalizedMotionValues.cursorSmoothing,
     cursorSpringStiffnessMultiplier:
-      normalizedMotionPreset.cursorSpringStiffnessMultiplier,
+      normalizedMotionValues.cursorSpringStiffnessMultiplier,
     cursorSpringDampingMultiplier:
-      normalizedMotionPreset.cursorSpringDampingMultiplier,
+      normalizedMotionValues.cursorSpringDampingMultiplier,
     cursorSpringMassMultiplier:
-      normalizedMotionPreset.cursorSpringMassMultiplier,
+      normalizedMotionValues.cursorSpringMassMultiplier,
     cameraSpringStiffnessMultiplier: isFiniteNumber(
       editor.cameraSpringStiffnessMultiplier,
     )
@@ -1272,14 +1267,16 @@ export function normalizeProjectEditor(
     )
       ? clamp(editor.cameraSpringMassMultiplier, 0.25, 3)
       : 1.12,
-    zoomSmoothness: DEFAULT_ZOOM_SMOOTHNESS,
+    zoomSmoothness: isFiniteNumber(editor.zoomSmoothness)
+      ? clamp(editor.zoomSmoothness, 0, 1)
+      : DEFAULT_ZOOM_SMOOTHNESS,
     zoomClassicMode:
       typeof editor.zoomClassicMode === "boolean"
         ? editor.zoomClassicMode
         : false,
-    cursorMotionBlur: normalizedMotionPreset.cursorMotionBlur,
-    cursorClickBounce: normalizedMotionPreset.cursorClickBounce,
-    cursorClickBounceDuration: normalizedMotionPreset.cursorClickBounceDuration,
+    cursorMotionBlur: normalizedMotionValues.cursorMotionBlur,
+    cursorClickBounce: normalizedMotionValues.cursorClickBounce,
+    cursorClickBounceDuration: normalizedMotionValues.cursorClickBounceDuration,
     cursorClickEffect: normalizeCursorClickEffect(editor.cursorClickEffect),
     cursorSway: isFiniteNumber(
       (editor as Partial<ProjectEditorState>).cursorSway,

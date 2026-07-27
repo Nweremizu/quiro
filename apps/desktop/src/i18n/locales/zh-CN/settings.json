@@ -68,7 +68,8 @@
       "smooth": {
         "label": "平滑",
         "description": "更柔和，适合展示、发布会风格视频和更从容的镜头。"
-      }
+      },
+      "custom": "自定义运动。选择一个预设，从已知的手感开始。"
     },
     "zoomInDuration": "进入时长",
     "zoomInOverlap": "进入重叠",
@@ -122,7 +123,13 @@
     "removeBackground": "移除背景",
     "classicZoomDescription": "为所有缩放关闭相机弹簧。缩放仍会缓入——需要硬切时，请为该缩放开启「瞬间」。",
     "zoomDrift": "漂移",
-    "zoomDriftHint": "保持缩放时加入缓慢视差，让长镜头看起来像运镜而不是裁切。仅适用于手动缩放。"
+    "zoomDriftHint": "保持缩放时加入缓慢视差，让长镜头看起来像运镜而不是裁切。仅适用于手动缩放。",
+    "zoomSmoothness": "镜头平滑度",
+    "cameraSpringControlsHint": "调整镜头运动的物理参数。运动预设会设置这些值，但每一项都仍可在此编辑。",
+    "cameraSpringControls": "相机弹簧",
+    "cameraSpringStiffnessMultiplier": "相机刚度",
+    "cameraSpringDampingMultiplier": "相机阻尼",
+    "cameraSpringMassMultiplier": "相机质量"
   },
   "sections": {
     "scene": "场景",

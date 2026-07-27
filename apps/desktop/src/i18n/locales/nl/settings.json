@@ -105,7 +105,16 @@
     "removeBackground": "Achtergrond verwijderen",
     "classicZoomDescription": "Schakel de cameraveer uit voor elke zoom. Zooms zoomen nog steeds geleidelijk in — zet Direct aan op die zoom voor een harde cut.",
     "zoomDrift": "Drift",
-    "zoomDriftHint": "Trage parallax terwijl een zoom wordt vastgehouden, zodat een lange opname als camera leest in plaats van als uitsnede. Alleen handmatige zooms."
+    "zoomDriftHint": "Trage parallax terwijl een zoom wordt vastgehouden, zodat een lange opname als camera leest in plaats van als uitsnede. Alleen handmatige zooms.",
+    "zoomSmoothness": "Camerasoepelheid",
+    "cameraSpringControlsHint": "Stel de bewegingsfysica van de camera in. Bewegingsvoorinstellingen zetten deze; alle blijven hier bewerkbaar.",
+    "cameraSpringControls": "Cameraveer",
+    "cameraSpringStiffnessMultiplier": "Camerastijfheid",
+    "cameraSpringDampingMultiplier": "Cameradamping",
+    "cameraSpringMassMultiplier": "Cameramassa",
+    "motionPresets": {
+      "custom": "Aangepaste beweging. Kies een voorinstelling om vanaf een bekend gevoel te starten."
+    }
   },
   "sections": {
     "scene": "Scène",

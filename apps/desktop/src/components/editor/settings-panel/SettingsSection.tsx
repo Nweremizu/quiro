@@ -13,6 +13,7 @@ import { SectionLabel } from "./SectionLabel";
 import { MotionPresetCards } from "./MotionPresetCards";
 import { KeyboardShortcutsDialog } from "../help";
 import Scrubber from "@/components/ui/scrubber";
+import { DEFAULT_ZOOM_SMOOTHNESS } from "@/types/editor";
 import { InfoTooltip } from "./shared";
 import type { AppLocale } from "@/i18n/config";
 import { SUPPORTED_LOCALES } from "@/i18n/config";
@@ -31,7 +32,7 @@ interface SettingsSectionProps {
   onAutoApplyFreshRecordingAutoZoomsChange?: (value: boolean) => void;
   connectZooms: boolean;
   onConnectZoomsChange?: (value: boolean) => void;
-  activeMotionPresetId: CursorMotionPresetId;
+  activeMotionPresetId: CursorMotionPresetId | null;
   onApplyMotionPreset: (presetId: CursorMotionPresetId) => void;
   showDevMotionControls: boolean;
   nativeCaptureUnavailableSession: boolean;
@@ -39,6 +40,8 @@ interface SettingsSectionProps {
   zoomMotionBlurTuning: ZoomMotionBlurTuning;
   initialZoomMotionBlurTuning: ZoomMotionBlurTuning;
   onZoomMotionBlurTuningChange?: (tuning: ZoomMotionBlurTuning) => void;
+  zoomSmoothness: number;
+  onZoomSmoothnessChange?: (value: number) => void;
   cameraSpringStiffnessMultiplier: number;
   onCameraSpringStiffnessMultiplierChange?: (value: number) => void;
   initialCameraSpringStiffnessMultiplier: number;
@@ -131,6 +134,8 @@ export function SettingsSection({
   zoomMotionBlurTuning,
   initialZoomMotionBlurTuning,
   onZoomMotionBlurTuningChange,
+  zoomSmoothness,
+  onZoomSmoothnessChange,
   cameraSpringStiffnessMultiplier,
   onCameraSpringStiffnessMultiplierChange,
   initialCameraSpringStiffnessMultiplier,
@@ -249,6 +254,72 @@ export function SettingsSection({
             className="data-[state=checked]:bg-primary scale-75"
           />
         </SettingRow>
+      </SettingsGroup>
+
+      <SettingsGroup
+        title={tSettings("effects.cameraSpringControls", "Camera Spring")}
+        description={tSettings(
+          "effects.cameraSpringControlsHint",
+          "Tune camera movement physics. Motion presets set these; every one stays editable here.",
+        )}
+      >
+        <Scrubber
+          label={tSettings("effects.zoomSmoothness", "Camera smoothness")}
+          value={zoomSmoothness}
+          defaultValue={DEFAULT_ZOOM_SMOOTHNESS}
+          min={0}
+          max={1}
+          step={0.01}
+          decimals={2}
+          onValueChange={(value) => onZoomSmoothnessChange?.(value)}
+        />
+        <ScrubberStack>
+          <Scrubber
+            label={tSettings(
+              "effects.cameraSpringStiffnessMultiplier",
+              "Camera stiffness",
+            )}
+            value={cameraSpringStiffnessMultiplier}
+            defaultValue={initialCameraSpringStiffnessMultiplier}
+            min={0.25}
+            max={3}
+            step={0.01}
+            onValueChange={(value) =>
+              onCameraSpringStiffnessMultiplierChange?.(value)
+            }
+            suffix="×"
+          />
+          <Scrubber
+            label={tSettings(
+              "effects.cameraSpringDampingMultiplier",
+              "Camera damping",
+            )}
+            value={cameraSpringDampingMultiplier}
+            defaultValue={initialCameraSpringDampingMultiplier}
+            min={0.25}
+            max={3}
+            step={0.01}
+            onValueChange={(value) =>
+              onCameraSpringDampingMultiplierChange?.(value)
+            }
+            suffix="×"
+          />
+          <Scrubber
+            label={tSettings(
+              "effects.cameraSpringMassMultiplier",
+              "Camera mass",
+            )}
+            value={cameraSpringMassMultiplier}
+            defaultValue={initialCameraSpringMassMultiplier}
+            min={0.25}
+            max={3}
+            step={0.01}
+            onValueChange={(value) =>
+              onCameraSpringMassMultiplierChange?.(value)
+            }
+            suffix="×"
+          />
+        </ScrubberStack>
       </SettingsGroup>
 
       <SettingsGroup
@@ -401,65 +472,6 @@ export function SettingsSection({
                 })
               }
               decimals={3}
-            />
-          </ScrubberStack>
-
-          <ScrubberStack>
-            <div className="flex items-center gap-1.5">
-              <SectionLabel>
-                {tSettings("effects.cameraSpringControls", "Camera Spring")}
-              </SectionLabel>
-              <InfoTooltip>
-                {tSettings(
-                  "effects.cameraSpringControlsHint",
-                  "Tune camera movement physics.",
-                )}
-              </InfoTooltip>
-            </div>
-            <Scrubber
-              label={tSettings(
-                "effects.cameraSpringStiffnessMultiplier",
-                "Camera stiffness",
-              )}
-              value={cameraSpringStiffnessMultiplier}
-              defaultValue={initialCameraSpringStiffnessMultiplier}
-              min={0.25}
-              max={3}
-              step={0.01}
-              onValueChange={(value) =>
-                onCameraSpringStiffnessMultiplierChange?.(value)
-              }
-              suffix="×"
-            />
-            <Scrubber
-              label={tSettings(
-                "effects.cameraSpringDampingMultiplier",
-                "Camera damping",
-              )}
-              value={cameraSpringDampingMultiplier}
-              defaultValue={initialCameraSpringDampingMultiplier}
-              min={0.25}
-              max={3}
-              step={0.01}
-              onValueChange={(value) =>
-                onCameraSpringDampingMultiplierChange?.(value)
-              }
-              suffix="×"
-            />
-            <Scrubber
-              label={tSettings(
-                "effects.cameraSpringMassMultiplier",
-                "Camera mass",
-              )}
-              value={cameraSpringMassMultiplier}
-              defaultValue={initialCameraSpringMassMultiplier}
-              min={0.25}
-              max={3}
-              step={0.01}
-              onValueChange={(value) =>
-                onCameraSpringMassMultiplierChange?.(value)
-              }
-              suffix="×"
             />
           </ScrubberStack>
 

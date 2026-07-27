@@ -73,7 +73,8 @@
       "smooth": {
         "label": "Smooth",
         "description": "Gentler motion for presentations, keynote-style videos, and polished reveals."
-      }
+      },
+      "custom": "Custom motion. Pick a preset to start from a known feel."
     },
     "zoomInDuration": "Zoom In Duration",
     "zoomInOverlap": "Zoom In Overlap",
@@ -130,7 +131,13 @@
     "removeBackground": "Remove background",
     "classicZoomDescription": "Drop the camera spring for every zoom. Zooms still ease in — for a hard cut, turn on Instant for that zoom.",
     "zoomDrift": "Drift",
-    "zoomDriftHint": "Slow parallax while a zoom is held, so a long hold reads as a camera rather than a crop. Manual zooms only."
+    "zoomDriftHint": "Slow parallax while a zoom is held, so a long hold reads as a camera rather than a crop. Manual zooms only.",
+    "zoomSmoothness": "Camera smoothness",
+    "cameraSpringControlsHint": "Tune camera movement physics. Motion presets set these; every one stays editable here.",
+    "cameraSpringControls": "Camera Spring",
+    "cameraSpringStiffnessMultiplier": "Camera stiffness",
+    "cameraSpringDampingMultiplier": "Camera damping",
+    "cameraSpringMassMultiplier": "Camera mass"
   },
   "sections": {
     "scene": "Scene",

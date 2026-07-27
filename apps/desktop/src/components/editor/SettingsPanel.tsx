@@ -32,7 +32,7 @@ import minimalCursorUrl from "@/assets/cursors/custom/minimal-cursor.svg";
 import { useI18n, useScopedT } from "../../contexts/I18nContext";
 import { AnnotationSettingsPanel } from "./AnnotationSettingsPanel";
 import {
-  CURSOR_MOTION_PRESETS,
+  applyCursorMotionPreset,
   type CursorMotionPresetId,
   getMatchingCursorMotionPresetId,
 } from "./utils/cursor-motion-presets";
@@ -70,6 +70,7 @@ import {
   DEFAULT_CURSOR_CLICK_BOUNCE_DURATION,
   DEFAULT_CURSOR_CLICK_EFFECT,
   DEFAULT_CONNECTED_ZOOM_EASING,
+  DEFAULT_ZOOM_SMOOTHNESS,
   DEFAULT_ZOOM_DRIFT,
   DEFAULT_CURSOR_MOTION_BLUR,
   DEFAULT_ZOOM_IN_EASING,
@@ -189,6 +190,8 @@ interface SettingsPanelProps {
   cameraSpringMassMultiplier?: number;
   onCameraSpringMassMultiplierChange?: (multiplier: number) => void;
   zoomClassicMode?: boolean;
+  zoomSmoothness?: number;
+  onZoomSmoothnessChange?: (value: number) => void;
   zoomDrift?: number;
   onZoomDriftChange?: (value: number) => void;
   selectedZoomInstant?: boolean;
@@ -513,6 +516,8 @@ function SettingsPanelImpl({
   onCameraSpringMassMultiplierChange,
   zoomClassicMode = false,
   onZoomClassicModeChange,
+  zoomSmoothness = DEFAULT_ZOOM_SMOOTHNESS,
+  onZoomSmoothnessChange,
   zoomDrift = DEFAULT_ZOOM_DRIFT,
   onZoomDriftChange,
   selectedZoomInstant = false,
@@ -1070,11 +1075,21 @@ function SettingsPanelImpl({
     onCursorSwayChange?.(initialEditorPreferences.cursorSway);
   };
 
-  const activeMotionPresetId = useMemo(() => {
-    return (
+  // Null when the current values are not a preset. Deliberately not
+  // defaulted: highlighting a preset the project does not have would describe
+  // a camera it is not using.
+  const activeMotionPresetId = useMemo(
+    () =>
       getMatchingCursorMotionPresetId({
+        zoomSmoothness,
+        cameraSpringStiffnessMultiplier,
+        cameraSpringDampingMultiplier,
+        cameraSpringMassMultiplier,
         zoomInDurationMs,
         zoomOutDurationMs,
+        zoomInEasing,
+        zoomOutEasing,
+        connectedZoomEasing,
         cursorSize,
         cursorSmoothing,
         cursorSpringStiffnessMultiplier,
@@ -1083,37 +1098,56 @@ function SettingsPanelImpl({
         cursorMotionBlur,
         cursorClickBounce,
         cursorClickBounceDuration,
-      }) ?? "focused"
-    );
-  }, [
-    cursorClickBounce,
-    cursorClickBounceDuration,
-    cursorMotionBlur,
-    cursorSize,
-    cursorSmoothing,
-    cursorSpringDampingMultiplier,
-    cursorSpringMassMultiplier,
-    cursorSpringStiffnessMultiplier,
-    zoomInDurationMs,
-    zoomOutDurationMs,
-  ]);
+      }),
+    [
+      zoomSmoothness,
+      cameraSpringStiffnessMultiplier,
+      cameraSpringDampingMultiplier,
+      cameraSpringMassMultiplier,
+      zoomInDurationMs,
+      zoomOutDurationMs,
+      zoomInEasing,
+      zoomOutEasing,
+      connectedZoomEasing,
+      cursorSize,
+      cursorSmoothing,
+      cursorSpringStiffnessMultiplier,
+      cursorSpringDampingMultiplier,
+      cursorSpringMassMultiplier,
+      cursorMotionBlur,
+      cursorClickBounce,
+      cursorClickBounceDuration,
+    ],
+  );
 
+  // One handler per preset field. The map is required, so a field added to
+  // CursorMotionPresetValues will not compile until it is wired to a control.
   const applyMotionPreset = (presetId: CursorMotionPresetId) => {
-    const preset = CURSOR_MOTION_PRESETS[presetId];
-    onZoomInDurationMsChange?.(preset.zoomInDurationMs);
-    onZoomOutDurationMsChange?.(preset.zoomOutDurationMs);
-    onCursorSizeChange?.(preset.cursorSize);
-    onCursorSmoothingChange?.(preset.cursorSmoothing);
-    onCursorSpringStiffnessMultiplierChange?.(
-      preset.cursorSpringStiffnessMultiplier,
-    );
-    onCursorSpringDampingMultiplierChange?.(
-      preset.cursorSpringDampingMultiplier,
-    );
-    onCursorSpringMassMultiplierChange?.(preset.cursorSpringMassMultiplier);
-    onCursorMotionBlurChange?.(preset.cursorMotionBlur);
-    onCursorClickBounceChange?.(preset.cursorClickBounce);
-    onCursorClickBounceDurationChange?.(preset.cursorClickBounceDuration);
+    applyCursorMotionPreset(presetId, {
+      zoomSmoothness: (v) => onZoomSmoothnessChange?.(v),
+      cameraSpringStiffnessMultiplier: (v) =>
+        onCameraSpringStiffnessMultiplierChange?.(v),
+      cameraSpringDampingMultiplier: (v) =>
+        onCameraSpringDampingMultiplierChange?.(v),
+      cameraSpringMassMultiplier: (v) =>
+        onCameraSpringMassMultiplierChange?.(v),
+      zoomInDurationMs: (v) => onZoomInDurationMsChange?.(v),
+      zoomOutDurationMs: (v) => onZoomOutDurationMsChange?.(v),
+      zoomInEasing: (v) => onZoomInEasingChange?.(v),
+      zoomOutEasing: (v) => onZoomOutEasingChange?.(v),
+      connectedZoomEasing: (v) => onConnectedZoomEasingChange?.(v),
+      cursorSize: (v) => onCursorSizeChange?.(v),
+      cursorSmoothing: (v) => onCursorSmoothingChange?.(v),
+      cursorSpringStiffnessMultiplier: (v) =>
+        onCursorSpringStiffnessMultiplierChange?.(v),
+      cursorSpringDampingMultiplier: (v) =>
+        onCursorSpringDampingMultiplierChange?.(v),
+      cursorSpringMassMultiplier: (v) =>
+        onCursorSpringMassMultiplierChange?.(v),
+      cursorMotionBlur: (v) => onCursorMotionBlurChange?.(v),
+      cursorClickBounce: (v) => onCursorClickBounceChange?.(v),
+      cursorClickBounceDuration: (v) => onCursorClickBounceDurationChange?.(v),
+    });
   };
 
   const resetFrameSection = () => {
@@ -1353,6 +1387,8 @@ function SettingsPanelImpl({
         onCameraSpringStiffnessMultiplierChange={
           onCameraSpringStiffnessMultiplierChange
         }
+        zoomSmoothness={zoomSmoothness}
+        onZoomSmoothnessChange={onZoomSmoothnessChange}
         initialCameraSpringStiffnessMultiplier={
           initialEditorPreferences.cameraSpringStiffnessMultiplier
         }

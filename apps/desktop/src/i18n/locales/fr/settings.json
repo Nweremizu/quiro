@@ -105,7 +105,16 @@
     "removeBackground": "Supprimer l’arrière-plan",
     "classicZoomDescription": "Supprime le ressort de caméra pour tous les zooms. Les zooms entrent toujours en douceur : pour une coupe franche, activez Instantané sur ce zoom.",
     "zoomDrift": "Dérive",
-    "zoomDriftHint": "Parallaxe lente pendant un zoom maintenu, pour qu'un plan long ressemble à une caméra plutôt qu'à un recadrage. Zooms manuels uniquement."
+    "zoomDriftHint": "Parallaxe lente pendant un zoom maintenu, pour qu'un plan long ressemble à une caméra plutôt qu'à un recadrage. Zooms manuels uniquement.",
+    "zoomSmoothness": "Douceur de caméra",
+    "cameraSpringControlsHint": "Réglez la physique du mouvement de caméra. Les préréglages les définissent ; tous restent modifiables ici.",
+    "cameraSpringControls": "Ressort de caméra",
+    "cameraSpringStiffnessMultiplier": "Rigidité de caméra",
+    "cameraSpringDampingMultiplier": "Amortissement de caméra",
+    "cameraSpringMassMultiplier": "Masse de caméra",
+    "motionPresets": {
+      "custom": "Mouvement personnalisé. Choisissez un préréglage pour partir d'une base connue."
+    }
   },
   "sections": {
     "scene": "Scène",

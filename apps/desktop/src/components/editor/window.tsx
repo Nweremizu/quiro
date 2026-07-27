@@ -6701,6 +6701,8 @@ export default function EditorWindow() {
                     ? zoomRegions.find((z) => z.id === selectedZoomId)?.depth
                     : null
                 }
+                zoomSmoothness={zoomSmoothness}
+                onZoomSmoothnessChange={setZoomSmoothness}
                 zoomDrift={zoomDrift}
                 onZoomDriftChange={setZoomDrift}
                 onZoomDepthChange={handleZoomDepthChange}

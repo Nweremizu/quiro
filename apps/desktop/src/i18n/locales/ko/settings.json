@@ -105,7 +105,16 @@
     "removeBackground": "배경 제거",
     "classicZoomDescription": "모든 줌에서 카메라 스프링을 끕니다. 줌은 여전히 서서히 들어갑니다 — 하드 컷을 원하면 해당 줌에서 즉시를 켜세요.",
     "zoomDrift": "드리프트",
-    "zoomDriftHint": "줌을 유지하는 동안 느린 시차 이동을 넣어, 긴 장면이 잘라낸 화면이 아니라 카메라처럼 보이게 합니다. 수동 줌에만 적용됩니다."
+    "zoomDriftHint": "줌을 유지하는 동안 느린 시차 이동을 넣어, 긴 장면이 잘라낸 화면이 아니라 카메라처럼 보이게 합니다. 수동 줌에만 적용됩니다.",
+    "zoomSmoothness": "카메라 부드러움",
+    "cameraSpringControlsHint": "카메라 움직임의 물리를 조정합니다. 모션 프리셋이 설정하지만, 모든 값은 여기서 계속 편집할 수 있습니다.",
+    "cameraSpringControls": "카메라 스프링",
+    "cameraSpringStiffnessMultiplier": "카메라 강성",
+    "cameraSpringDampingMultiplier": "카메라 감쇠",
+    "cameraSpringMassMultiplier": "카메라 질량",
+    "motionPresets": {
+      "custom": "사용자 지정 모션입니다. 프리셋을 선택해 익숙한 느낌에서 시작하세요."
+    }
   },
   "sections": {
     "scene": "장면",

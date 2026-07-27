@@ -133,3 +133,56 @@ describe("normalizeProjectEditor — zoom drift", () => {
     ).toBe(0);
   });
 });
+
+describe("normalizeProjectEditor — motion values are the user's, not a preset's", () => {
+  // Loading a project used to resolve the closest motion preset and then
+  // overwrite ten stored fields with that preset's values, so any custom
+  // tuning silently snapped back to Focused on reopen.
+  const custom = {
+    cursorSize: 4.2,
+    cursorSmoothing: 1.1,
+    cursorSpringStiffnessMultiplier: 2.4,
+    cursorSpringDampingMultiplier: 0.4,
+    cursorSpringMassMultiplier: 2.1,
+    cursorMotionBlur: 1.7,
+    cursorClickBounce: 4.4,
+    cursorClickBounceDuration: 420,
+    zoomInDurationMs: 640,
+    zoomOutDurationMs: 880,
+  };
+
+  it("keeps every custom motion value through a load", () => {
+    const normalized = normalizeProjectEditor(custom);
+    for (const [key, value] of Object.entries(custom)) {
+      expect([key, normalized[key as keyof typeof custom]]).toEqual([
+        key,
+        value,
+      ]);
+    }
+  });
+
+  it("still clamps values that are out of range", () => {
+    expect(normalizeProjectEditor({ cursorSize: 999 }).cursorSize).toBe(10);
+  });
+
+  it("still falls back for values that are absent", () => {
+    const normalized = normalizeProjectEditor({});
+    expect(Number.isFinite(normalized.cursorSize)).toBe(true);
+    expect(Number.isFinite(normalized.zoomInDurationMs)).toBe(true);
+  });
+});
+
+describe("normalizeProjectEditor — zoom smoothness", () => {
+  // Was hardcoded to the default on load, so whatever a motion preset wrote
+  // snapped back to 0.5 on reopen.
+  it("keeps a stored value", () => {
+    expect(normalizeProjectEditor({ zoomSmoothness: 0.7 }).zoomSmoothness).toBe(
+      0.7,
+    );
+  });
+
+  it("clamps and falls back", () => {
+    expect(normalizeProjectEditor({ zoomSmoothness: 5 }).zoomSmoothness).toBe(1);
+    expect(normalizeProjectEditor({}).zoomSmoothness).toBe(0.5);
+  });
+});

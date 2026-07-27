@@ -17,14 +17,12 @@ export function MotionPresetCards({
   onApply: (presetId: CursorMotionPresetId) => void;
   tSettings: (key: string, fallback?: string) => string;
 }) {
-  const activePreset = activePresetId ?? MOTION_PRESET_ORDER[0];
-
   return (
     <div className="space-y-2">
       <div className="flex rounded-lg border border-border bg-foreground/[0.04] p-0.5">
         {MOTION_PRESET_ORDER.map((presetId) => {
           const Icon = presetId === "focused" ? IconClick : IconPresentation;
-          const isActive = activePreset === presetId;
+          const isActive = activePresetId === presetId;
 
           return (
             <button
@@ -39,13 +37,20 @@ export function MotionPresetCards({
               )}
             >
               <Icon className="h-3.5 w-3.5" />
-              <span>{tSettings(`effects.motionPresets.${presetId}.label`)}</span>
+              <span>
+                {tSettings(`effects.motionPresets.${presetId}.label`)}
+              </span>
             </button>
           );
         })}
       </div>
       <p className="text-[10px] leading-4 text-muted-foreground/70">
-        {tSettings(`effects.motionPresets.${activePreset}.description`)}
+        {activePresetId
+          ? tSettings(`effects.motionPresets.${activePresetId}.description`)
+          : tSettings(
+              "effects.motionPresets.custom",
+              "Custom motion. Pick a preset to start from a known feel.",
+            )}
       </p>
     </div>
   );
