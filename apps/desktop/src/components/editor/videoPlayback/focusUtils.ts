@@ -121,60 +121,6 @@ export function softenFocusToScale(
   };
 }
 
-/**
- * Edge snap algorithm for cursor-follow camera.
- *
- * Maps cursor position through a clamped linear remap so the camera
- * pins to the edge when the cursor is within `snapToEdgesRatio` of
- * the viewport boundary.
- *
- * With snapToEdgesRatio = 0.25 (default for manual zooms):
- *   cursor ∈ [0, 0.25]   → output 0   (camera pinned to left/top)
- *   cursor ∈ [0.25, 0.75] → linearly maps 0→1 (camera follows)
- *   cursor ∈ [0.75, 1.0]  → output 1   (camera pinned to right/bottom)
- *
- * The result is then mapped back to focus-space bounds for the given
- * zoom scale, so the camera stays within the valid viewport.
- *
- * @param snapToEdgesRatio 0.25 for manual zooms, 0.5 for system/auto zooms
- */
-export function edgeSnapFocus(
-  cursorFocus: ZoomFocus,
-  zoomScale: number,
-  snapToEdgesRatio: number,
-): ZoomFocus {
-  const bounds = getFocusBoundsForScale(zoomScale);
-
-  const snappedX = clampedInterpolate(
-    cursorFocus.cx,
-    snapToEdgesRatio,
-    1 - snapToEdgesRatio + 0.0001,
-  );
-  const snappedY = clampedInterpolate(
-    cursorFocus.cy,
-    snapToEdgesRatio,
-    1 - snapToEdgesRatio + 0.0001,
-  );
-
-  return {
-    cx: bounds.minX + snappedX * (bounds.maxX - bounds.minX),
-    cy: bounds.minY + snappedY * (bounds.maxY - bounds.minY),
-  };
-}
-
-/**
- * Clamped linear interpolation: maps `value` from [inMin, inMax] → [0, 1].
- */
-function clampedInterpolate(
-  value: number,
-  inMin: number,
-  inMax: number,
-): number {
-  if (inMax <= inMin) return 0;
-  const t = (value - inMin) / (inMax - inMin);
-  return clamp(t, 0, 1);
-}
-
 export function stageFocusToVideoSpace(
   focus: ZoomFocus,
   stageSize: StageSize,

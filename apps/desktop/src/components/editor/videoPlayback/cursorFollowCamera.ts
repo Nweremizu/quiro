@@ -7,12 +7,24 @@ import { clampFocusToScale } from "./focusUtils";
  *
  * Keeps a persistent camera center while zoomed in. The camera only recenters
  * after the cursor leaves an inner safe zone within the current zoomed view,
- * shifting just enough to bring the cursor back inside that zone.
+ * and then centres on the cursor before being clamped to the video bounds.
+ *
+ * The safe zone is a fraction of the *visible* span, so the camera reacts at
+ * the same proportional distance at every zoom depth — verified across all
+ * six in cursorFollowCamera.test.ts.
+ *
+ * Note: centring on the cursor is a stronger move than the minimum shift
+ * needed to bring it back inside the zone. That is a taste question for the
+ * tuning sweep, not a correctness bug — the framing is bounded either way.
  */
 
-/** Default snap ratio for manual zoom regions */
-export const SNAP_TO_EDGES_RATIO_MANUAL = 0.25;
-/** Snap ratio for system/auto zoom regions */
+/**
+ * How much of the visible span, at each edge, is outside the safe zone.
+ *
+ * One value for every zoom region. A separate manual-zoom ratio was
+ * declared but never referenced and held the same 0.25, so it was removed
+ * rather than left implying a distinction the product does not make.
+ */
 export const SNAP_TO_EDGES_RATIO_AUTO = 0.25;
 
 export interface CursorFollowCameraState {
@@ -35,8 +47,8 @@ export interface CursorFollowCameraState {
 
 export interface CursorFollowConfig {
   /**
-   * snapToEdgesRatio — how much of the screen edge pins the camera.
-   * 0.25 for manual zooms, 0.25 for auto/system zooms.
+   * snapToEdgesRatio — the fraction of the visible span, at each edge, that
+   * sits outside the safe zone. One value for every zoom region.
    */
   snapToEdgesRatio: number;
 }

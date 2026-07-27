@@ -208,7 +208,9 @@ changeable.
 - [ ] **Instant-zoom option** — bypass easing for hard cuts
 - [ ] **Camera/zoom motion presets** — extend the proven `cursor-motion-presets.ts` + `MotionPresetCards` pattern
 - [ ] **Spring/easing tuning sweep** — the actual taste work; iterate until *untouched* output looks expensive
-- [ ] **`edgeSnapFocus` tuning pass** — already exists (`videoPlayback/focusUtils.ts:141`); validate across all 6 zoom depths
+- [x] **Edge-snap validation** — `edgeSnapFocus` turned out to be dead code and was removed; the live
+      behaviour is `recenterFocusWhenCursorLeavesSafeZone` in `videoPlayback/cursorFollowCamera.ts`,
+      now verified uniform across all 6 zoom depths. No behaviour changed.
 - [ ] **`motionSmoothing.ts` audit** — verify it earns its place
 
 ### Phase 2 — Looks & Brand Kit *(packaging)*
