@@ -186,3 +186,62 @@ describe("normalizeProjectEditor — zoom smoothness", () => {
     expect(normalizeProjectEditor({}).zoomSmoothness).toBe(0.5);
   });
 });
+
+describe("normalizeProjectEditor — #30 legacy default migration", () => {
+  // No settings-panel control for these three has ever existed, so a stored
+  // value that exactly matches the OLD shipped default is definitionally
+  // "whatever the build shipped," not a deliberate choice — safe to remap to
+  // the value already in force so existing projects keep today's motion.
+
+  it("remaps a stored 500ms overlap (the old default) to 1000ms", () => {
+    expect(
+      normalizeProjectEditor({ zoomInOverlapMs: 500, zoomInDurationMs: 2000 })
+        .zoomInOverlapMs,
+    ).toBe(1000);
+  });
+
+  it("remaps a stored 1500ms gap (the old default) to 1350ms", () => {
+    expect(
+      normalizeProjectEditor({ connectedZoomGapMs: 1500 }).connectedZoomGapMs,
+    ).toBe(1350);
+  });
+
+  it("leaves a deliberately different stored value alone", () => {
+    // Only the exact legacy sentinel is remapped; anything else is a value
+    // some other code path already understood.
+    expect(
+      normalizeProjectEditor({ zoomInOverlapMs: 750, zoomInDurationMs: 2000 })
+        .zoomInOverlapMs,
+    ).toBe(750);
+    expect(
+      normalizeProjectEditor({ connectedZoomGapMs: 900 }).connectedZoomGapMs,
+    ).toBe(900);
+  });
+
+  it("defaults to the value already in force for a project missing the field", () => {
+    expect(normalizeProjectEditor({}).zoomInOverlapMs).toBe(1000);
+    expect(normalizeProjectEditor({}).connectedZoomGapMs).toBe(1350);
+    expect(normalizeProjectEditor({}).connectedZoomDurationMs).toBe(1000);
+  });
+
+  it("still clamps a remapped overlap to the zoom-in duration", () => {
+    // 1000 > a 400ms zoom-in duration, so the clamp still has to apply after
+    // the remap, not instead of it.
+    expect(
+      normalizeProjectEditor({ zoomInOverlapMs: 500, zoomInDurationMs: 400 })
+        .zoomInOverlapMs,
+    ).toBe(400);
+  });
+
+  it("round-trips a non-legacy overlap and gap through save and load", () => {
+    const normalized = normalizeProjectEditor({
+      zoomInOverlapMs: 620,
+      zoomInDurationMs: 2000,
+      connectedZoomGapMs: 800,
+      connectedZoomDurationMs: 1400,
+    });
+    expect(normalized.zoomInOverlapMs).toBe(620);
+    expect(normalized.connectedZoomGapMs).toBe(800);
+    expect(normalized.connectedZoomDurationMs).toBe(1400);
+  });
+});

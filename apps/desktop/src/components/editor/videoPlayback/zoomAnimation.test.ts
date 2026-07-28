@@ -651,7 +651,10 @@ describe("buildCameraMotionOptions", () => {
   const settings: CameraMotionOptions = {
     connectZooms: true,
     zoomInDurationMs: 800,
+    zoomInOverlapMs: 700,
     zoomOutDurationMs: 400,
+    connectedZoomGapMs: 1200,
+    connectedZoomDurationMs: 900,
     zoomInEasing: "snappy",
     zoomOutEasing: "smooth",
     connectedZoomEasing: "linear",
@@ -664,7 +667,10 @@ describe("buildCameraMotionOptions", () => {
     expect(buildCameraMotionOptions(settings)).toEqual({
       connectZooms: true,
       zoomInDurationMs: 800,
+      zoomInOverlapMs: 700,
       zoomOutDurationMs: 400,
+      connectedZoomGapMs: 1200,
+      connectedZoomDurationMs: 900,
       zoomInEasing: "snappy",
       zoomOutEasing: "smooth",
       connectedZoomEasing: "linear",
@@ -678,10 +684,13 @@ describe("buildCameraMotionOptions", () => {
     const configLike = { ...settings, exportQuality: "high", width: 1920 };
     expect(Object.keys(buildCameraMotionOptions(configLike)).sort()).toEqual([
       "connectZooms",
+      "connectedZoomDurationMs",
       "connectedZoomEasing",
+      "connectedZoomGapMs",
       "zoomDrift",
       "zoomInDurationMs",
       "zoomInEasing",
+      "zoomInOverlapMs",
       "zoomOutDurationMs",
       "zoomOutEasing",
     ]);
@@ -1320,6 +1329,203 @@ describe("drift through findDominantRegion", () => {
         expect(focus.cy).toBeGreaterThanOrEqual(margin - 1e-9);
         expect(focus.cy).toBeLessThanOrEqual(1 - margin + 1e-9);
       }
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// zoomRegionUtils — zoomInOverlapMs / connectedZoomGapMs / connectedZoomDurationMs (#30)
+//
+// These three were stored, persisted and threaded into every exporter config,
+// but nothing ever read them — the module-level constants ZOOM_IN_OVERLAP_MS,
+// CHAINED_ZOOM_PAN_GAP_MS and CONNECTED_ZOOM_PAN_DURATION_MS were what
+// actually ran. The shipped defaults for two of the three disagreed with
+// those constants, so wiring them up naively would have changed every
+// existing project's motion. The regression guards below are what make that
+// not true.
+// ---------------------------------------------------------------------------
+
+describe("zoomInOverlapMs", () => {
+  const region: ZoomRegion = {
+    id: "r",
+    startMs: 2000,
+    endMs: 8000,
+    depth: 3,
+    focus: { cx: 0.5, cy: 0.5 },
+  };
+
+  it("defaults to the value already in force (1000ms), not the stale 500ms default", () => {
+    // Identical output with the option omitted and the option explicitly set
+    // to the old in-force constant is the regression guard: an untouched
+    // project's camera must not move.
+    for (let timeMs = 0; timeMs <= 8000; timeMs += 50) {
+      expect(computeRegionStrength(region, timeMs)).toBe(
+        computeRegionStrength(region, timeMs, { zoomInOverlapMs: 1000 }),
+      );
+    }
+  });
+
+  it("a larger overlap starts the zoom-in ramp later", () => {
+    // leadInStart = region.startMs + overlap - zoomInTransitionWindow, so a
+    // bigger overlap pushes the ramp start later in time.
+    const smallOverlap = computeRegionStrength(region, 1700, {
+      zoomInOverlapMs: 200,
+    });
+    const largeOverlap = computeRegionStrength(region, 1700, {
+      zoomInOverlapMs: 1200,
+    });
+    expect(largeOverlap).toBeLessThan(smallOverlap);
+  });
+});
+
+describe("connectedZoomGapMs", () => {
+  const gapped = (gapMs: number): ZoomRegion[] => [
+    { id: "a", startMs: 0, endMs: 3000, depth: 2, focus: { cx: 0.2, cy: 0.2 } },
+    {
+      id: "b",
+      startMs: 3000 + gapMs,
+      endMs: 6000 + gapMs,
+      depth: 4,
+      focus: { cx: 0.8, cy: 0.8 },
+    },
+  ];
+
+  it("defaults to the value already in force (1350ms), not the stale 1500ms default", () => {
+    const regions = gapped(1400);
+    for (let timeMs = 3100; timeMs <= 3600; timeMs += 25) {
+      expect(
+        findDominantRegion(regions, timeMs, { connectZooms: true }),
+      ).toEqual(
+        findDominantRegion(regions, timeMs, {
+          connectZooms: true,
+          connectedZoomGapMs: 1350,
+        }),
+      );
+    }
+  });
+
+  it("a smaller gap setting stops a pair that would otherwise chain", () => {
+    const regions = gapped(1300); // chains under the 1350 default
+    const withDefault = findDominantRegion(regions, 3400, {
+      connectZooms: true,
+    });
+    expect(withDefault.transition).not.toBeNull();
+
+    const withSmallerGap = findDominantRegion(regions, 3400, {
+      connectZooms: true,
+      connectedZoomGapMs: 1000,
+    });
+    expect(withSmallerGap.transition).toBeNull();
+  });
+
+  it("a larger gap setting lets a pair chain that would not by default", () => {
+    const regions = gapped(1400); // does not chain under the 1350 default
+    const withDefault = findDominantRegion(regions, 3600, {
+      connectZooms: true,
+    });
+    expect(withDefault.transition).toBeNull();
+
+    const withLargerGap = findDominantRegion(regions, 3600, {
+      connectZooms: true,
+      connectedZoomGapMs: 1500,
+    });
+    expect(withLargerGap.transition).not.toBeNull();
+  });
+});
+
+describe("connectedZoomDurationMs", () => {
+  const regions: ZoomRegion[] = [
+    { id: "a", startMs: 0, endMs: 3000, depth: 2, focus: { cx: 0.2, cy: 0.2 } },
+    {
+      id: "b",
+      startMs: 3400,
+      endMs: 6000,
+      depth: 4,
+      focus: { cx: 0.8, cy: 0.8 },
+    },
+  ];
+
+  it("defaults to 1000ms, matching the value already in force", () => {
+    const timeMs = 3300;
+    expect(
+      findDominantRegion(regions, timeMs, { connectZooms: true }),
+    ).toEqual(
+      findDominantRegion(regions, timeMs, {
+        connectZooms: true,
+        connectedZoomDurationMs: 1000,
+      }),
+    );
+  });
+
+  it("a longer duration stretches the pan, so the same instant is earlier in it", () => {
+    const timeMs = 3600; // 200ms into the transition window either way
+    const short = findDominantRegion(regions, timeMs, {
+      connectZooms: true,
+      connectedZoomDurationMs: 500,
+    });
+    const long = findDominantRegion(regions, timeMs, {
+      connectZooms: true,
+      connectedZoomDurationMs: 4000,
+    });
+
+    expect(short.transition?.progress).not.toBeNull();
+    expect(long.transition?.progress).not.toBeNull();
+    expect(long.transition!.progress).toBeLessThan(short.transition!.progress);
+  });
+});
+
+describe("#30 regression guard — dominant-region output is unchanged under defaults", () => {
+  it("isolated region: identical across the whole ramp with and without the new options", () => {
+    const region: ZoomRegion = {
+      id: "solo",
+      startMs: 1000,
+      endMs: 6000,
+      depth: 3,
+      focus: { cx: 0.4, cy: 0.6 },
+    };
+    for (let timeMs = 0; timeMs <= 7000; timeMs += 100) {
+      expect(findDominantRegion([region], timeMs)).toEqual(
+        findDominantRegion([region], timeMs, {
+          zoomInOverlapMs: 1000,
+          connectedZoomGapMs: 1350,
+          connectedZoomDurationMs: 1000,
+        }),
+      );
+    }
+  });
+
+  it("overlapping regions: identical across the whole window", () => {
+    const regions: ZoomRegion[] = [
+      { id: "a", startMs: 0, endMs: 4000, depth: 2, focus: { cx: 0.3, cy: 0.3 } },
+      { id: "b", startMs: 3000, endMs: 7000, depth: 4, focus: { cx: 0.7, cy: 0.7 } },
+    ];
+    for (let timeMs = 0; timeMs <= 7500; timeMs += 100) {
+      expect(findDominantRegion(regions, timeMs)).toEqual(
+        findDominantRegion(regions, timeMs, {
+          zoomInOverlapMs: 1000,
+          connectedZoomGapMs: 1350,
+          connectedZoomDurationMs: 1000,
+        }),
+      );
+    }
+  });
+
+  it("chained regions: identical across the whole connected window", () => {
+    const regions: ZoomRegion[] = [
+      { id: "a", startMs: 0, endMs: 3000, depth: 2, focus: { cx: 0.2, cy: 0.2 } },
+      { id: "b", startMs: 3500, endMs: 6000, depth: 3, focus: { cx: 0.8, cy: 0.8 } },
+    ];
+    for (let timeMs = 0; timeMs <= 6500; timeMs += 50) {
+      expect(
+        findDominantRegion(regions, timeMs, { connectZooms: true }),
+      ).toEqual(
+        findDominantRegion(regions, timeMs, {
+          connectZooms: true,
+          zoomInOverlapMs: 1000,
+          connectedZoomGapMs: 1350,
+          connectedZoomDurationMs: 1000,
+        }),
+      );
     }
   });
 });

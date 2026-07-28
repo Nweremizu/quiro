@@ -197,9 +197,14 @@ export const DEFAULT_ZOOM_MOTION_BLUR_TUNING: ZoomMotionBlurTuning = {
   zoomSafeZoneRadiusPx: 6,
 };
 export const DEFAULT_ZOOM_IN_DURATION_MS = 1522.575;
-export const DEFAULT_ZOOM_IN_OVERLAP_MS = 500;
+// Realigned 2026-07-28 (#30) from 500 to the value actually in force —
+// zoomInOverlapMs was stored and persisted but never read, so the module
+// constant it should have matched is the true shipped behaviour.
+export const DEFAULT_ZOOM_IN_OVERLAP_MS = 1000;
 export const DEFAULT_ZOOM_OUT_DURATION_MS = 1015.05;
-export const DEFAULT_CONNECTED_ZOOM_GAP_MS = 1500;
+// Realigned 2026-07-28 (#30) from 1500 to the value actually in force. See
+// DEFAULT_ZOOM_IN_OVERLAP_MS above.
+export const DEFAULT_CONNECTED_ZOOM_GAP_MS = 1350;
 export const DEFAULT_CONNECTED_ZOOM_DURATION_MS = 1000;
 export const DEFAULT_ZOOM_IN_EASING: ZoomTransitionEasing = "quiro";
 export const DEFAULT_ZOOM_OUT_EASING: ZoomTransitionEasing = "quiro";

@@ -182,6 +182,25 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
+// #30 — zoomInOverlapMs and connectedZoomGapMs were persisted but never read;
+// the module constants that actually ran disagreed with the shipped
+// defaults below. No settings-panel control for either has ever existed, so
+// every stored value is definitionally "whatever this build shipped" — never
+// a deliberate user choice. A file that recorded exactly the stale default
+// is therefore safe to remap to the new one on load; anything else is a
+// value that was written by code that already knew what it meant (a preset,
+// or this same normaliser on a later save) and is passed through unchanged.
+const LEGACY_DEFAULT_ZOOM_IN_OVERLAP_MS = 500;
+const LEGACY_DEFAULT_CONNECTED_ZOOM_GAP_MS = 1500;
+
+function remapLegacyDefault(
+  value: number,
+  legacyDefault: number,
+  currentDefault: number,
+) {
+  return value === legacyDefault ? currentDefault : value;
+}
+
 function normalizeZoomPresetId(value: unknown): ZoomPresetId | undefined {
   return value === "focus" ||
     value === "follow-cursor" ||
@@ -674,13 +693,29 @@ export function normalizeProjectEditor(
     ? clamp(editor.zoomInDurationMs, 60, 4000)
     : DEFAULT_MOTION_PRESET.values.zoomInDurationMs;
   const normalizedZoomInOverlapMs = isFiniteNumber(editor.zoomInOverlapMs)
-    ? clamp(editor.zoomInOverlapMs, 0, normalizedZoomInDurationMs)
+    ? clamp(
+        remapLegacyDefault(
+          editor.zoomInOverlapMs,
+          LEGACY_DEFAULT_ZOOM_IN_OVERLAP_MS,
+          DEFAULT_ZOOM_IN_OVERLAP_MS,
+        ),
+        0,
+        normalizedZoomInDurationMs,
+      )
     : DEFAULT_ZOOM_IN_OVERLAP_MS;
   const normalizedZoomOutDurationMs = isFiniteNumber(editor.zoomOutDurationMs)
     ? clamp(editor.zoomOutDurationMs, 60, 4000)
     : DEFAULT_MOTION_PRESET.values.zoomOutDurationMs;
   const normalizedConnectedZoomGapMs = isFiniteNumber(editor.connectedZoomGapMs)
-    ? clamp(editor.connectedZoomGapMs, 0, 5000)
+    ? clamp(
+        remapLegacyDefault(
+          editor.connectedZoomGapMs,
+          LEGACY_DEFAULT_CONNECTED_ZOOM_GAP_MS,
+          DEFAULT_CONNECTED_ZOOM_GAP_MS,
+        ),
+        0,
+        5000,
+      )
     : DEFAULT_CONNECTED_ZOOM_GAP_MS;
   const normalizedConnectedZoomDurationMs = isFiniteNumber(
     editor.connectedZoomDurationMs,

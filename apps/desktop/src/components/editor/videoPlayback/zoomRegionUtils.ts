@@ -4,8 +4,11 @@ import type {
   ZoomTransitionEasing,
 } from "@/types/editor";
 import {
+  DEFAULT_CONNECTED_ZOOM_DURATION_MS,
   DEFAULT_CONNECTED_ZOOM_EASING,
+  DEFAULT_CONNECTED_ZOOM_GAP_MS,
   DEFAULT_ZOOM_IN_EASING,
+  DEFAULT_ZOOM_IN_OVERLAP_MS,
   DEFAULT_ZOOM_OUT_EASING,
   ZOOM_DEPTH_SCALES,
 } from "@/types/editor";
@@ -32,15 +35,15 @@ const DRIFT_VERTICAL_PHASE_OFFSET = 1.37;
 const TAU = Math.PI * 2;
 const NO_DRIFT = Object.freeze({ dx: 0, dy: 0 });
 
-const CHAINED_ZOOM_PAN_GAP_MS = 1350;
-const CONNECTED_ZOOM_PAN_DURATION_MS = 1000;
-const ZOOM_IN_OVERLAP_MS = 1000;
 const ZOOM_ANIMATION_LEAD_MS = 200;
 
 export type CameraMotionOptions = {
   connectZooms?: boolean;
   zoomInDurationMs?: number;
+  zoomInOverlapMs?: number;
   zoomOutDurationMs?: number;
+  connectedZoomGapMs?: number;
+  connectedZoomDurationMs?: number;
   zoomInEasing?: ZoomTransitionEasing;
   zoomOutEasing?: ZoomTransitionEasing;
   connectedZoomEasing?: ZoomTransitionEasing;
@@ -83,7 +86,10 @@ export function buildCameraMotionOptions(
   return {
     connectZooms: settings.connectZooms,
     zoomInDurationMs: settings.zoomInDurationMs,
+    zoomInOverlapMs: settings.zoomInOverlapMs,
     zoomOutDurationMs: settings.zoomOutDurationMs,
+    connectedZoomGapMs: settings.connectedZoomGapMs,
+    connectedZoomDurationMs: settings.connectedZoomDurationMs,
     zoomInEasing: settings.zoomInEasing,
     zoomOutEasing: settings.zoomOutEasing,
     connectedZoomEasing: settings.connectedZoomEasing,
@@ -223,6 +229,7 @@ export function computeRegionStrength(
   options: Pick<
     CameraMotionOptions,
     | "zoomInDurationMs"
+    | "zoomInOverlapMs"
     | "zoomOutDurationMs"
     | "zoomInEasing"
     | "zoomOutEasing"
@@ -232,13 +239,14 @@ export function computeRegionStrength(
     1,
     options.zoomInDurationMs ?? ZOOM_IN_TRANSITION_WINDOW_MS,
   );
+  const zoomInOverlapMs = options.zoomInOverlapMs ?? DEFAULT_ZOOM_IN_OVERLAP_MS;
   const zoomOutDurationMs = Math.max(
     1,
     options.zoomOutDurationMs ?? TRANSITION_WINDOW_MS,
   );
   const adjustedTimeMs = timeMs - ZOOM_ANIMATION_LEAD_MS;
   const leadInStart =
-    region.startMs + ZOOM_IN_OVERLAP_MS - ZOOM_IN_TRANSITION_WINDOW_MS;
+    region.startMs + zoomInOverlapMs - ZOOM_IN_TRANSITION_WINDOW_MS;
   let zoomOutStart = region.endMs - ZOOM_OUT_EARLY_START_MS;
   let zoomInEnd = leadInStart + zoomInDurationMs;
 
@@ -345,7 +353,17 @@ function getResolvedFocus(
   return clampFocusToScale(region.focus, zoomScale);
 }
 
-function getConnectedRegionPairs(regions: ZoomRegion[]) {
+function getConnectedRegionPairs(
+  regions: ZoomRegion[],
+  options: Pick<
+    CameraMotionOptions,
+    "connectedZoomGapMs" | "connectedZoomDurationMs"
+  >,
+) {
+  const connectedZoomGapMs =
+    options.connectedZoomGapMs ?? DEFAULT_CONNECTED_ZOOM_GAP_MS;
+  const connectedZoomDurationMs =
+    options.connectedZoomDurationMs ?? DEFAULT_CONNECTED_ZOOM_DURATION_MS;
   const sortedRegions = [...regions].sort((a, b) => a.startMs - b.startMs);
   const pairs: ConnectedRegionPair[] = [];
 
@@ -354,7 +372,7 @@ function getConnectedRegionPairs(regions: ZoomRegion[]) {
     const nextRegion = sortedRegions[index + 1];
     const gapMs = nextRegion.startMs - currentRegion.endMs;
 
-    if (gapMs > CHAINED_ZOOM_PAN_GAP_MS) {
+    if (gapMs > connectedZoomGapMs) {
       continue;
     }
 
@@ -370,9 +388,7 @@ function getConnectedRegionPairs(regions: ZoomRegion[]) {
       nextRegion,
       transitionStart: currentRegion.endMs + ZOOM_ANIMATION_LEAD_MS,
       transitionEnd:
-        currentRegion.endMs +
-        ZOOM_ANIMATION_LEAD_MS +
-        CONNECTED_ZOOM_PAN_DURATION_MS,
+        currentRegion.endMs + ZOOM_ANIMATION_LEAD_MS + connectedZoomDurationMs,
     });
   }
 
@@ -535,7 +551,7 @@ export function findDominantRegion(
   transition: ConnectedPanTransition | null;
 } {
   const connectedPairs = options.connectZooms
-    ? getConnectedRegionPairs(regions)
+    ? getConnectedRegionPairs(regions, options)
     : [];
 
   if (options.connectZooms) {

@@ -567,7 +567,10 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
         buildCameraMotionOptions({
           connectZooms,
           zoomInDurationMs,
+          zoomInOverlapMs,
           zoomOutDurationMs,
+          connectedZoomGapMs,
+          connectedZoomDurationMs,
           zoomInEasing,
           zoomOutEasing,
           connectedZoomEasing,
@@ -576,7 +579,10 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
       [
         connectZooms,
         zoomInDurationMs,
+        zoomInOverlapMs,
         zoomOutDurationMs,
+        connectedZoomGapMs,
+        connectedZoomDurationMs,
         zoomInEasing,
         zoomOutEasing,
         connectedZoomEasing,
@@ -584,9 +590,6 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
       ],
     );
     const cameraMotionOptionsRef = useRef(cameraMotionOptions);
-    const zoomInOverlapMsRef = useRef(zoomInOverlapMs);
-    const connectedZoomGapMsRef = useRef(connectedZoomGapMs);
-    const connectedZoomDurationMsRef = useRef(connectedZoomDurationMs);
     const videoReadyRafRef = useRef<number | null>(null);
     const cursorOverlayRef = useRef<PixiCursorOverlay | null>(null);
     const cursorEffectsCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -1626,18 +1629,6 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
     useEffect(() => {
       cameraMotionOptionsRef.current = cameraMotionOptions;
     }, [cameraMotionOptions]);
-
-    useEffect(() => {
-      zoomInOverlapMsRef.current = zoomInOverlapMs;
-    }, [zoomInOverlapMs]);
-
-    useEffect(() => {
-      connectedZoomGapMsRef.current = connectedZoomGapMs;
-    }, [connectedZoomGapMs]);
-
-    useEffect(() => {
-      connectedZoomDurationMsRef.current = connectedZoomDurationMs;
-    }, [connectedZoomDurationMs]);
 
     useEffect(() => {
       cursorTelemetryRef.current = cursorTelemetry;
