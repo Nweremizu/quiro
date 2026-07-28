@@ -203,7 +203,13 @@ changeable.
 
 ### Phase 1 — Motion quality *(the moat)*
 
-- [ ] **Clip transitions** — crossfade + fade-through-black, minimum-duration floor. Confirmed absent from `types/editor.ts` and `timeline/`.
+- ~~**Clip transitions**~~ — **dropped 2026-07-28.** Built and removed the same day.
+      A crossfade needs two source timestamps in one output frame, which neither
+      render path can produce: preview has a single video element, and export is a
+      single forward decode handing one frame per output frame to the renderer.
+      Supporting it means a second frame source on both paths. On seeing it in the
+      app the feature was judged not worth that, and not wanted in the product for
+      now. Motion quality is the moat; transitions are packaging.
 - [ ] **Glide/drift while zoomed** — slow parallax so a held zoom reads as camera work, not a static crop
 - [ ] **Instant-zoom option** — bypass easing for hard cuts
 - [ ] **Camera/zoom motion presets** — extend the proven `cursor-motion-presets.ts` + `MotionPresetCards` pattern
