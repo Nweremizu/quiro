@@ -69,6 +69,12 @@ The editor had severe playback stutter caused by React re-rendering the whole `E
 
 Debug tooling (dev-only, safe to leave in): `src/lib/playbackSessionDebug.ts` logs per-playback-session stats (presented-frame gaps, decoder drops, long tasks, per-phase ticker timing, `react:*` Profiler probe costs) to the console; toggle with `window.__PLAYBACK_DEBUG = false/true`. `PerfOverlay` (Ctrl+Shift+P) shows live FPS/CPU/IPC. After any change to playback, preview rendering, or window.tsx state flow, play a clip and check the session summary — `stalls ≥80ms` should stay at none and `react:settings-panel` should stay near zero during playback.
 
+## CI & release
+
+Releasing is triggered by pushing a `v*` tag; `prepare-release` fails unless the tag matches `apps/desktop/package.json`'s version.
+
+**Canonical release path:** from `apps/desktop`, run `npm run release:patch` / `release:minor` / `release:major`. It bumps the version, syncs the root lockfile (`npm install --package-lock-only` at repo root — easy to skip by hand, and it has drifted before), commits, tags `main` (annotated), pushes, and creates the GitHub Release. If releasing by hand instead, you must run that lockfile sync yourself.
+
 ## Agent skills
 
 ### Issue tracker

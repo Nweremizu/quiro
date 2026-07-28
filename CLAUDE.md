@@ -76,7 +76,11 @@ The preview Pixi ticker (`playback.tsx`) runs every frame; keep its idle cost lo
 
 Two workflows: `.github/workflows/test.yml` (Windows + macOS matrix on every PR/push — desktop `test:ci` = typecheck + vitest, plus `@quiro/web` typecheck) and `.github/workflows/release.yml`.
 
-**Releasing** is triggered by pushing a `v*` tag (e.g. `v1.2.0`). `prepare-release` fails unless the tag version equals `apps/desktop/package.json` version (the only versioned workspace), so bump that, land it on `main`, then tag `main`. The pipeline builds signed Windows + notarized macOS installers, checksums them, and uploads to the GitHub Release, which shipped clients auto-update from (~90 min). `release.yml` runs desktop unit tests on the Windows build job but **not** the web typecheck, so a red web typecheck in `test.yml` does not block a release build.
+**Releasing** is triggered by pushing a `v*` tag (e.g. `v1.2.0`). `prepare-release` fails unless the tag version equals `apps/desktop/package.json` version (the only versioned workspace) — that's the constraint the release path below exists to satisfy. The pipeline builds signed Windows + notarized macOS installers, checksums them, and uploads to the GitHub Release, which shipped clients auto-update from (~90 min). `release.yml` runs desktop unit tests on the Windows build job but **not** the web typecheck, so a red web typecheck in `test.yml` does not block a release build.
+
+**Canonical release path:** from `apps/desktop`, run `npm run release:patch` / `release:minor` / `release:major`. It runs `test:ci`, bumps `apps/desktop/package.json`, **syncs the root lockfile** (`npm install --package-lock-only` at repo root — the step a manual release skips and that drifted twice, see #15), commits both as `chore(release): v<version>`, tags `main` with an **annotated** tag, pushes branch and tag, then creates the GitHub Release (`gh release create --verify-tag`). Flags: `--no-push`, `--no-github-release`, `--skip-tests`.
+
+If you must do it by hand — bump `apps/desktop/package.json`, land it on `main`, tag `main` — you **must** also run `npm install --package-lock-only` at the repo root before committing, or the root lockfile drifts from the workspace version again.
 
 Known CI gotchas — these fail **only in CI** (clean `npm ci`), pass in local dev, and are already fixed; don't reintroduce them:
 
