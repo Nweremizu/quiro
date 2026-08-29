@@ -1,0 +1,125 @@
+[package]
+name = "quiro-desktop"
+version = "0.1.0"
+description = "Beautiful screen recordings, owned by you."
+authors = ["you"]
+edition = "2024"
+
+
+[lints]
+workspace = true
+
+[lib]
+name = "quiro_desktop_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[target.'cfg(target_os = "macos")'.build-dependencies]
+swift-rs = { version = "1.0.6", features = ["build"] }
+
+[dependencies]
+tauri = { version = "2", features = [
+    "tray-icon",
+    "image-png",
+    "devtools",
+    "protocol-asset",
+] }
+tauri-specta = { version = "=2.0.0-rc.20", features = ["derive", "typescript"] }
+tauri-plugin-dialog = "2.2.0"
+tauri-plugin-fs = "2.2.0"
+tauri-plugin-global-shortcut = "2.2.0"
+tauri-plugin-http = "=2.5.2"
+tauri-plugin-notification = "2.2.0"
+tauri-plugin-os = "2.2.0"
+tauri-plugin-process = "2.2.0"
+tauri-plugin-shell = "2.2.0"
+tauri-plugin-single-instance = { version = "2.2.0", features = ["deep-link"] }
+tauri-plugin-store = "2.2.0"
+tauri-plugin-updater = "2.9.0"
+tauri-plugin-window-state = "2.2.0"
+tauri-plugin-positioner = "2.2.0"
+tauri-plugin-deep-link = "2.2.0"
+tauri-plugin-clipboard-manager = "2.2.1"
+tauri-plugin-opener = "2"
+
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+specta.workspace = true
+specta-typescript = "0.0.7"
+tokio = { workspace = true, features = ["signal"] }
+uuid = { version = "1.10.0", features = ["v4"] }
+image = "0.25.2"
+futures-intrusive = "0.5.0"
+anyhow.workspace = true
+futures = { workspace = true }
+axum = { version = "0.7.5", features = ["ws", "macros"] }
+tracing.workspace = true
+tempfile = "3.9.0"
+ffmpeg.workspace = true
+chrono = { version = "0.4.31", features = ["serde"] }
+regex = "1.10.4"
+rodio = "0.19.0"
+png = "0.17.13"
+device_query = "4.0.1"
+base64 = "0.22.1"
+reqwest = { version = "0.12.24", features = ["json", "stream", "multipart"] }
+dotenvy_macro = "0.15.7"
+global-hotkey = "0.7.0"
+scap-targets = { path = "../../../packages/crates/scap-targets" }
+cpal.workspace = true
+flume = "0.11.0"
+kameo = "0.17.2"
+tokio-util = "0.7.15"
+tokio-stream = { version = "0.1.17", features = ["sync"] }
+wgpu = { version = "25.0.0", features = ["wgpu-core"] }
+pollster = "0.4"
+bytemuck = "1.23.1"
+thiserror = "1.0"
+sysinfo = "0.35"
+keyed_priority_queue = "0.4.2"
+tracing-subscriber = "0.3.19"
+relative-path = "1.9.3"
+tokio-tungstenite = "0.24"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+winreg = "0.55.0"
+webview2-com = "0.38.2"
+# Must track the workspace version so HWND/handle types line up with
+# scap-targets and scap-direct3d; webview2-com needs its own newer
+# windows-core, which is why the two versions differ here.
+windows = { workspace = true, features = [
+    "Foundation",
+    "Foundation_Collections",
+    "Win32_Foundation",
+    "Win32_System",
+    "Win32_System_Power",
+    "Win32_System_Threading",
+    "Win32_System_WinRT",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Gdi",
+    "Graphics_Capture",
+    "Globalization",
+    "Graphics_Imaging",
+    "Media_Ocr",
+    "Storage_Streams",
+] }
+windows-sys = { workspace = true }
+windows-core = "0.61.2"
+scap-direct3d = { path = "../../../packages/crates/scap-direct3d" }
+quiro-enc-ffmpeg = { path = "../../../packages/crates/enc-ffmpeg" }
+quiro-media-info = { path = "../../../packages/crates/media-info" }
+quiro-audio = { path = "../../../packages/crates/audio" }
+quiro-camera = { path = "../../../packages/crates/camera", features = ["serde", "specta"] }
+quiro-camera-effects = { path = "../../../packages/crates/camera-effects" }
+quiro-utils = { path = "../../../packages/crates/utils" }
+quiro-project = { path = "../../../packages/crates/project" }
+quiro-rendering = { path = "../../../packages/crates/rendering" }
+quiro-media = { path = "../../../packages/crates/media" }
+quiro-flags = { path = "../../../packages/crates/flags" }
+quiro-recording = { path = "../../../packages/crates/recording" }
+scap-screencapturekit = { path = "../../../packages/crates/scap-screencapturekit" }

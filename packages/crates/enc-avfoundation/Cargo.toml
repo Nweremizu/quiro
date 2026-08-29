@@ -1,0 +1,19 @@
+[package]
+name = "quiro-enc-avfoundation"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+quiro-media-info = { path = "../media-info" }
+
+ffmpeg.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+cidre = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

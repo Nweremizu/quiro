@@ -1,0 +1,46 @@
+{
+	"$schema": "https://schema.tauri.app/config/2",
+	"productName": "Quiro",
+	"version": "0.1.0",
+	"identifier": "com.bronx.quiro",
+	"build": {
+		"beforeDevCommand": "npm run dev",
+		"devUrl": "http://localhost:1420",
+		"beforeBuildCommand": "npm run build",
+		"frontendDist": "../dist"
+	},
+	"app": {
+		"security": {
+			"csp": null,
+			"assetProtocol": {
+				"enable": true,
+				"scope": [
+					"$APPDATA/**",
+					"$HOME/**",
+					"$RESOURCE/**",
+					"**/*.png",
+					"**/*.jpg",
+					"**/*.jpeg",
+					"**/*.webp",
+					"**/*.avif",
+					"**/*.mp4"
+				]
+			}
+		}
+	},
+	"bundle": {
+		"active": true,
+		"targets": "all",
+		"icon": [
+			"icons/32x32.png",
+			"icons/64x64.png",
+			"icons/128x128.png",
+			"icons/128x128@2x.png",
+			"icons/icon.icns",
+			"icons/icon.ico"
+		],
+		"resources": {
+			"assets/backgrounds": "assets/backgrounds"
+		}
+	}
+}

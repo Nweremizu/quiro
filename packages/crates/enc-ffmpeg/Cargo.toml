@@ -1,0 +1,24 @@
+[package]
+name = "quiro-enc-ffmpeg"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+quiro-media-info = { path = "../media-info" }
+
+ffmpeg.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+sysinfo.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile = "3.20.0"
+
+
+[target.'cfg(target_os = "windows")'.dependencies]
+quiro-frame-converter = { path = "../frame-converter" }
+
+[lints]
+workspace = true

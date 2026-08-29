@@ -1,0 +1,13 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/ui" },
+    { "path": "./packages/recorder-core" },
+    { "path": "./packages/utils" },
+    { "path": "./apps/desktop" },
+    { "path": "./apps/web" }
+  ],
+  "compilerOptions": {
+    "plugins": [{ "name": "@effect/language-service" }]
+  }
+}

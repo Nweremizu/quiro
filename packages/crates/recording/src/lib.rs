@@ -1,0 +1,172 @@
+pub mod benchmark;
+mod capture_pipeline;
+pub mod cursor;
+pub mod defaults;
+pub mod diagnostics;
+pub mod feeds;
+pub mod fragmentation;
+pub mod instant_recording;
+pub mod memory_profiling;
+mod output_pipeline;
+pub mod output_validation;
+pub mod recovery;
+mod resolution_limits;
+pub mod screenshot;
+pub mod sources;
+pub mod studio_recording;
+pub mod sync_calibration;
+pub mod track_heal;
+
+pub use resolution_limits::{H264_MAX_DIMENSION, calculate_gpu_compatible_size};
+
+#[cfg(any(test, feature = "test-utils"))]
+pub mod test_sources;
+
+pub use defaults::{
+    CAMERA_ACTIVE_STUDIO_MAX_FPS, DEFAULT_CAPTURE_KEYBOARD_EVENTS,
+    DEFAULT_CRASH_RECOVERY_RECORDING, DEFAULT_CUSTOM_CURSOR_CAPTURE, DEFAULT_INSTANT_MODE_FPS,
+    DEFAULT_INSTANT_MODE_MAX_RESOLUTION, DEFAULT_OUT_OF_PROCESS_MUXER, DEFAULT_STUDIO_MAX_FPS,
+    FREE_INSTANT_MODE_MAX_RESOLUTION, PRO_INSTANT_MODE_MAX_RESOLUTION, RecordingDefaults,
+    default_studio_recording_quality,
+};
+pub use feeds::{camera::CameraFeed, microphone::MicrophoneFeed};
+pub use output_pipeline::oop_muxer;
+pub use output_pipeline::*;
+pub use sources::screen_capture;
+
+use feeds::microphone::MicrophoneFeedLock;
+use quiro_media::MediaError;
+use scap_targets::bounds::LogicalBounds;
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use thiserror::Error;
+
+use crate::{feeds::camera::CameraFeedLock, sources::screen_capture::ScreenCaptureTarget};
+
+#[derive(specta::Type, Serialize, Deserialize, Clone, Debug, Copy, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum RecordingMode {
+    Studio,
+    #[default]
+    Instant,
+    Screenshot,
+}
+
+#[derive(Clone, Debug, Copy, Default, PartialEq, Eq)]
+pub enum StudioQuality {
+    Compatibility,
+    #[default]
+    Balanced,
+    Ultra,
+}
+
+#[derive(specta::Type, Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordingOptions {
+    pub capture_target: ScreenCaptureTarget,
+    #[serde(alias = "audio_input_name")]
+    pub mic_name: Option<String>,
+    pub camera_label: Option<String>,
+    #[serde(default)]
+    pub capture_system_audio: bool,
+    pub mode: RecordingMode,
+}
+
+#[derive(Clone)]
+pub struct RecordingBaseInputs {
+    pub capture_target: ScreenCaptureTarget,
+    pub capture_system_audio: bool,
+    pub mic_feed: Option<Arc<MicrophoneFeedLock>>,
+    pub camera_feed: Option<Arc<CameraFeedLock>>,
+    #[cfg(target_os = "macos")]
+    pub shareable_content: Option<SendableShareableContent>,
+    #[cfg(target_os = "macos")]
+    pub excluded_windows: Vec<scap_targets::WindowId>,
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Clone)]
+pub struct SendableShareableContent(
+    Arc<std::sync::Mutex<cidre::arc::R<cidre::sc::ShareableContent>>>,
+);
+
+#[cfg(target_os = "macos")]
+impl SendableShareableContent {
+    pub fn retained(&self) -> cidre::arc::R<cidre::sc::ShareableContent> {
+        self.0.lock().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl From<cidre::arc::R<cidre::sc::ShareableContent>> for SendableShareableContent {
+    fn from(value: cidre::arc::R<cidre::sc::ShareableContent>) -> Self {
+        Self(Arc::new(std::sync::Mutex::new(value)))
+    }
+}
+
+#[derive(specta::Type, Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub enum RecordingOptionCaptureTarget {
+    Window {
+        id: u32,
+    },
+    Screen {
+        id: u32,
+    },
+    Area {
+        screen_id: u32,
+        bounds: LogicalBounds,
+    },
+}
+
+impl RecordingOptions {
+    pub fn camera_label(&self) -> Option<&str> {
+        self.camera_label.as_deref()
+    }
+
+    pub fn mic_name(&self) -> Option<&str> {
+        self.mic_name.as_deref()
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum ActorError {
+    #[error("Actor has stopped")]
+    ActorStopped,
+
+    #[error("Failed to send to actor")]
+    SendFailed(#[from] flume::SendError<()>),
+}
+
+#[derive(Error, Debug)]
+pub enum RecordingError {
+    #[error("Media error: {0}")]
+    Media(#[from] MediaError),
+
+    #[error("Actor error: {0}")]
+    Actor(#[from] ActorError),
+
+    #[error("Serde/{0}")]
+    Serde(#[from] serde_json::Error),
+
+    #[error("IO/{0}")]
+    Io(#[from] std::io::Error),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum RecordingHealth {
+    Healthy,
+    Repaired { original_issue: String },
+    Degraded { issues: Vec<String> },
+    Damaged { reason: String },
+}
+
+impl RecordingHealth {
+    pub fn is_uploadable(&self) -> bool {
+        matches!(
+            self,
+            Self::Healthy | Self::Repaired { .. } | Self::Degraded { .. }
+        )
+    }
+}

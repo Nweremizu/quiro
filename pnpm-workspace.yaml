@@ -1,0 +1,7 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "packages/crates/tauri-plugin-*"
+allowBuilds:
+  esbuild: false
+  unrs-resolver: false

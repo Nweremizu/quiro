@@ -1,0 +1,9 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "resources": {
+      "../../../target/native-deps/onnxruntime/lib/onnxruntime.dll": "onnxruntime.dll",
+      "../../../target/native-deps/onnxruntime/lib/onnxruntime_providers_shared.dll": "onnxruntime_providers_shared.dll"
+    }
+  }
+}

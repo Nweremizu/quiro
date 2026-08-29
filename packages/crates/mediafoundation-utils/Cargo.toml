@@ -1,0 +1,18 @@
+[package]
+name = "quiro-mediafoundation-utils"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+[target.'cfg(windows)'.dependencies]
+windows-core = { workspace = true }
+windows = { workspace = true, features = [
+    "Win32_Media_MediaFoundation",
+    "Win32_Media_DirectShow",
+    "Win32_System_Com",
+    "Win32_System_Threading",
+] }
+
+[lints]
+workspace = true

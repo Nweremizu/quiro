@@ -1,0 +1,10 @@
+[env]
+FFMPEG_DIR = { relative = true, force = true, value = "target/native-deps" }
+# Camera background blur runs its segmentation model through ONNX Runtime,
+# which `ort` is built to dlopen at runtime (the `load-dynamic` feature — see
+# packages/crates/camera-effects/Cargo.toml) rather than link statically. This
+# is the only thing that tells it where to find the library; without it blur
+# silently no-ops. Populate the path with `pnpm setup:onnxruntime`.
+ORT_DYLIB_PATH = { relative = true, force = true, value = "target/native-deps/onnxruntime/lib/onnxruntime.dll" }
+LIBCLANG_PATH = "C:\\Program Files\\LLVM\\bin"
+BINDGEN_EXTRA_CLANG_ARGS = "--target=x86_64-pc-windows-msvc"

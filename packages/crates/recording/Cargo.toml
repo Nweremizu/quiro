@@ -1,0 +1,135 @@
+[package]
+name = "quiro-recording"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[features]
+default = []
+test-utils = []
+memory-profiling = ["dep:dhat"]
+
+[dependencies]
+quiro-audio = { path = "../audio" }
+quiro-fail = { path = "../fail" }
+quiro-project = { path = "../project" }
+quiro-media = { path = "../media" }
+quiro-rendering = { path = "../rendering" }
+quiro-flags = { path = "../flags" }
+quiro-utils = { path = "../utils" }
+scap-targets = { path = "../scap-targets" }
+quiro-cursor-capture = { path = "../cursor-capture" }
+quiro-media-info = { path = "../media-info" }
+quiro-cursor-info = { path = "../cursor-info" }
+quiro-camera = { path = "../camera", features = ["serde", "specta"] }
+quiro-camera-ffmpeg = { path = "../camera-ffmpeg" }
+quiro-enc-ffmpeg = { path = "../enc-ffmpeg" }
+quiro-frame-converter = { path = "../frame-converter" }
+quiro-timestamp = { path = "../timestamp" }
+quiro-muxer-protocol = { path = "../cap-muxer-protocol" }
+scap-ffmpeg = { path = "../scap-ffmpeg" }
+
+specta = { workspace = true }
+tokio = { workspace = true }
+flume = { workspace = true }
+thiserror = { workspace = true }
+ffmpeg = { workspace = true }
+serde = { workspace = true }
+futures = { workspace = true }
+anyhow = { workspace = true }
+
+serde_json = "1"
+chrono = "0.4.38"
+tracing.workspace = true
+device_query = "4.0.1"
+image = "0.25.2"
+either = "1.13.0"
+tracing-subscriber = { version = "0.3.19" }
+relative-path = "1.9.3"
+tokio-util = "0.7.15"
+sha2 = "0.10.9"
+hex = "0.4.3"
+ringbuf = "0.4.8"
+cpal.workspace = true
+indexmap = "2.10.0"
+kameo = "0.17.2"
+inquire = "0.7.5"
+replace_with = "0.1.8"
+retry = "2.1.0"
+sysinfo = "0.35"
+parking_lot = "0.12"
+dhat = { version = "0.3", optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+cidre = { workspace = true }
+screencapturekit = "0.3.5"
+cocoa = "0.26.0"
+objc = "0.2.7"
+objc2 = "0.6"
+objc2-app-kit = "0.3.1"
+core-graphics = "0.24.0"
+core-foundation = "0.10.0"
+coreaudio-rs = { version = "0.11.3", features = ["audio_unit"] }
+foreign-types-shared = "0.3"
+libc = "0.2"
+
+scap-screencapturekit = { path = "../scap-screencapturekit" }
+quiro-enc-avfoundation = { path = "../enc-avfoundation" }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Gdi",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Performance",
+    "Win32_Storage_Xps",
+] }
+
+quiro-d3d-adapter = { path = "../d3d-adapter" }
+quiro-enc-mediafoundation = { path = "../enc-mediafoundation" }
+quiro-mediafoundation-ffmpeg = { path = "../mediafoundation-ffmpeg" }
+quiro-mediafoundation-utils = { path = "../mediafoundation-utils" }
+quiro-camera-windows = { path = "../camera-windows" }
+scap-direct3d = { path = "../scap-direct3d" }
+scap-cpal = { path = "../scap-cpal" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+ashpd = { version = "0.11.0", default-features = false, features = ["tokio"] }
+pipewire = "0.10.0"
+x11rb = { version = "0.13.2", features = ["xfixes"] }
+
+[dev-dependencies]
+tempfile = "3.20.0"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+clap = { version = "4.5", features = ["derive"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+libproc = "0.14"
+
+[target.'cfg(target_os = "windows")'.dev-dependencies]
+windows = { workspace = true, features = ["Win32_UI_HiDpi"] }
+
+[[test]]
+name = "synthetic_recording"
+required-features = ["test-utils"]
+
+[[example]]
+name = "synthetic-test-runner"
+required-features = ["test-utils"]
+
+[[example]]
+name = "playback-test-runner"
+
+[[example]]
+name = "real-device-test-runner"
+
+[[example]]
+name = "memory-stress-test"
+
+[[example]]
+name = "instant-mode-profile"

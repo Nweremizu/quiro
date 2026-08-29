@@ -1,0 +1,15 @@
+[package]
+name = "quiro-cursor-capture"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+scap-targets = { path = "../scap-targets" }
+
+device_query = "4.0.1"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-graphics = "0.24.0"

@@ -1,0 +1,84 @@
+import React, { Suspense } from "react";
+import ReactDOM from "react-dom/client";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
+import "./App.css";
+import { Toaster } from "@quiro/ui";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { message } from "@tauri-apps/plugin-dialog";
+import { AppErrorBoundary } from "./components/AppErrorBoundary";
+import Camera from "./routes/camera";
+import Debug from "./routes/debug";
+import MainWindow from "./routes/launch";
+import ScreenshotEditor from "./routes/screenshot-editor";
+import Settings from "./routes/settings";
+import GeneralSettings from "./routes/settings/general";
+import { ToolbarWindow } from "./routes/ToolbarWindow";
+import TargetSelectOverlay from "./routes/target-select-overlay";
+import WindowCaptureOccluder from "./routes/window-capture-occluder";
+import WindowLayout from "./routes/window-layout";
+
+const queryClient = new QueryClient({
+	defaultOptions: {
+		queries: {
+			refetchOnWindowFocus: false,
+			refetchOnReconnect: false,
+		},
+		mutations: {
+			onError: (error) => {
+				message(`An error occurred: ${error}`, {
+					title: "Error",
+				});
+			},
+		},
+	},
+});
+
+// One index.html for every Tauri window — each window's WebviewUrl just
+// points at a different route (see src-tauri/src/windows.rs), and Vite's
+// dev server + Tauri's asset protocol both fall back to index.html for
+// unmatched paths, so this needs no hash routing.
+ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+	<React.StrictMode>
+		<QueryClientProvider client={queryClient}>
+			<AppErrorBoundary>
+				<Suspense>
+					<BrowserRouter>
+						<Inner />
+					</BrowserRouter>
+				</Suspense>
+			</AppErrorBoundary>
+			<Toaster />
+		</QueryClientProvider>
+	</React.StrictMode>,
+);
+
+function Inner() {
+	return (
+		<Routes>
+			{/* Outside WindowLayout on purpose: the target-select overlays and
+          the camera bubble are transparent, chrome-less windows, so they
+          must not inherit the opaque window chrome (header, background,
+          rounded shell). */}
+			<Route path="/target-select-overlay" element={<TargetSelectOverlay />} />
+			<Route path="/camera" element={<Camera />} />
+			<Route path="/toolbar" element={<ToolbarWindow />} />
+			<Route
+				path="/window-capture-occluder"
+				element={<WindowCaptureOccluder />}
+			/>
+			<Route path="/" element={<WindowLayout />}>
+				<Route index element={<MainWindow />} />
+
+				<Route path="/debug" element={<Debug />} />
+				<Route path="/screenshot-editor" element={<ScreenshotEditor />} />
+				{/* Rust's show_settings builds the URL as `/settings/{page}`,
+				    with an empty `page` (→ trailing slash) when none is given —
+				    the index route below covers that same "no page" case. */}
+				<Route path="/settings" element={<Settings />}>
+					<Route index element={<GeneralSettings />} />
+					<Route path="general" element={<GeneralSettings />} />
+				</Route>
+			</Route>
+		</Routes>
+	);
+}
