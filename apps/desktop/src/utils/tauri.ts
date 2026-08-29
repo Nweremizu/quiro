@@ -500,6 +500,17 @@ export type DevicesUpdated = { cameras: CameraInfo[]; microphones: string[]; per
 export type DisplayId = string
 export type DisplayInformation = { name: string | null; physical_size: PhysicalSize | null; logical_size: LogicalSize | null; logical_bounds: LogicalBounds | null; refresh_rate: string }
 export type EditorPreviewQuality = "quarter" | "half" | "full"
+export type FocusConfig = { x: number; y: number; radiusX: number; radiusY: number; 
+/**
+ * Degrees, clockwise. Lets the plane of focus follow a diagonal subject.
+ */
+rotation: number; shape: FocusShape; blur: number; depth: number; lens: number; 
+/**
+ * Asymmetry multipliers: content above the focus reads as further away,
+ * below as nearer, so a composition can defocus one side harder. `1.0`
+ * each side is symmetric.
+ */
+nearBlur: number; farBlur: number }
 /**
  * Cinematic depth of field over the screenshot: an elliptical plane of focus,
  * with blur growing continuously with distance from it — a circle-of-confusion
@@ -513,18 +524,11 @@ export type EditorPreviewQuality = "quarter" | "half" | "full"
  * `blur`, `depth` and `lens` are the user-facing dials (0-100); the shader
  * derives max circle-of-confusion, falloff curve and bokeh highlight strength
  * from them, so no lens terminology leaks into the UI.
+ * Outline of the plane of focus. An ellipse is the lens-native shape; a
+ * rectangle suits UI screenshots, where the subject is usually a panel, a
+ * toolbar or a dialog rather than a round object.
  */
-export type FocusConfig = { x: number; y: number; radiusX: number; radiusY: number; 
-/**
- * Degrees, clockwise. Lets the plane of focus follow a diagonal subject.
- */
-rotation: number; blur: number; depth: number; lens: number; 
-/**
- * Asymmetry multipliers: content above the focus reads as further away,
- * below as nearer, so a composition can defocus one side harder. `1.0`
- * each side is symmetric.
- */
-nearBlur: number; farBlur: number }
+export type FocusShape = "ellipse" | "rectangle"
 export type FrameConfiguration = { style: FrameStyle; theme: FrameTheme; 
 /**
  * Text shown in the browser style's URL pill.

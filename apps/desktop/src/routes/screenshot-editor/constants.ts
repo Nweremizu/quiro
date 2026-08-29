@@ -10,9 +10,12 @@ export const DEFAULT_FOCUS: FocusConfig = {
 	radiusX: 0.2,
 	radiusY: 0.16,
 	rotation: 0,
+	shape: "ellipse",
 	blur: 18,
 	depth: 26,
-	lens: 64,
+	// Low on purpose: this drives a real highlight expansion in linear light,
+	// so a little goes a long way on a bright UI screenshot.
+	lens: 5,
 	nearBlur: 0.55,
 	farBlur: 0.55,
 };

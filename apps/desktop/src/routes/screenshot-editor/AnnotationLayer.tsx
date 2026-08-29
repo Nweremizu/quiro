@@ -708,32 +708,49 @@ function FocusOverlay({
 		{ id: "n", x: cx, y: cy - ry, mode: "y", sign: -1 },
 	];
 
+	// The guide has to describe the shape the shader actually uses, so it is
+	// drawn from the same config rather than always being an ellipse. The
+	// rectangle is rounded because the falloff's corners are too — it is a
+	// superellipse, not a hard-cornered box.
+	const outline = (props: React.SVGProps<SVGElement>) =>
+		focus.shape === "rectangle" ? (
+			<rect
+				x={cx - rx}
+				y={cy - ry}
+				width={rx * 2}
+				height={ry * 2}
+				rx={Math.min(rx, ry) * 0.22}
+				{...(props as React.SVGProps<SVGRectElement>)}
+			/>
+		) : (
+			<ellipse
+				cx={cx}
+				cy={cy}
+				rx={rx}
+				ry={ry}
+				{...(props as React.SVGProps<SVGEllipseElement>)}
+			/>
+		);
+
 	return (
 		<g style={{ pointerEvents: "all" }}>
 			{/* Two strokes: a dark one under a dashed light one, so the guide is
 			    legible over whatever the screenshot happens to show. */}
-			<ellipse
-				cx={cx}
-				cy={cy}
-				rx={rx}
-				ry={ry}
-				fill="transparent"
-				stroke="rgba(0,0,0,0.55)"
-				strokeWidth={handleSize * 0.28}
-				style={{ cursor: "move" }}
-				onMouseDown={(event) => begin(event, "move")}
-			/>
-			<ellipse
-				cx={cx}
-				cy={cy}
-				rx={rx}
-				ry={ry}
-				fill="none"
-				stroke="#fff"
-				strokeWidth={handleSize * 0.14}
-				strokeDasharray={`${handleSize * 0.7} ${handleSize * 0.5}`}
-				pointerEvents="none"
-			/>
+			{outline({
+				fill: "transparent",
+				stroke: "rgba(0,0,0,0.55)",
+				strokeWidth: handleSize * 0.28,
+				style: { cursor: "move" },
+				onMouseDown: (event) =>
+					begin(event as React.MouseEvent<SVGElement>, "move"),
+			})}
+			{outline({
+				fill: "none",
+				stroke: "#fff",
+				strokeWidth: handleSize * 0.14,
+				strokeDasharray: `${handleSize * 0.7} ${handleSize * 0.5}`,
+				pointerEvents: "none",
+			})}
 
 			<circle
 				cx={cx}

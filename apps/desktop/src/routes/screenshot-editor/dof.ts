@@ -72,6 +72,7 @@ uniform float uNearBlur;
 uniform float uFarBlur;
 uniform float uHighlight;
 uniform float uCatEye;
+uniform float uShapePower;
 uniform int uSamples;
 
 const float TAU = 6.28318530718;
@@ -96,6 +97,22 @@ vec3 expandHighlights(vec3 linear) {
   return linear * (1.0 + uHighlight * smoothstep(0.45, 1.0, luma(linear)) * 7.0);
 }
 
+// How far a point sits from the centre of the focus region, normalised so 1.0
+// is the boundary whatever the shape. Both shapes are the same superellipse
+// with a different exponent: 2 is a true ellipse, 6 reads as a rectangle while
+// keeping its corners smooth — a hard-cornered iso-line would crease the blur
+// ramp diagonally at each corner.
+float shapeDistance(vec2 n) {
+  // The exponent is a uniform, so this branch is coherent across the draw and
+  // costs nothing; the ellipse then avoids a pow() entirely.
+  if (uShapePower < 2.5) return length(n);
+
+  vec2 a = abs(n);
+  vec2 a2 = a * a;
+  vec2 a6 = a2 * a2 * a2;
+  return pow(a6.x + a6.y, 1.0 / 6.0);
+}
+
 /** Circle of confusion, in pixels, for a point in region-local UV space. */
 float coc(vec2 uv) {
   // Worked in pixels so the ellipse and its rotation stay true to what the
@@ -107,7 +124,7 @@ float coc(vec2 uv) {
   d = vec2(d.x * c - d.y * s, d.x * s + d.y * c);
 
   vec2 radiusPx = max(uFocusRadius * uResolution, vec2(1.0));
-  float distance = length(d / radiusPx);
+  float distance = shapeDistance(d / radiusPx);
 
   // 1 across the plane of focus, easing to 0 outside it. The inner edge is
   // what "Depth" narrows, so a higher setting keeps less of the frame sharp.
@@ -400,6 +417,10 @@ export class DofRenderer {
 		// blooms highlights harder and vignettes the bokeh into cat's eyes.
 		gl.uniform1f(this.location("uHighlight"), focus.lens / 100);
 		gl.uniform1f(this.location("uCatEye"), (focus.lens / 100) * 0.6);
+		gl.uniform1f(
+			this.location("uShapePower"),
+			focus.shape === "rectangle" ? 6 : 2,
+		);
 		gl.uniform1i(this.location("uSamples"), SAMPLES[quality]);
 
 		gl.drawArrays(gl.TRIANGLES, 0, 3);

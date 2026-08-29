@@ -1584,6 +1584,17 @@ pub enum MaskType {
 /// `blur`, `depth` and `lens` are the user-facing dials (0-100); the shader
 /// derives max circle-of-confusion, falloff curve and bokeh highlight strength
 /// from them, so no lens terminology leaks into the UI.
+/// Outline of the plane of focus. An ellipse is the lens-native shape; a
+/// rectangle suits UI screenshots, where the subject is usually a panel, a
+/// toolbar or a dialog rather than a round object.
+#[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum FocusShape {
+    #[default]
+    Ellipse,
+    Rectangle,
+}
+
 #[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct FocusConfig {
@@ -1593,6 +1604,7 @@ pub struct FocusConfig {
     pub radius_y: f64,
     /// Degrees, clockwise. Lets the plane of focus follow a diagonal subject.
     pub rotation: f64,
+    pub shape: FocusShape,
 
     pub blur: f64,
     pub depth: f64,
@@ -1613,13 +1625,14 @@ impl Default for FocusConfig {
             radius_x: 0.20,
             radius_y: 0.16,
             rotation: 0.0,
+            shape: FocusShape::Ellipse,
             // Tuned on screen rather than derived: a gentle circle of confusion
-            // over a wide, softly-ramped plane of focus, with enough highlight
-            // bloom to read as a lens. Understated on purpose — opening the tool
-            // should look like depth, not like a blurred screenshot.
+            // over a wide, softly-ramped plane of focus. `lens` stays low
+            // because it drives a real highlight expansion — enough to read as
+            // optics, not enough to blow out a bright UI.
             blur: 18.0,
             depth: 26.0,
-            lens: 64.0,
+            lens: 5.0,
             near_blur: 0.55,
             far_blur: 0.55,
         }

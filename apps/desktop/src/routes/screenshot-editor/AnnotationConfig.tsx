@@ -52,8 +52,34 @@ export function AnnotationConfig() {
 			<div className="flex h-full w-60 shrink-0 flex-col gap-4 overflow-y-auto border-l border-gray-3 bg-gray-1 p-3">
 				<span className="text-xs font-medium text-gray-12">Focus</span>
 				<p className="text-pretty text-xs text-gray-10">
-					Press F and click the screenshot to aim, or drag the ellipse.
+					Press F and click the screenshot to aim, or drag the region.
 				</p>
+
+				<Field name="Region">
+					<div className="flex items-center gap-1 rounded-lg bg-gray-3 p-1">
+						{(
+							[
+								{ value: "ellipse", label: "Ellipse" },
+								{ value: "rectangle", label: "Rectangle" },
+							] as const
+						).map((option) => (
+							<button
+								key={option.value}
+								type="button"
+								aria-pressed={focus.shape === option.value}
+								onClick={() => setFocus({ shape: option.value })}
+								className={cn(
+									"h-7 flex-1 rounded-md text-xs transition-colors",
+									focus.shape === option.value
+										? "bg-gray-1 text-gray-12 shadow-sm"
+										: "text-gray-10 hover:text-gray-12",
+								)}
+							>
+								{option.label}
+							</button>
+						))}
+					</div>
+				</Field>
 
 				<SliderWithHistory
 					label="Blur"
