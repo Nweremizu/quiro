@@ -436,7 +436,6 @@ impl PendingNv12Readback {
             return Err(self.cancel());
         };
 
-        let mut poll_count = 0u32;
         let start_time = Instant::now();
         let timeout_duration = gpu_buffer_wait_timeout();
 
@@ -455,13 +454,26 @@ impl PendingNv12Readback {
                 },
                 Err(oneshot::error::TryRecvError::Empty) => {
                     device.poll(wgpu::PollType::Poll)?;
-                    poll_count += 1;
-                    if poll_count < 10 {
+
+                    // Sleeping here is the trap: Windows' default timer
+                    // granularity is ~15.6ms, so a `sleep(100us)` really costs
+                    // milliseconds. A readback of a few MB completes in about
+                    // one, which meant the copy was finished and this task was
+                    // still asleep — measured at 25.5ms per frame against
+                    // 0.3ms of actual GPU work.
+                    //
+                    // So yield for as long as a healthy readback could
+                    // plausibly take, and only fall back to sleeping when
+                    // something has clearly gone wrong. `yield_now` reschedules
+                    // immediately when the runtime is otherwise idle, which is
+                    // exactly the tight poll this wants.
+                    let waited = start_time.elapsed();
+                    if waited < YIELD_UNTIL {
                         tokio::task::yield_now().await;
-                    } else if poll_count < 100 {
-                        tokio::time::sleep(std::time::Duration::from_micros(100)).await;
-                    } else {
+                    } else if waited < SHORT_SLEEP_UNTIL {
                         tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+                    } else {
+                        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
                     }
                 }
                 Err(oneshot::error::TryRecvError::Closed) => {
@@ -505,6 +517,15 @@ pub enum GpuOutputFormat {
     Nv12,
     Rgba,
 }
+
+/// How long to keep yield-polling for a GPU readback before sleeping. Covers
+/// a healthy transfer several times over; past it, something is wrong and
+/// burning a core no longer helps.
+const YIELD_UNTIL: std::time::Duration =
+    std::time::Duration::from_millis(if cfg!(windows) { 40 } else { 8 });
+
+/// Beyond this, back off harder — the frame is late regardless.
+const SHORT_SLEEP_UNTIL: std::time::Duration = std::time::Duration::from_millis(50);
 
 pub struct Nv12RenderedFrame {
     pub data: SharedNv12Buffer,
@@ -592,12 +613,18 @@ impl PendingReadback {
                 Err(oneshot::error::TryRecvError::Empty) => {
                     device.poll(wgpu::PollType::Poll)?;
                     poll_count += 1;
-                    if poll_count < 10 {
+
+                    // Same trap as the NV12 path: a sub-millisecond sleep on
+                    // Windows costs milliseconds, so the readback finished long
+                    // before this task woke up. Yield-poll for as long as a
+                    // healthy transfer could take, then back off.
+                    let waited = start_time.elapsed();
+                    if waited < YIELD_UNTIL {
                         tokio::task::yield_now().await;
-                    } else if poll_count < 100 {
-                        tokio::time::sleep(std::time::Duration::from_micros(100)).await;
-                    } else {
+                    } else if waited < SHORT_SLEEP_UNTIL {
                         tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+                    } else {
+                        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
                     }
                     if poll_count.is_multiple_of(10000) {
                         tracing::warn!(

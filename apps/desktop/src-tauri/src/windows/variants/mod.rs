@@ -1,6 +1,7 @@
 use crate::windows::*;
 
 pub(crate) mod camera;
+pub(crate) mod editor;
 pub(crate) mod main_window;
 pub(crate) mod overlays;
 pub(crate) mod recording_controls;
@@ -15,6 +16,7 @@ pub(crate) async fn try_reuse_existing(
         ShowQuiroWindow::Camera { .. }
             | ShowQuiroWindow::InProgressRecording { .. }
             | ShowQuiroWindow::ScreenshotEditor { .. }
+            | ShowQuiroWindow::Editor { .. }
     ) && let Some(window) = this.id(app).get(app)
     {
         #[cfg(target_os = "macos")]

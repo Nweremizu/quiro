@@ -1,8 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Annotation, AnnotationType } from "@/utils/tauri";
-import { getArrowHeadPoints } from "./arrow";
+import {
+	arrowSpec,
+	bendFromHandle,
+	bendHandle,
+	buildArrow,
+	type HeadShape,
+	polygonPath,
+	polylinePath,
+} from "./arrow";
 import { DEFAULT_FOCUS, DEFAULT_FOCUS_STRENGTH } from "./constants";
 import { useScreenshotEditorContext } from "./context";
+import { resizeByHandle } from "./geometry";
+import {
+	annotationAABB,
+	collectSnapTargets,
+	type SnapTargets,
+	snap,
+} from "./snapping";
 
 // React port of Cap's `AnnotationLayer.tsx`. Annotations are SVG, not canvas —
 // that is Cap's choice and it is the right one: hit-testing, hover and drag all
@@ -20,12 +35,33 @@ type DragState = {
 	startX: number;
 	startY: number;
 	original: Annotation;
+	targets: SnapTargets;
 };
 
 const clamp = (value: number, min: number, max: number) =>
 	Math.min(Math.max(value, min), max);
 
 const DEFAULT_STROKE = "#F05656";
+
+/** Only these carry a rotation transform + rotate handle. Arrows rotate by
+ * dragging an endpoint; focus has its own rotation; masks resample pixels. */
+const ROTATABLE = new Set<AnnotationType>(["rectangle", "circle", "text"]);
+
+const canRotate = (a: Annotation) => ROTATABLE.has(a.type);
+
+/** `rotate(deg cx cy)` about the box centre, or undefined when upright. */
+const rotationTransform = (a: Annotation): string | undefined =>
+	a.rotation && canRotate(a)
+		? `rotate(${a.rotation} ${a.x + a.width / 2} ${a.y + a.height / 2})`
+		: undefined;
+
+/** Circles are round by default and free-form with Shift; rectangles and masks
+ * are the other way round. One rule, used both while drawing and while
+ * resizing, so the two can't drift apart. */
+const aspectLocked = (type: AnnotationType, shiftKey: boolean) =>
+	type === "circle"
+		? !shiftKey
+		: (type === "rectangle" || type === "mask") && shiftKey;
 
 export function AnnotationLayer({
 	bounds,
@@ -56,6 +92,11 @@ export function AnnotationLayer({
 	const [dragState, setDragState] = useState<DragState | null>(null);
 	const [textEditingId, setTextEditingId] = useState<string | null>(null);
 	const [tempAnnotation, setTempAnnotation] = useState<Annotation | null>(null);
+	// The frame coordinate a snap has locked onto, per axis, for the guide lines.
+	const [snapGuides, setSnapGuides] = useState<{
+		x: number | null;
+		y: number | null;
+	}>({ x: null, y: null });
 
 	// A whole gesture is one undo entry: history is paused on pointer-down and
 	// resumed on pointer-up, rather than snapshotting per pointer-move.
@@ -212,6 +253,17 @@ export function AnnotationLayer({
 			text: activeTool === "text" ? "Text" : null,
 			maskType: activeTool === "mask" ? "pixelate" : null,
 			maskLevel: activeTool === "mask" ? 7 : null,
+			...(activeTool === "arrow"
+				? {
+						arrowCurve: "straight" as const,
+						arrowBend: 0,
+						arrowStartHead: "none" as const,
+						arrowEndHead: "triangle" as const,
+						arrowHeadSize: 1,
+						lineStyle: "solid" as const,
+						arrowTaper: false,
+					}
+				: {}),
 		};
 
 		beginGesture();
@@ -234,23 +286,17 @@ export function AnnotationLayer({
 			let width = current.x - temp.x;
 			let height = current.y - temp.y;
 
-			// Circles are round by default and free-form with Shift; rectangles
-			// and masks are the other way round. Arrows snap to 45°.
-			const square = () => {
+			if (aspectLocked(temp.type, event.shiftKey)) {
 				const size = Math.max(Math.abs(width), Math.abs(height));
 				width = width < 0 ? -size : size;
 				height = height < 0 ? -size : size;
-			};
-			if (temp.type === "circle" && !event.shiftKey) square();
-			else if (event.shiftKey) {
-				if (temp.type === "rectangle" || temp.type === "mask") square();
-				else if (temp.type === "arrow") {
-					const angle = Math.atan2(height, width);
-					const snapped = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
-					const distance = Math.hypot(width, height);
-					width = Math.cos(snapped) * distance;
-					height = Math.sin(snapped) * distance;
-				}
+			} else if (event.shiftKey && temp.type === "arrow") {
+				// Arrows snap to 45° instead.
+				const angle = Math.atan2(height, width);
+				const snapped = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
+				const distance = Math.hypot(width, height);
+				width = Math.cos(snapped) * distance;
+				height = Math.sin(snapped) * distance;
 			}
 
 			const next = { ...temp, width, height };
@@ -265,12 +311,30 @@ export function AnnotationLayer({
 		const original = dragState.original;
 
 		if (dragState.action === "move") {
-			const nextX = original.x + dx;
-			const nextY = original.y + dy;
+			let mdx = dx;
+			let mdy = dy;
+			if (!event.altKey) {
+				// Snap the moved AABB's left/centre/right and top/centre/bottom.
+				const b = annotationAABB(original);
+				const s = snap(
+					[b.x + dx, b.x + b.width / 2 + dx, b.x + b.width + dx],
+					[b.y + dy, b.y + b.height / 2 + dy, b.y + b.height + dy],
+					dragState.targets,
+					snapThreshold,
+				);
+				mdx += s.dx;
+				mdy += s.dy;
+				setSnapGuides({ x: s.guideX, y: s.guideY });
+			} else {
+				setSnapGuides({ x: null, y: null });
+			}
+			const nextX = original.x + mdx;
+			const nextY = original.y + mdy;
 			patch(
 				dragState.id,
 				original.type === "mask"
 					? {
+							// Snap first, then clamp to the image — clamp wins on conflict.
 							x: clamp(
 								nextX,
 								imageRect.x,
@@ -291,6 +355,15 @@ export function AnnotationLayer({
 		let { x: newX, y: newY, width: newW, height: newH } = original;
 
 		if (original.type === "arrow") {
+			// The bend handle rides on the curve itself, so it follows the cursor
+			// exactly. Dragging it only rewrites `arrowBend`, never the endpoints —
+			// re-aiming and bending stay independent gestures.
+			if (dragState.handle === "bend") {
+				patch(dragState.id, {
+					arrowBend: bendFromHandle(arrowSpec(original), point),
+				});
+				return;
+			}
 			// An arrow has two endpoints rather than a box, so its handles move
 			// the tail or the head instead of an edge.
 			if (dragState.handle === "start") {
@@ -302,31 +375,85 @@ export function AnnotationLayer({
 				newW = original.width + dx;
 				newH = original.height + dy;
 			}
-		} else {
-			if (dragState.handle.includes("e")) newW = original.width + dx;
-			if (dragState.handle.includes("s")) newH = original.height + dy;
-			if (dragState.handle.includes("w")) {
-				newX = original.x + dx;
-				newW = original.width - dx;
-			}
-			if (dragState.handle.includes("n")) {
-				newY = original.y + dy;
-				newH = original.height - dy;
-			}
 
-			const constrain =
-				(original.type === "circle" && !event.shiftKey) ||
-				(original.type === "rectangle" && event.shiftKey);
-			if (constrain) {
-				const size = Math.max(Math.abs(newW), Math.abs(newH));
-				const signW = newW < 0 ? -1 : 1;
-				const signH = newH < 0 ? -1 : 1;
-				if (dragState.handle.includes("w"))
-					newX = original.x + original.width - signW * size;
-				if (dragState.handle.includes("n"))
-					newY = original.y + original.height - signH * size;
-				newW = signW * size;
-				newH = signH * size;
+			// Snap the dragged endpoint to the target lines.
+			if (!event.altKey) {
+				const px = dragState.handle === "start" ? newX : newX + newW;
+				const py = dragState.handle === "start" ? newY : newY + newH;
+				const s = snap([px], [py], dragState.targets, snapThreshold);
+				setSnapGuides({ x: s.guideX, y: s.guideY });
+				if (dragState.handle === "start") {
+					newX += s.dx;
+					newY += s.dy;
+					newW -= s.dx;
+					newH -= s.dy;
+				} else {
+					newW += s.dx;
+					newH += s.dy;
+				}
+			} else {
+				setSnapGuides({ x: null, y: null });
+			}
+		} else if (dragState.handle === "rotate") {
+			const cx = original.x + original.width / 2;
+			const cy = original.y + original.height / 2;
+			const a0 = Math.atan2(dragState.startY - cy, dragState.startX - cx);
+			const a1 = Math.atan2(point.y - cy, point.x - cx);
+			let deg = original.rotation + ((a1 - a0) * 180) / Math.PI;
+			if (event.shiftKey) deg = Math.round(deg / 15) * 15;
+			// Normalise into (-180, 180] so the config slider can always show it.
+			deg = ((((deg + 180) % 360) + 360) % 360) - 180;
+			patch(dragState.id, { rotation: deg });
+			setSnapGuides({ x: null, y: null });
+			return;
+		} else {
+			const r = resizeByHandle(
+				original,
+				dragState.handle,
+				dx,
+				dy,
+				aspectLocked(original.type, event.shiftKey),
+			);
+			newX = r.x;
+			newY = r.y;
+			newW = r.width;
+			newH = r.height;
+
+			// Resize-snap only when upright: on a rotated box the AABB edge ↔
+			// handle mapping is ambiguous, and it is a marginal interaction.
+			// ponytail: upright-only resize snap, revisit if anyone asks.
+			if (!event.altKey && !original.rotation) {
+				const left = Math.min(newX, newX + newW);
+				const right = Math.max(newX, newX + newW);
+				const top = Math.min(newY, newY + newH);
+				const bottom = Math.max(newY, newY + newH);
+				const s = snap(
+					[
+						...(dragState.handle.includes("w") ? [left] : []),
+						...(dragState.handle.includes("e") ? [right] : []),
+					],
+					[
+						...(dragState.handle.includes("n") ? [top] : []),
+						...(dragState.handle.includes("s") ? [bottom] : []),
+					],
+					dragState.targets,
+					snapThreshold,
+				);
+				setSnapGuides({ x: s.guideX, y: s.guideY });
+				if (dragState.handle.includes("w")) {
+					newX += s.dx;
+					newW -= s.dx;
+				} else if (dragState.handle.includes("e")) {
+					newW += s.dx;
+				}
+				if (dragState.handle.includes("n")) {
+					newY += s.dy;
+					newH -= s.dy;
+				} else if (dragState.handle.includes("s")) {
+					newH += s.dy;
+				}
+			} else {
+				setSnapGuides({ x: null, y: null });
 			}
 		}
 
@@ -407,6 +534,7 @@ export function AnnotationLayer({
 		}
 
 		setDragState(null);
+		setSnapGuides({ x: null, y: null });
 		endGesture();
 	};
 
@@ -431,6 +559,8 @@ export function AnnotationLayer({
 			startX: point.x,
 			startY: point.y,
 			original: { ...annotation },
+			// Other annotations don't move mid-drag, so gather snap targets once.
+			targets: collectSnapTargets(annotations, bounds, id),
 		});
 	};
 
@@ -438,6 +568,15 @@ export function AnnotationLayer({
 	// size, so their size is converted back through the current scale.
 	const handleSize = useMemo(
 		() => (cssWidth === 0 ? 0 : (10 / cssWidth) * bounds.width),
+		[cssWidth, bounds.width],
+	);
+	// 6 screen pixels of snap pull, and a 1px guide line — both in frame units.
+	const snapThreshold = useMemo(
+		() => (cssWidth === 0 ? 0 : (6 / cssWidth) * bounds.width),
+		[cssWidth, bounds.width],
+	);
+	const guideStroke = useMemo(
+		() => (cssWidth === 0 ? 0 : (1 / cssWidth) * bounds.width),
 		[cssWidth, bounds.width],
 	);
 
@@ -471,6 +610,13 @@ export function AnnotationLayer({
 			{annotations.map((annotation) => (
 				<g
 					key={annotation.id}
+					// Upright while its text is being edited (a rotated contentEditable
+					// is unusable); re-rotates on blur.
+					transform={
+						textEditingId === annotation.id
+							? undefined
+							: rotationTransform(annotation)
+					}
 					onMouseDown={(event) => startDrag(event, annotation.id)}
 					onDoubleClick={(event) => {
 						event.stopPropagation();
@@ -531,6 +677,30 @@ export function AnnotationLayer({
 
 			{tempAnnotation && tempAnnotation.type !== "mask" && (
 				<RenderAnnotation annotation={tempAnnotation} />
+			)}
+
+			{/* Alignment guides — a full-span line at each locked-on coordinate. */}
+			{dragState && snapGuides.x != null && (
+				<line
+					x1={snapGuides.x}
+					y1={bounds.y}
+					x2={snapGuides.x}
+					y2={bounds.y + bounds.height}
+					stroke="#F03808"
+					strokeWidth={guideStroke}
+					style={{ pointerEvents: "none" }}
+				/>
+			)}
+			{dragState && snapGuides.y != null && (
+				<line
+					x1={bounds.x}
+					y1={snapGuides.y}
+					x2={bounds.x + bounds.width}
+					y2={snapGuides.y}
+					stroke="#F03808"
+					strokeWidth={guideStroke}
+					style={{ pointerEvents: "none" }}
+				/>
 			)}
 		</svg>
 	);
@@ -779,6 +949,48 @@ function FocusOverlay({
 	);
 }
 
+/** One resolved arrow head. Filled heads paint in `color`; the open chevron
+ * ("arrow") is stroked so it reads as an outline, matching the essay. */
+function HeadSvg({
+	shape,
+	color,
+	strokeWidth,
+	opacity,
+}: {
+	shape: HeadShape;
+	color: string;
+	strokeWidth: number;
+	opacity: number;
+}) {
+	if (shape.kind === "none") return null;
+	if (shape.kind === "circle") {
+		return (
+			<circle
+				cx={shape.c.x}
+				cy={shape.c.y}
+				r={shape.r}
+				fill={color}
+				opacity={opacity}
+			/>
+		);
+	}
+	const points = shape.points.map((p) => `${p.x},${p.y}`).join(" ");
+	if (shape.kind === "arrow") {
+		return (
+			<polyline
+				points={points}
+				fill="none"
+				stroke={color}
+				strokeWidth={strokeWidth}
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				opacity={opacity}
+			/>
+		);
+	}
+	return <polygon points={points} fill={color} opacity={opacity} />;
+}
+
 function RenderAnnotation({ annotation }: { annotation: Annotation }) {
 	const left = Math.min(annotation.x, annotation.x + annotation.width);
 	const top = Math.min(annotation.y, annotation.y + annotation.height);
@@ -815,27 +1027,50 @@ function RenderAnnotation({ annotation }: { annotation: Annotation }) {
 			);
 
 		case "arrow": {
-			const x2 = annotation.x + annotation.width;
-			const y2 = annotation.y + annotation.height;
-			const angle = Math.atan2(annotation.height, annotation.width);
-			const head = getArrowHeadPoints(x2, y2, angle, annotation.strokeWidth);
+			const spec = arrowSpec(annotation);
+			const built = buildArrow(spec);
+			const color = annotation.strokeColor;
+			const sw = annotation.strokeWidth;
 			return (
 				<>
-					{/* The shaft stops at the head's base so the stroke does not
-					    show through the arrowhead's point. */}
-					<line
-						x1={annotation.x}
-						y1={annotation.y}
-						x2={head.base.x}
-						y2={head.base.y}
-						stroke={annotation.strokeColor}
-						strokeWidth={annotation.strokeWidth}
+					{/* Fat invisible stroke so a thin arrow is still easy to grab —
+					    the visible line keeps its real width. */}
+					<path
+						d={polylinePath(built.samples)}
+						fill="none"
+						stroke="transparent"
+						strokeWidth={Math.max(sw + 16, 24)}
 						strokeLinecap="round"
+						style={{ pointerEvents: "stroke" }}
+					/>
+					{built.outline ? (
+						<path
+							d={polygonPath(built.outline)}
+							fill={color}
+							opacity={annotation.opacity}
+						/>
+					) : (
+						<path
+							d={polylinePath(built.shaft)}
+							fill="none"
+							stroke={color}
+							strokeWidth={sw}
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							strokeDasharray={built.dash?.join(" ")}
+							opacity={annotation.opacity}
+						/>
+					)}
+					<HeadSvg
+						shape={built.startHead}
+						color={color}
+						strokeWidth={sw}
 						opacity={annotation.opacity}
 					/>
-					<polygon
-						points={head.points.map((p) => `${p.x},${p.y}`).join(" ")}
-						fill={annotation.strokeColor}
+					<HeadSvg
+						shape={built.endHead}
+						color={color}
+						strokeWidth={sw}
 						opacity={annotation.opacity}
 					/>
 				</>
@@ -911,6 +1146,7 @@ function SelectionHandles({
 
 	// An arrow is a line, so it gets endpoint handles rather than a box.
 	if (annotation.type === "arrow") {
+		const spec = arrowSpec(annotation);
 		const points = [
 			{ id: "start", x: annotation.x, y: annotation.y },
 			{
@@ -919,6 +1155,8 @@ function SelectionHandles({
 				y: annotation.y + annotation.height,
 			},
 		];
+		// A curved arrow also gets a bend handle, sitting on the curve itself.
+		const bend = bendHandle(spec);
 		return (
 			<>
 				{points.map((point) => (
@@ -936,6 +1174,18 @@ function SelectionHandles({
 						}
 					/>
 				))}
+				{bend && (
+					<circle
+						cx={bend.x}
+						cy={bend.y}
+						r={half}
+						fill="#3B82F6"
+						stroke="#fff"
+						strokeWidth={half * 0.35}
+						style={{ cursor: "pointer", pointerEvents: "all" }}
+						onMouseDown={(event) => onResizeStart(event, annotation.id, "bend")}
+					/>
+				)}
 			</>
 		);
 	}
@@ -957,6 +1207,11 @@ function SelectionHandles({
 		return "nesw-resize";
 	};
 
+	// Drawn in local space — the parent <g> is already rotated, so the handle
+	// and its stem orbit the shape for free.
+	const rotateX = rect.x + rect.width / 2;
+	const rotateY = rect.y - handleSize * 2;
+
 	return (
 		<>
 			<rect
@@ -969,6 +1224,31 @@ function SelectionHandles({
 				strokeWidth={half * 0.25}
 				style={{ pointerEvents: "none" }}
 			/>
+			{canRotate(annotation) && (
+				<>
+					<line
+						x1={rotateX}
+						y1={rect.y}
+						x2={rotateX}
+						y2={rotateY}
+						stroke="#3B82F6"
+						strokeWidth={half * 0.25}
+						style={{ pointerEvents: "none" }}
+					/>
+					<circle
+						cx={rotateX}
+						cy={rotateY}
+						r={half}
+						fill="#fff"
+						stroke="#3B82F6"
+						strokeWidth={half * 0.35}
+						style={{ cursor: "grab", pointerEvents: "all" }}
+						onMouseDown={(event) =>
+							onResizeStart(event, annotation.id, "rotate")
+						}
+					/>
+				</>
+			)}
 			{handles.map((handle) => (
 				<rect
 					key={handle.id}
@@ -977,7 +1257,7 @@ function SelectionHandles({
 					width={handleSize}
 					height={handleSize}
 					fill="#fff"
-					stroke="#3B82F6"
+					stroke={"#F03808"}
 					strokeWidth={half * 0.25}
 					rx={half * 0.4}
 					style={{ cursor: cursorFor(handle.id), pointerEvents: "all" }}

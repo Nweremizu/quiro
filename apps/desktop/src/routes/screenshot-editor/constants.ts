@@ -1,4 +1,8 @@
-import type { BackgroundConfiguration, FocusConfig } from "@/utils/tauri";
+import type {
+	AspectRatio,
+	BackgroundConfiguration,
+	FocusConfig,
+} from "@/utils/tauri";
 
 /** Mirrors `FocusConfig::default()` in `quiro-project`. Duplicated rather than
  * fetched because a new focus is created client-side and never round-trips
@@ -90,6 +94,11 @@ export const BACKGROUND_GRADIENTS: Array<{
 	{ from: [0, 255, 255], to: [255, 20, 147] },
 	{ from: [255, 127, 0], to: [255, 255, 0] },
 	{ from: [255, 0, 255], to: [0, 255, 0] },
+	// "Aozora" (blue sky): misted-sky blue down to river indigo. Reduced from a
+	// 4-stop OKLCH mesh gradient with a noise-texture overlay — this renderer
+	// only supports a 2-stop linear gradient, so the source's outer two stops
+	// (#E6F2FF, #6699E6) stand in for the full ramp.
+	{ from: [230, 242, 255], to: [102, 153, 230] },
 ];
 
 /** Bundled wallpapers, listed the way Cap lists theirs — a static array
@@ -138,6 +147,20 @@ export const WALLPAPER_FILENAMES = [
 ];
 
 export type BackgroundSourceType = BackgroundConfiguration["source"]["type"];
+
+/** Cap's `ASPECT_RATIOS`, plus their "Auto" (null) entry. Shared by both
+ * editors — the same `aspectRatio` field drives the same renderer in each. */
+export const ASPECT_RATIO_OPTIONS: Array<{
+	label: string;
+	value: AspectRatio | null;
+}> = [
+	{ label: "Auto", value: null },
+	{ label: "Wide 16:9", value: "wide" },
+	{ label: "Vertical 9:16", value: "vertical" },
+	{ label: "Square 1:1", value: "square" },
+	{ label: "Classic 4:3", value: "classic" },
+	{ label: "Tall 3:4", value: "tall" },
+];
 
 export const BACKGROUND_SOURCE_TABS: Array<{
 	type: BackgroundSourceType;

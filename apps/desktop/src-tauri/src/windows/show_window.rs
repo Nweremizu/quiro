@@ -37,6 +37,9 @@ pub enum ShowQuiroWindow {
     ScreenshotEditor {
         path: PathBuf,
     },
+    Editor {
+        path: PathBuf,
+    },
 }
 
 #[tauri::command]
@@ -58,11 +61,21 @@ impl ShowQuiroWindow {
             None
         };
 
+        // Before the reuse checks below, so focusing an already-open editor
+        // hides the main window just like opening a new one does.
+        if matches!(self, Self::Editor { .. } | Self::ScreenshotEditor { .. }) {
+            hide_main_window_for_editor(app);
+        }
+
         if let Some(result) = variants::camera::try_reuse(self, app).await {
             return result;
         }
 
         if let Some(result) = variants::screenshot_editor::try_reuse(self, app).await {
+            return result;
+        }
+
+        if let Some(result) = variants::editor::try_reuse(self, app).await {
             return result;
         }
 
@@ -100,9 +113,16 @@ impl ShowQuiroWindow {
             Self::ModeSelect => {
                 variants::main_window::show_mode_select(self, app, cursor_monitor).await?
             }
+            // Both editors restore the main window if their own window fails
+            // to appear — it was hidden above on the assumption one would.
             Self::ScreenshotEditor { path } => {
-                variants::screenshot_editor::show_screenshot_editor(self, app, path).await?
+                variants::screenshot_editor::show_screenshot_editor(self, app, path)
+                    .await
+                    .inspect_err(|_| restore_main_window_after_editor(app, ""))?
             }
+            Self::Editor { path } => variants::editor::show_editor(self, app, path)
+                .await
+                .inspect_err(|_| restore_main_window_after_editor(app, ""))?,
             Self::Camera { centered } => {
                 variants::camera::show_camera(
                     self,
@@ -208,8 +228,12 @@ impl ShowQuiroWindow {
             };
 
             let bg_color = if is_dark { "#141414" } else { "#ffffff" };
+            // An initialization script runs at document-start, where
+            // `document.documentElement` can still be null — appending to it
+            // unconditionally threw "Cannot read properties of null" and left
+            // the window unthemed. Retry on readystatechange when that happens.
             let init_script = format!(
-                r#"(function(){{var s=document.createElement('style');s.textContent='html,body{{background-color:{bg_color}}}';document.documentElement.appendChild(s);}})();"#
+                r#"(function(){{var a=function(){{var r=document.head||document.documentElement;if(!r)return false;var s=document.createElement('style');s.textContent='html,body{{background-color:{bg_color}}}';r.appendChild(s);return true;}};if(!a())document.addEventListener('readystatechange',function h(){{if(a())document.removeEventListener('readystatechange',h);}});}})();"#
             );
             builder = builder.initialization_script(&init_script);
 
@@ -289,6 +313,7 @@ impl ShowQuiroWindow {
             ShowQuiroWindow::InProgressRecording { .. } => WindowId::RecordingControls,
             ShowQuiroWindow::ModeSelect => WindowId::ModeSelect,
             ShowQuiroWindow::ScreenshotEditor { .. } => WindowId::ScreenshotEditor,
+            ShowQuiroWindow::Editor { .. } => WindowId::Editor,
         }
     }
 }

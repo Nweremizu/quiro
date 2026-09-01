@@ -8,6 +8,7 @@ import { message } from "@tauri-apps/plugin-dialog";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import Camera from "./routes/camera";
 import Debug from "./routes/debug";
+import Editor from "./routes/editor";
 import MainWindow from "./routes/launch";
 import ScreenshotEditor from "./routes/screenshot-editor";
 import Settings from "./routes/settings";
@@ -71,6 +72,7 @@ function Inner() {
 
 				<Route path="/debug" element={<Debug />} />
 				<Route path="/screenshot-editor" element={<ScreenshotEditor />} />
+				<Route path="/editor" element={<Editor />} />
 				{/* Rust's show_settings builds the URL as `/settings/{page}`,
 				    with an empty `page` (→ trailing slash) when none is given —
 				    the index route below covers that same "no page" case. */}

@@ -78,6 +78,31 @@
 }
 
 :root {
+    /* Editor timeline track colours, ported from Cap's theme.css. Each track
+       type owns one hue so a glance at the timeline reads as structure. */
+    --track-clip: #3f8ae0;
+    --track-zoom: #4a4f5c;
+    --track-caption: #6f747d;
+    --track-keyboard: #d4742c;
+    --track-text: #2898ac;
+    --track-mask: #d2444b;
+    --track-scene: #975cfa;
+    --track-audio: #29a383;
+}
+
+/* A segment fills with its track colour and takes a darker mix of the same
+   hue as its border, so every track is one colour rather than two. */
+.track-segment-fill {
+    background: var(--seg-color);
+    border: 1px solid color-mix(in srgb, var(--seg-color) 58%, black);
+}
+
+.timeline-scissors-cursor,
+.timeline-scissors-cursor * {
+    cursor: crosshair;
+}
+
+:root {
     --macos-settings-sidebar-width: 227px;
     --macos-settings-sidebar-padding-x: 10px;
     --macos-settings-content-padding-x: 16px;

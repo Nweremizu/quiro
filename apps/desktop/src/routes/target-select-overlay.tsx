@@ -96,7 +96,7 @@ function ConfirmPanel({
 
 	return (
 		<div
-			className={`pointer-events-auto w-[26rem] max-w-[90vw] ${LIQUID_GLASS_SURFACE_CLASS} p-3`}
+			className={`pointer-events-auto w-104 max-w-[90vw] ${LIQUID_GLASS_SURFACE_CLASS} p-3`}
 		>
 			<div className="flex items-center gap-2.5">
 				<button
@@ -113,7 +113,7 @@ function ConfirmPanel({
 					onClick={available ? onSelect : undefined}
 					className={`flex h-11 min-w-0 flex-1 items-center gap-3 rounded-full pl-4 pr-5 text-white transition-[filter] ${
 						available
-							? "bg-gradient-to-r from-accent-400 via-accent-400 to-accent-500 hover:brightness-110"
+							? "bg-linear-60 from-accent-400 via-accent-500 to-accent-600 hover:brightness-110"
 							: "cursor-not-allowed bg-gray-7 text-gray-12"
 					}`}
 				>
@@ -852,7 +852,7 @@ function AreaSelectOverlay({
 								tabIndex={-1}
 								aria-label={`Resize ${handle.direction}`}
 								onPointerDown={(event) => beginResize(event, handle.direction)}
-								className="absolute size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-accent-500 bg-gray-1 shadow-sm focus:outline-none"
+								className="absolute size-3 -translate-x-1/2 -translate-y-1/2  border-[1.5px] border-accent-500 bg-gray-1 shadow-sm focus:outline-none"
 								style={{
 									left: handle.left,
 									top: handle.top,

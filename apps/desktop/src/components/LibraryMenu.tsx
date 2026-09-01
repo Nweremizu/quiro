@@ -1,6 +1,5 @@
 import { cn } from "@quiro/ui";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-shell";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RecordingWithPath, ScreenshotWithPath } from "@/utils/queries";
 import { commands } from "@/utils/tauri";
@@ -11,15 +10,14 @@ import IconVideo from "~icons/quiro/camera";
 // Screenshots are always PNG (capture.rs/library.rs never write anything
 // else) and recordings are always MP4 (RecordingMeta::output_path) — that's
 // enough to route without every caller having to pass its own kind down.
-// A screenshot opens in Quiro's own editor; there's still no video-editor
-// port, so a recording is handed to the OS's own default app for it via
-// plugin-shell's `open`, which also happily opens a plain file path.
+// Each opens in its own editor; the Rust side resolves a recording's
+// `output/result.mp4` back to the project directory it belongs to.
 export async function openMediaFile(path: string) {
 	if (path.toLowerCase().endsWith(".png")) {
 		await commands.showWindow({ ScreenshotEditor: { path } });
 		return;
 	}
-	await open(path);
+	await commands.showWindow({ Editor: { path } });
 }
 
 const RECENTS_LIMIT = 9;

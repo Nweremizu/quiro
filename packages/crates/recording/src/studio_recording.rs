@@ -1011,7 +1011,7 @@ async fn stop_recording(
             // what un-edited recordings use.
             let display_media_duration = match s.pipeline.screen.video_timestamp_span {
                 Some((first, last)) if display_fps > 0 => {
-                    (last - first).as_secs_f64() + 1.0 / f64::from(display_fps)
+                    last.saturating_sub(first).as_secs_f64() + 1.0 / f64::from(display_fps)
                 }
                 _ if display_fps > 0 => {
                     s.pipeline.screen.video_frame_count as f64 / f64::from(display_fps)

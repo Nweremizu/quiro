@@ -1,8 +1,29 @@
-import { cn } from "@quiro/ui";
+import { cn, Select, Switch } from "@quiro/ui";
 import { useRef } from "react";
 import type { Annotation } from "@/utils/tauri";
 import { useScreenshotEditorContext } from "./context";
 import { Field, hexToRgb, RgbInput, rgbToHex, Slider } from "./ui";
+
+const CURVE_OPTIONS = [
+	{ value: "straight", label: "Straight" },
+	{ value: "quadratic", label: "Curved" },
+	{ value: "cubic", label: "S-curve" },
+	{ value: "elbow", label: "Elbow" },
+];
+
+const LINE_OPTIONS = [
+	{ value: "solid", label: "Solid" },
+	{ value: "dashed", label: "Dashed" },
+	{ value: "dotted", label: "Dotted" },
+];
+
+const HEAD_OPTIONS = [
+	{ value: "none", label: "None" },
+	{ value: "arrow", label: "Arrow" },
+	{ value: "triangle", label: "Triangle" },
+	{ value: "circle", label: "Circle" },
+	{ value: "square", label: "Square" },
+];
 
 // React port of Cap's `AnnotationConfig.tsx` — the inspector that appears
 // beside the canvas when an annotation is selected. Which controls are shown
@@ -34,9 +55,11 @@ export function AnnotationConfig() {
 
 	const isMask = annotation.type === "mask";
 	const isText = annotation.type === "text";
+	const isArrow = annotation.type === "arrow";
 	const isFocus = annotation.type === "focus";
 	const hasFill =
 		annotation.type === "rectangle" || annotation.type === "circle";
+	const canRotate = hasFill || isText;
 
 	// Focus has its own inspector: none of the shared stroke/fill controls
 	// apply, and its six dials all live on a nested config object.
@@ -180,6 +203,84 @@ export function AnnotationConfig() {
 					onChange={(v) => update("strokeWidth", v)}
 					dragScope={dragScope}
 				/>
+			)}
+
+			{canRotate && (
+				<SliderWithHistory
+					label="Rotation"
+					value={annotation.rotation}
+					format={(v) => `${Math.round(v)}°`}
+					min={-180}
+					max={180}
+					onChange={(v) => update("rotation", v)}
+					dragScope={dragScope}
+				/>
+			)}
+
+			{isArrow && (
+				<>
+					<Field name="Curve">
+						<Select
+							variant="light"
+							className="h-8 w-full text-xs"
+							options={CURVE_OPTIONS}
+							value={annotation.arrowCurve ?? "straight"}
+							onValueChange={(v) =>
+								update("arrowCurve", v as Annotation["arrowCurve"])
+							}
+						/>
+					</Field>
+					<Field name="Line">
+						<Select
+							variant="light"
+							className="h-8 w-full text-xs"
+							options={LINE_OPTIONS}
+							value={annotation.lineStyle ?? "solid"}
+							onValueChange={(v) =>
+								update("lineStyle", v as Annotation["lineStyle"])
+							}
+						/>
+					</Field>
+					<Field name="Start head">
+						<Select
+							variant="light"
+							className="h-8 w-full text-xs"
+							options={HEAD_OPTIONS}
+							value={annotation.arrowStartHead ?? "none"}
+							onValueChange={(v) =>
+								update("arrowStartHead", v as Annotation["arrowStartHead"])
+							}
+						/>
+					</Field>
+					<Field name="End head">
+						<Select
+							variant="light"
+							className="h-8 w-full text-xs"
+							options={HEAD_OPTIONS}
+							value={annotation.arrowEndHead ?? "triangle"}
+							onValueChange={(v) =>
+								update("arrowEndHead", v as Annotation["arrowEndHead"])
+							}
+						/>
+					</Field>
+					<SliderWithHistory
+						label="Head size"
+						value={annotation.arrowHeadSize ?? 1}
+						min={0.5}
+						max={3}
+						step={0.1}
+						format={(v) => `${v.toFixed(1)}×`}
+						onChange={(v) => update("arrowHeadSize", v)}
+						dragScope={dragScope}
+					/>
+					<div className="flex items-center justify-between">
+						<span className="text-xs font-medium text-gray-11">Taper</span>
+						<Switch
+							checked={annotation.arrowTaper ?? false}
+							onCheckedChange={(v) => update("arrowTaper", v)}
+						/>
+					</div>
+				</>
 			)}
 
 			{isText && (

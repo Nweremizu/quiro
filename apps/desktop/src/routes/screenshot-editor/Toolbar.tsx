@@ -1,6 +1,5 @@
 import { Select } from "@quiro/ui";
 import { useEffect, useState } from "react";
-import type { AspectRatio } from "@/utils/tauri";
 import IconLucideCrop from "~icons/lucide/crop";
 import IconLucideMinus from "~icons/lucide/minus";
 import IconLucidePlus from "~icons/lucide/plus";
@@ -8,6 +7,7 @@ import IconLucideScan from "~icons/lucide/scan";
 import IconLucideSlidersHorizontal from "~icons/lucide/sliders-horizontal";
 import { AnnotationTools } from "./AnnotationTools";
 import { CropDialog } from "./CropDialog";
+import { ASPECT_RATIO_OPTIONS } from "./constants";
 import { useScreenshotEditorContext } from "./context";
 import { clampZoom, DEFAULT_VIEWPORT, type Viewport } from "./Preview";
 import { PerspectivePopover } from "./popovers/PerspectivePopover";
@@ -20,19 +20,6 @@ import { EditorButton, ToolbarDivider } from "./ui";
 // formerly their own popovers here, now live in the persistent StylePanel;
 // Perspective stays a popover since it's an occasional adjustment, not
 // something worth permanent screen space.
-
-/** Cap's `ASPECT_RATIOS`, plus their "Auto" (null) entry. */
-const ASPECT_RATIO_OPTIONS: Array<{
-	label: string;
-	value: AspectRatio | null;
-}> = [
-	{ label: "Auto", value: null },
-	{ label: "Wide 16:9", value: "wide" },
-	{ label: "Vertical 9:16", value: "vertical" },
-	{ label: "Square 1:1", value: "square" },
-	{ label: "Classic 4:3", value: "classic" },
-	{ label: "Tall 3:4", value: "tall" },
-];
 
 export function Toolbar({
 	viewport,

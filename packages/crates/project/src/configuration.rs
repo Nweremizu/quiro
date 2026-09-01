@@ -1098,6 +1098,11 @@ where
 #[serde(rename_all = "camelCase")]
 pub struct TimelineConfiguration {
     pub segments: Vec<TimelineSegment>,
+    // NOTE: omitted from the JSON when empty, but the generated TypeScript
+    // still types this as a present array — specta applies `#[specta(...)]`
+    // before `#[serde(...)]`, so `skip_serializing_if` (not `Option::is_none`)
+    // resets the optional flag and no attribute here can win. The editor
+    // normalizes the timeline on load instead; see `normalizeTimeline`.
     #[serde(
         default,
         deserialize_with = "deserialize_clip_transitions",
@@ -1572,6 +1577,36 @@ pub enum MaskType {
     Pixelate,
 }
 
+/// Arrow-only shape/style. All optional on `Annotation`: absent reproduces the
+/// original straight arrow with a single solid head. Geometry lives in the
+/// frontend's `arrow.ts`; the renderer never draws annotations.
+#[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum ArrowCurve {
+    Straight,
+    Quadratic,
+    Cubic,
+    Elbow,
+}
+
+#[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum ArrowHead {
+    None,
+    Arrow,
+    Triangle,
+    Circle,
+    Square,
+}
+
+#[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum LineStyle {
+    Solid,
+    Dashed,
+    Dotted,
+}
+
 /// Cinematic depth of field over the screenshot: an elliptical plane of focus,
 /// with blur growing continuously with distance from it — a circle-of-confusion
 /// approximation rather than a sharp-inside/blurred-outside mask. Applies to the
@@ -1721,6 +1756,20 @@ pub struct Annotation {
     pub mask_level: Option<f64>,
     #[serde(default)]
     pub focus: Option<FocusConfig>,
+    #[serde(default)]
+    pub arrow_curve: Option<ArrowCurve>,
+    #[serde(default)]
+    pub arrow_bend: Option<f64>,
+    #[serde(default)]
+    pub arrow_start_head: Option<ArrowHead>,
+    #[serde(default)]
+    pub arrow_end_head: Option<ArrowHead>,
+    #[serde(default)]
+    pub arrow_head_size: Option<f64>,
+    #[serde(default)]
+    pub line_style: Option<LineStyle>,
+    #[serde(default)]
+    pub arrow_taper: Option<bool>,
 }
 
 impl Annotation {

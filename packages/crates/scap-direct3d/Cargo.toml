@@ -42,3 +42,6 @@ tracing.workspace = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
 quiro-d3d-adapter = { path = "../d3d-adapter" }
+
+[dev-dependencies]
+scap-targets = { path = "../scap-targets" }

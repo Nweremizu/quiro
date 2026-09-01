@@ -42,9 +42,7 @@ export default function SystemAudio({
 				<span
 					className={cn(
 						"flex h-5 items-center rounded-full px-2 text-[10px] font-semibold uppercase tracking-wide",
-						enabled
-							? "bg-accent-300/15 text-accent-300"
-							: "bg-gray-5 text-gray-10",
+						enabled ? "bg-accent-600 text-gray-1" : "bg-gray-5 text-gray-10",
 					)}
 				>
 					{enabled ? "On" : "Off"}

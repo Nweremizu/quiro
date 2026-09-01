@@ -98,8 +98,29 @@ manual_clamp = "deny"
 [profile.dev]
 debug = 1
 
+# Dependencies — including the media crates below — are unusable unoptimised:
+# a debug build of the renderer is roughly an order of magnitude slower than a
+# release one, which makes any performance measured in `cargo run` meaningless.
+# The app crate itself stays at opt-level 0 so iteration stays fast.
 [profile.dev.package."*"]
 debug = 0
+opt-level = 2
+
+# The per-pixel and per-sample paths, where the difference is largest.
+[profile.dev.package.quiro-rendering]
+opt-level = 3
+[profile.dev.package.quiro-editor]
+opt-level = 3
+[profile.dev.package.quiro-export]
+opt-level = 3
+[profile.dev.package.quiro-audio]
+opt-level = 3
+[profile.dev.package.quiro-video-decode]
+opt-level = 3
+[profile.dev.package.quiro-enc-ffmpeg]
+opt-level = 3
+[profile.dev.package.quiro-project]
+opt-level = 3
 
 # Optimize for smaller binary size
 [profile.release]

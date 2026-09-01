@@ -5,8 +5,12 @@ pub enum WindowId {
     Main,
     Settings,
     RecordingsOverlay,
-    WindowCaptureOccluder { screen_id: DisplayId },
-    TargetSelectOverlay { display_id: DisplayId },
+    WindowCaptureOccluder {
+        screen_id: DisplayId,
+    },
+    TargetSelectOverlay {
+        display_id: DisplayId,
+    },
     CaptureArea,
     Camera,
     RecordingControls,
@@ -18,6 +22,9 @@ pub enum WindowId {
     /// multi-instance: many labels map to this one variant, and the real
     /// identity (which path) lives only in the label, not here.
     ScreenshotEditor,
+    /// Multi-instance too, one per open studio recording — same label
+    /// scheme as [`WindowId::ScreenshotEditor`].
+    Editor,
 }
 
 impl FromStr for WindowId {
@@ -29,6 +36,7 @@ impl FromStr for WindowId {
             "settings" => Self::Settings,
             s if is_camera_window_label(s) => Self::Camera,
             s if is_screenshot_editor_label(s) => Self::ScreenshotEditor,
+            s if is_editor_label(s) => Self::Editor,
             "capture-area" => Self::CaptureArea,
             // legacy identifier
             "in-progress-recording" => Self::RecordingControls,
@@ -75,6 +83,7 @@ impl std::fmt::Display for WindowId {
             // for_path`) — this variant only stands for "some screenshot
             // editor, whichever" in contexts that don't need one specific.
             Self::ScreenshotEditor => write!(f, "screenshot-editor"),
+            Self::Editor => write!(f, "editor"),
         }
     }
 }
@@ -96,6 +105,7 @@ impl WindowId {
             Self::TargetSelectOverlay { .. } => "Quiro Target Select".to_string(),
             Self::Teleprompter => "Quiro Teleprompter".to_string(),
             Self::ScreenshotEditor => "Quiro Screenshot Editor".to_string(),
+            Self::Editor => "Quiro Editor".to_string(),
             _ => "Quiro".to_string(),
         }
     }
@@ -104,7 +114,7 @@ impl WindowId {
     pub fn activates_dock(&self) -> bool {
         matches!(
             self,
-            Self::Main | Self::Settings | Self::ModeSelect | Self::ScreenshotEditor
+            Self::Main | Self::Settings | Self::ModeSelect | Self::ScreenshotEditor | Self::Editor
         )
     }
 

@@ -880,9 +880,10 @@ fn requires_software_encoder(config: &VideoInfo, preset: H264Preset, is_export: 
     #[cfg(target_os = "windows")]
     {
         let _ = config;
-        return true;
+        true
     }
 
+    #[cfg(not(target_os = "windows"))]
     false
 }
 

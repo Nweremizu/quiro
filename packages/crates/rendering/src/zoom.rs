@@ -47,14 +47,13 @@ impl SegmentBounds {
         )
     }
 
-    /// Remaps a scalar in [0,1] so values inside the outer `snap_ratio` band
-    /// stick to the edges: [r, 1-r] -> [0, 1], clamped.
-    pub(crate) fn snap_to_edges(scalar: f64, snap_ratio: f64) -> f64 {
-        if snap_ratio <= 0.0 {
+    /// Remaps a focus scalar in [0,1] to a framing scalar, given the band
+    /// `[lo, 1-lo]` of focus positions the viewport can actually be centred on.
+    pub(crate) fn snap_to_edges(scalar: f64, lo: f64) -> f64 {
+        if lo <= 0.0 {
             return scalar;
         }
-        let lo = snap_ratio;
-        let hi = 1.0 - snap_ratio + 0.0001;
+        let hi = 1.0 - lo + 0.0001;
         if hi <= lo {
             return 0.5;
         }
@@ -62,20 +61,41 @@ impl SegmentBounds {
     }
 
     /// Maps a focus position (UV space) to a `from_amount_center`-space center
-    /// for auto zooms: edge-snap each axis, then clamp to [0, 1].
+    /// for auto zooms.
     ///
     /// `from_amount_center` places the center scalar PROPORTIONALLY across the
     /// frame (s = 0 is top-left-flush, s = 1 is bottom-right-flush), so the
     /// full [0, 1] range is exactly the set of in-bounds framings and a focus
     /// snapped to 1.0 puts the frame corner-flush with the content corner —
     /// no centered-viewport band, which would make corners unreachable.
-    pub(crate) fn calculate_follow_center(
-        focus_pos: (f64, f64),
-        edge_snap_ratio: f64,
-    ) -> (f64, f64) {
+    ///
+    /// The conversion depends on the zoom amount: a focus can only be centred
+    /// when it is at least half a viewport from the edge, and a viewport is
+    /// `1 / amount` of the frame. Using a fixed band instead — as this did,
+    /// with `edge_snap_ratio` standing in for it — is exact only at 2x, and
+    /// mis-framed by a growing margin either side of that, which is why auto
+    /// zoom drifted off the cursor as the magnification went up.
+    ///
+    /// The band is derived from the geometry alone. `ZoomSegment::
+    /// edge_snap_ratio` used to supply it as a constant 0.25, which happens to
+    /// equal the half-viewport at exactly 2x — that is why auto zoom framed
+    /// correctly there and drifted everywhere else. It no longer participates:
+    /// clamping to the geometric band already puts the frame flush against an
+    /// edge whenever the focus is closer than half a viewport to it, which is
+    /// what the snap was approximating, and it does so at every magnification.
+    pub(crate) fn calculate_follow_center(focus_pos: (f64, f64), amount: f64) -> (f64, f64) {
+        // At amount <= 1 the viewport covers the whole frame, so the centre
+        // scalar is unobservable (`from_amount_center` cancels it out); pass
+        // the focus through rather than inventing a framing.
+        let half_viewport = if amount.is_finite() && amount > 1.0 {
+            0.5 / amount
+        } else {
+            0.0
+        };
+
         (
-            Self::snap_to_edges(focus_pos.0, edge_snap_ratio).clamp(0.0, 1.0),
-            Self::snap_to_edges(focus_pos.1, edge_snap_ratio).clamp(0.0, 1.0),
+            Self::snap_to_edges(focus_pos.0, half_viewport).clamp(0.0, 1.0),
+            Self::snap_to_edges(focus_pos.1, half_viewport).clamp(0.0, 1.0),
         )
     }
 }
@@ -182,15 +202,15 @@ mod test {
     #[test]
     fn follow_center_maps_focus_proportionally() {
         // Center focus stays centered.
-        let (cx, cy) = SegmentBounds::calculate_follow_center((0.5, 0.5), 0.0);
+        let (cx, cy) = SegmentBounds::calculate_follow_center((0.5, 0.5), 1.0);
         assert!((cx - 0.5).abs() < 1e-6);
         assert!((cy - 0.5).abs() < 1e-6);
 
         // Extreme focus reaches the corner-flush framings so edge/corner
         // content is actually reachable (proportional placement semantics).
-        let (left, _) = SegmentBounds::calculate_follow_center((0.0, 0.5), 0.0);
+        let (left, _) = SegmentBounds::calculate_follow_center((0.0, 0.5), 1.0);
         assert!(left.abs() < 1e-6);
-        let (right, _) = SegmentBounds::calculate_follow_center((1.0, 0.5), 0.0);
+        let (right, _) = SegmentBounds::calculate_follow_center((1.0, 0.5), 1.0);
         assert!((right - 1.0).abs() < 1e-6);
 
         // A corner-flush framing keeps the frame fully covered at any amount.

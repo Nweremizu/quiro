@@ -30,7 +30,7 @@ function MenuSelectionButton({
 					"min-h-14 flex-row items-center justify-start gap-2.5 px-3 text-left",
 				!description && "justify-end",
 				selected
-					? "border-accent-400-8 bg-accent-200 text-accent-500 hover:border-accent-400 hover:bg-accent-300 active:bg-accent-200 dark:bg-accent-100/30 dark:hover:bg-accent-200/40"
+					? "border-accent-700-8 bg-accent-300 text-accent-800 hover:border-accent-600 hover:bg-accent-300 active:bg-accent-300 dark:bg-accent-200/30 dark:hover:bg-accent-300/40"
 					: "border-gray-6 bg-gray-2 text-gray-12 hover:border-gray-8 hover:bg-gray-4 active:bg-gray-5",
 				disabled && "pointer-events-none opacity-60",
 				className,
@@ -39,12 +39,18 @@ function MenuSelectionButton({
 			<Component
 				className={cn(
 					"size-5 shrink-0 transition-colors",
-					selected ? "text-accent-500" : "text-gray-10",
+					selected ? "text-accent-600" : "text-gray-10",
 				)}
 			/>
 
 			<div className="min-w-0">
-				<p className={cn("text-xs", description && "font-medium leading-4")}>
+				<p
+					className={cn(
+						"text-xs",
+						description && "font-medium leading-4 text-gray-12",
+						selected && !description && "text-accent-600",
+					)}
+				>
 					{name}
 				</p>
 
@@ -52,7 +58,7 @@ function MenuSelectionButton({
 					<p
 						className={cn(
 							"text-[10px] leading-3",
-							selected ? "text-accent-400" : "text-gray-10",
+							selected ? "text-accent-600" : "text-gray-10",
 						)}
 					>
 						{description}

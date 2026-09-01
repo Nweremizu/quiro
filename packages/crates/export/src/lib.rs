@@ -1,0 +1,237 @@
+pub mod gif;
+pub mod mov;
+pub mod mp4;
+pub mod preview;
+pub mod settings;
+
+use quiro_editor::SegmentMedia;
+use quiro_project::{
+    BackgroundSource, ProjectConfiguration, RecordingMeta, StudioRecordingMeta,
+    TimelineConfiguration, TimelineSegment,
+};
+use quiro_rendering::{ProjectRecordingsMeta, RenderVideoConstants};
+use std::{path::PathBuf, sync::Arc};
+
+#[derive(thiserror::Error, Debug)]
+pub enum ExportError {
+    #[error("FFmpeg: {0}")]
+    FFmpeg(String),
+
+    #[error("IO: {0}")]
+    IO(#[from] std::io::Error),
+
+    #[error("Rendering: {0}")]
+    Rendering(#[from] quiro_rendering::RenderingError),
+
+    #[error("Media/{0}")]
+    Media(#[from] quiro_media::MediaError),
+
+    #[error("Join: {0}")]
+    Join(#[from] tokio::task::JoinError),
+
+    #[error("Other:{0}")]
+    Other(String),
+
+    #[error("Exporting timed out")]
+    Timeout(#[from] tokio::time::error::Elapsed),
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum ExporterBuildError {
+    #[error("Failed to load config: {0}")]
+    ConfigLoad(#[source] Box<dyn std::error::Error>),
+    #[error("Failed to load meta: {0}")]
+    MetaLoad(#[source] Box<dyn std::error::Error>),
+    #[error("Recording is not a studio recording")]
+    NotStudioRecording,
+    #[error("Failed to load recordings meta: {0}")]
+    RecordingsMeta(String),
+    #[error("Failed to setup renderer: {0}")]
+    RendererSetup(#[source] quiro_rendering::RenderingError),
+    #[error("Failed to load media: {0}")]
+    MediaLoad(String),
+    #[error("IO error at path '{0}': {1}")]
+    IO(PathBuf, std::io::Error),
+}
+
+pub struct ExporterBuilder {
+    project_path: PathBuf,
+    config: Option<ProjectConfiguration>,
+    output_path: Option<PathBuf>,
+    force_ffmpeg_decoder: bool,
+}
+
+impl ExporterBuilder {
+    pub fn with_config(mut self, config: ProjectConfiguration) -> Self {
+        self.config = Some(config);
+        self
+    }
+
+    pub fn with_output_path(mut self, output_path: PathBuf) -> Self {
+        self.output_path = Some(output_path);
+        self
+    }
+
+    pub fn with_force_ffmpeg_decoder(mut self, force: bool) -> Self {
+        self.force_ffmpeg_decoder = force;
+        self
+    }
+
+    pub async fn build(self) -> Result<ExporterBase, ExporterBuildError> {
+        type Error = ExporterBuildError;
+
+        let mut project_config = if let Some(config) = self.config {
+            config
+        } else {
+            ProjectConfiguration::load(&self.project_path)
+                .map_err(|v| Error::ConfigLoad(v.into()))?
+        };
+
+        let recording_meta =
+            RecordingMeta::load_for_project(&self.project_path).map_err(Error::MetaLoad)?;
+        let studio_meta = recording_meta
+            .studio_meta()
+            .ok_or(Error::NotStudioRecording)?;
+
+        let recordings = Arc::new(
+            ProjectRecordingsMeta::new(&recording_meta.project_path, studio_meta)
+                .map_err(Error::RecordingsMeta)?,
+        );
+
+        // A freshly recorded .cap has no timeline — only the editor creates one. Without it the
+        // render loop's get_segment_time() returns None on frame 0 and produces zero frames (an empty
+        // export). Synthesize the same default timeline the editor would (one segment per recording,
+        // spanning its full duration) so raw recordings — e.g. from `cap export` — render correctly.
+        // Desktop exports already carry a timeline by export time, so this only fires for un-edited
+        // projects and changes nothing for them.
+        if project_config.timeline.is_none() {
+            let segments: Vec<TimelineSegment> = recordings
+                .segments
+                .iter()
+                .enumerate()
+                .filter_map(|(i, segment)| {
+                    let duration = segment.duration();
+                    (duration > 0.0).then_some(TimelineSegment {
+                        recording_clip: i as u32,
+                        start: 0.0,
+                        end: duration,
+                        timescale: 1.0,
+                        name: None,
+                        speed_audio_mode: None,
+                    })
+                })
+                .collect();
+            if !segments.is_empty() {
+                project_config.timeline = Some(TimelineConfiguration {
+                    segments,
+                    transitions: Vec::new(),
+                    zoom_segments: Vec::new(),
+                    scene_segments: Vec::new(),
+                    mask_segments: Vec::new(),
+                    text_segments: Vec::new(),
+                    caption_segments: Vec::new(),
+                    keyboard_segments: Vec::new(),
+                    audio_segments: Vec::new(),
+                });
+            }
+        }
+
+        let render_constants = Arc::new(
+            RenderVideoConstants::new(
+                &recordings.segments,
+                recording_meta.clone(),
+                studio_meta.clone(),
+            )
+            .await
+            .map_err(Error::RendererSetup)?,
+        );
+
+        let segments =
+            quiro_editor::create_segments(&recording_meta, studio_meta, self.force_ffmpeg_decoder)
+                .await
+                .map_err(Error::MediaLoad)?;
+
+        // Audio decodes in the background after create_segments; exports must
+        // not silently drop a track, so fail loudly if any decode failed.
+        for segment in &segments {
+            segment.audio.get().await.map_err(Error::MediaLoad)?;
+            segment.system_audio.get().await.map_err(Error::MediaLoad)?;
+        }
+
+        let output_path = self
+            .output_path
+            .unwrap_or_else(|| recording_meta.output_path());
+
+        if let Some(parent) = output_path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| ExporterBuildError::IO(parent.to_path_buf(), e))?;
+        }
+
+        Ok(ExporterBase {
+            output_path,
+            studio_meta: studio_meta.clone(),
+            recordings,
+            render_constants,
+            segments,
+            recording_meta,
+            project_config,
+            project_path: self.project_path,
+        })
+    }
+}
+
+pub fn make_cursor_only_project(mut project_config: ProjectConfiguration) -> ProjectConfiguration {
+    project_config.background.source = BackgroundSource::Color {
+        value: [0, 0, 0],
+        alpha: 0,
+    };
+    project_config.background.blur = 0.0;
+    project_config.background.shadow = 0.0;
+    project_config.background.advanced_shadow = None;
+    project_config.background.border = None;
+    project_config.camera.hide = true;
+    project_config.captions = None;
+    project_config.keyboard = None;
+
+    if let Some(timeline) = project_config.timeline.as_mut() {
+        timeline.mask_segments.clear();
+        timeline.text_segments.clear();
+        timeline.caption_segments.clear();
+        timeline.keyboard_segments.clear();
+    }
+
+    project_config
+}
+
+pub struct ExporterBase {
+    project_path: PathBuf,
+    recording_meta: RecordingMeta,
+    project_config: ProjectConfiguration,
+    studio_meta: StudioRecordingMeta,
+    recordings: Arc<ProjectRecordingsMeta>,
+    render_constants: Arc<RenderVideoConstants>,
+    segments: Vec<SegmentMedia>,
+    output_path: PathBuf,
+}
+
+impl ExporterBase {
+    pub fn total_frames(&self, fps: u32) -> u32 {
+        let duration = quiro_rendering::get_duration(
+            &self.recordings,
+            &self.recording_meta,
+            &self.studio_meta,
+            &self.project_config,
+        );
+
+        (fps as f64 * duration).ceil() as u32
+    }
+
+    pub fn builder(project_path: PathBuf) -> ExporterBuilder {
+        ExporterBuilder {
+            project_path,
+            config: None,
+            output_path: None,
+            force_ffmpeg_decoder: false,
+        }
+    }
+}

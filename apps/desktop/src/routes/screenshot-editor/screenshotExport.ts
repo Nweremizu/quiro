@@ -1,6 +1,13 @@
 import type { Annotation, ProjectConfiguration } from "@/utils/tauri";
-import { getArrowHeadPoints } from "./arrow";
+import {
+	arrowBounds,
+	arrowSpec,
+	buildArrow,
+	type Pt,
+	paintHead,
+} from "./arrow";
 import { type DofQuality, sharedDofRenderer } from "./dof";
+import { shapePoints } from "./geometry";
 
 // React port of Cap's `screenshotExport.ts`. The Rust renderer draws the frame
 // (background, padding, rounding, shadow, crop) but knows nothing about
@@ -256,6 +263,14 @@ export const applyFocus = (
 	ctx.restore();
 };
 
+const tracePolyline = (ctx: CanvasRenderingContext2D, pts: Pt[]) => {
+	if (!pts.length) return;
+	ctx.moveTo(pts[0].x, pts[0].y);
+	for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+};
+
+const ROTATABLE_TYPES = new Set(["rectangle", "circle", "text"]);
+
 /** Vector annotations, painted in list order so the layers panel ordering
  * holds. Masks are skipped — `paintMasks` has already burned those in. */
 const drawAnnotations = (
@@ -270,6 +285,14 @@ const drawAnnotations = (
 		ctx.strokeStyle = ann.strokeColor;
 		ctx.lineWidth = ann.strokeWidth;
 		ctx.fillStyle = ann.fillColor;
+
+		if (ann.rotation && ROTATABLE_TYPES.has(ann.type)) {
+			const cx = ann.x + ann.width / 2;
+			const cy = ann.y + ann.height / 2;
+			ctx.translate(cx, cy);
+			ctx.rotate((ann.rotation * Math.PI) / 180);
+			ctx.translate(-cx, -cy);
+		}
 
 		if (ann.type === "rectangle") {
 			if (ann.fillColor !== "transparent") {
@@ -290,26 +313,28 @@ const drawAnnotations = (
 			if (ann.fillColor !== "transparent") ctx.fill();
 			ctx.stroke();
 		} else if (ann.type === "arrow") {
-			ctx.beginPath();
+			// Same geometry engine as the SVG editor, so the export matches the
+			// canvas pixel for pixel — curve, dashes, heads and taper included.
+			const built = buildArrow(arrowSpec(ann));
 			ctx.lineCap = "round";
-			const x2 = ann.x + ann.width;
-			const y2 = ann.y + ann.height;
-			const angle = Math.atan2(y2 - ann.y, x2 - ann.x);
-			const head = getArrowHeadPoints(x2, y2, angle, ann.strokeWidth);
-
-			// The shaft stops at the head's base, so a thick stroke does not poke
-			// through the tip of the triangle.
-			ctx.moveTo(ann.x, ann.y);
-			ctx.lineTo(head.base.x, head.base.y);
-			ctx.stroke();
-
-			ctx.beginPath();
-			ctx.moveTo(head.points[0].x, head.points[0].y);
-			ctx.lineTo(head.points[1].x, head.points[1].y);
-			ctx.lineTo(head.points[2].x, head.points[2].y);
-			ctx.closePath();
+			ctx.lineJoin = "round";
+			ctx.strokeStyle = ann.strokeColor;
 			ctx.fillStyle = ann.strokeColor;
-			ctx.fill();
+
+			if (built.outline) {
+				ctx.beginPath();
+				tracePolyline(ctx, built.outline);
+				ctx.closePath();
+				ctx.fill();
+			} else {
+				ctx.beginPath();
+				ctx.setLineDash(built.dash ?? []);
+				tracePolyline(ctx, built.shaft);
+				ctx.stroke();
+				ctx.setLineDash([]);
+			}
+			paintHead(ctx, built.startHead, ann.strokeColor);
+			paintHead(ctx, built.endHead, ann.strokeColor);
 		} else if (ann.type === "text" && ann.text) {
 			ctx.fillStyle = ann.strokeColor;
 			ctx.font = `${ann.height}px sans-serif`;
@@ -443,10 +468,22 @@ export function renderScreenshotExportCanvas({
 	for (const ann of scaledAnnotations) {
 		// Neither draws outside the image, so neither should grow the export.
 		if (ann.type === "mask" || ann.type === "focus") continue;
-		minX = Math.min(minX, ann.x, ann.x + ann.width);
-		maxX = Math.max(maxX, ann.x, ann.x + ann.width);
-		minY = Math.min(minY, ann.y, ann.y + ann.height);
-		maxY = Math.max(maxY, ann.y, ann.y + ann.height);
+		if (ann.type === "arrow") {
+			// Exact: the curve's derivative roots plus the head shapes, rather
+			// than sampled points plus a guessed pad.
+			const b = arrowBounds(arrowSpec(ann));
+			minX = Math.min(minX, b.minX);
+			maxX = Math.max(maxX, b.maxX);
+			minY = Math.min(minY, b.minY);
+			maxY = Math.max(maxY, b.maxY);
+			continue;
+		}
+		for (const c of shapePoints(ann)) {
+			minX = Math.min(minX, c.x);
+			maxX = Math.max(maxX, c.x);
+			minY = Math.min(minY, c.y);
+			maxY = Math.max(maxY, c.y);
+		}
 	}
 
 	const outputCanvas = document.createElement("canvas");

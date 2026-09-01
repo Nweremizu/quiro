@@ -1,0 +1,132 @@
+use std::{path::Path, sync::Arc};
+
+use quiro_audio::AudioData;
+use quiro_project::ProjectConfiguration;
+use tracing::warn;
+
+use crate::{
+    SegmentMedia,
+    audio::{AudioSegment, AudioSegmentTrack, MusicTracks},
+};
+
+fn resolve_music_path(project_path: &Path, path: &str) -> std::path::PathBuf {
+    let candidate = Path::new(path);
+    if candidate.is_absolute() {
+        candidate.to_path_buf()
+    } else {
+        project_path.join(candidate)
+    }
+}
+
+/// Decodes every distinct music/imported-audio file referenced by the project's
+/// timeline audio segments, reusing `cache` so repeated playback/export starts
+/// don't re-decode. Returns a snapshot keyed by the config path string for the
+/// renderer to mix. Files that fail to decode are skipped (logged) so a missing
+/// or corrupt track never aborts playback or export.
+pub fn load_music_tracks(
+    project: &ProjectConfiguration,
+    project_path: &Path,
+    cache: &mut MusicTracks,
+) -> MusicTracks {
+    let mut result = MusicTracks::new();
+
+    let Some(timeline) = &project.timeline else {
+        return result;
+    };
+
+    for segment in &timeline.audio_segments {
+        if result.contains_key(&segment.path) {
+            continue;
+        }
+
+        if let Some(data) = cache.get(&segment.path) {
+            result.insert(segment.path.clone(), Arc::clone(data));
+            continue;
+        }
+
+        let resolved = resolve_music_path(project_path, &segment.path);
+        match AudioData::from_file(&resolved) {
+            Ok(data) => {
+                let data = Arc::new(data);
+                cache.insert(segment.path.clone(), Arc::clone(&data));
+                result.insert(segment.path.clone(), data);
+            }
+            Err(error) => {
+                warn!(
+                    path = %resolved.display(),
+                    error,
+                    "Failed to load timeline audio track; skipping"
+                );
+            }
+        }
+    }
+
+    result
+}
+
+/// Convenience wrapper for one-shot consumers (e.g. export) that don't keep a
+/// persistent decode cache.
+pub fn load_music_tracks_uncached(
+    project: &ProjectConfiguration,
+    project_path: &Path,
+) -> MusicTracks {
+    let mut cache = MusicTracks::new();
+    load_music_tracks(project, project_path, &mut cache)
+}
+
+/// Waits for a segment track's background decode, degrading a failed track to
+/// "no audio" (with a warning) so playback never hard-fails on a corrupt file.
+/// Export validates loaders strictly before reaching this point.
+async fn loaded_track(
+    loader: &crate::AudioLoader,
+    label: &str,
+) -> Option<Arc<quiro_audio::AudioData>> {
+    match loader.get().await {
+        Ok(audio) => audio,
+        Err(error) => {
+            warn!(%error, "Failed to load {label} track; continuing without it");
+            None
+        }
+    }
+}
+
+pub async fn get_audio_segments(segments: &[SegmentMedia]) -> Vec<AudioSegment> {
+    let mut out = Vec::with_capacity(segments.len());
+
+    for s in segments {
+        let audio = loaded_track(&s.audio, "mic audio").await;
+        let system_audio = loaded_track(&s.system_audio, "system audio").await;
+
+        out.push(AudioSegment {
+            tracks: [
+                audio.map(|a| {
+                    AudioSegmentTrack::new(
+                        a,
+                        |c| c.mic_volume_db,
+                        |c| match c.mic_stereo_mode {
+                            quiro_project::StereoMode::Stereo => quiro_audio::StereoMode::Stereo,
+                            quiro_project::StereoMode::MonoL => quiro_audio::StereoMode::MonoL,
+                            quiro_project::StereoMode::MonoR => quiro_audio::StereoMode::MonoR,
+                        },
+                        |o| o.mic,
+                    )
+                    .with_timing_offset_secs(s.audio_timing_repair.mic_offset_secs)
+                }),
+                system_audio.map(|a| -> AudioSegmentTrack {
+                    AudioSegmentTrack::new(
+                        a,
+                        |c| c.system_volume_db,
+                        |_| quiro_audio::StereoMode::Stereo,
+                        |o| o.system_audio,
+                    )
+                    .with_timing_offset_secs(s.audio_timing_repair.system_audio_offset_secs)
+                }),
+            ]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>(),
+        });
+    }
+
+    out
+}

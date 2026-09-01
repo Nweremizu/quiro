@@ -960,6 +960,111 @@ pub async fn render_video_to_channel(
     Ok(())
 }
 
+/// Inside `render_nv12`: how long each stage of producing one frame took,
+/// summed across an export. `prepare` is CPU work building layer uniforms and
+/// uploading textures, `submit` records the GPU commands, and `readback` waits
+/// for the NV12 result to come back off the GPU — the stage most likely to be
+/// a stall rather than work.
+#[derive(Default)]
+pub struct Nv12RenderStageTotals {
+    pub frames: std::sync::atomic::AtomicU64,
+    pub prepare_micros: std::sync::atomic::AtomicU64,
+    pub submit_micros: std::sync::atomic::AtomicU64,
+    pub readback_micros: std::sync::atomic::AtomicU64,
+}
+
+impl Nv12RenderStageTotals {
+    fn add(
+        &self,
+        prepare: std::time::Duration,
+        submit: std::time::Duration,
+        readback: std::time::Duration,
+    ) {
+        use std::sync::atomic::Ordering::Relaxed;
+        self.frames.fetch_add(1, Relaxed);
+        self.prepare_micros
+            .fetch_add(prepare.as_micros() as u64, Relaxed);
+        self.submit_micros
+            .fetch_add(submit.as_micros() as u64, Relaxed);
+        self.readback_micros
+            .fetch_add(readback.as_micros() as u64, Relaxed);
+    }
+
+    fn mean_ms(&self, total: &std::sync::atomic::AtomicU64) -> f64 {
+        use std::sync::atomic::Ordering::Relaxed;
+        let frames = self.frames.load(Relaxed);
+        if frames == 0 {
+            return 0.0;
+        }
+        total.load(Relaxed) as f64 / 1000.0 / frames as f64
+    }
+}
+
+/// Process-wide, because the renderer is reached through several paths and the
+/// point is to see the aggregate for one export.
+pub static NV12_RENDER_STAGES: std::sync::LazyLock<Nv12RenderStageTotals> =
+    std::sync::LazyLock::new(Nv12RenderStageTotals::default);
+
+/// Where an export's wall clock actually goes, accumulated across every
+/// frame. The existing breakdown only records the first frame, which measures
+/// startup rather than steady state — and steady state is what decides whether
+/// an export is slow because of decoding, rendering or backpressure.
+#[derive(Default)]
+struct ExportStageTotals {
+    frames: u64,
+    zoom_precompute: std::time::Duration,
+    decode: std::time::Duration,
+    render: std::time::Duration,
+    send: std::time::Duration,
+}
+
+impl ExportStageTotals {
+    fn mean_ms(&self, total: std::time::Duration) -> f64 {
+        if self.frames == 0 {
+            return 0.0;
+        }
+        total.as_secs_f64() * 1000.0 / self.frames as f64
+    }
+
+    fn log(&self, elapsed: std::time::Duration) {
+        if self.frames == 0 {
+            return;
+        }
+
+        let wall_per_frame = elapsed.as_secs_f64() * 1000.0 / self.frames as f64;
+        // Decode is overlapped with render via prefetch, so these are the cost
+        // of each stage, not a partition of the frame. Whichever is closest to
+        // the wall time per frame is the one setting the pace.
+        tracing::info!(
+            frames = self.frames,
+            fps = format!("{:.1}", self.frames as f64 / elapsed.as_secs_f64()),
+            wall_ms_per_frame = format!("{wall_per_frame:.1}"),
+            decode_ms = format!("{:.1}", self.mean_ms(self.decode)),
+            render_ms = format!("{:.1}", self.mean_ms(self.render)),
+            send_ms = format!("{:.1}", self.mean_ms(self.send)),
+            zoom_ms = format!("{:.1}", self.mean_ms(self.zoom_precompute)),
+            "export stage profile"
+        );
+
+        // The render stage broken down, since it is the one that sets the pace.
+        tracing::info!(
+            prepare_ms = format!(
+                "{:.1}",
+                NV12_RENDER_STAGES.mean_ms(&NV12_RENDER_STAGES.prepare_micros)
+            ),
+            submit_ms = format!(
+                "{:.1}",
+                NV12_RENDER_STAGES.mean_ms(&NV12_RENDER_STAGES.submit_micros)
+            ),
+            readback_ms = format!(
+                "{:.1}",
+                NV12_RENDER_STAGES.mean_ms(&NV12_RENDER_STAGES.readback_micros)
+            ),
+            "export render breakdown"
+        );
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn render_video_to_channel_nv12(
     constants: &RenderVideoConstants,
@@ -979,6 +1084,7 @@ pub async fn render_video_to_channel_nv12(
     let ffmpeg_init_ms = ffmpeg_init_start.elapsed().as_millis() as u64;
 
     let start_time = Instant::now();
+    let mut stage_totals = ExportStageTotals::default();
 
     let duration = get_duration(recordings, recording_meta, meta, project);
 
@@ -1180,6 +1286,10 @@ pub async fn render_video_to_channel_nv12(
             (incoming_decode.await, None)
         };
         let this_decode_ms = decode_wall_start.elapsed().as_millis() as u64;
+        stage_totals.frames += 1;
+        stage_totals.decode += decode_wall_start.elapsed();
+        stage_totals.zoom_precompute += std::time::Duration::from_millis(this_zoom_pre_ms);
+        let frame_render_start = Instant::now();
 
         if let Some(segment_frames) = segment_frames {
             consecutive_failures = 0;
@@ -1425,7 +1535,10 @@ pub async fn render_video_to_channel_nv12(
                         record_first_frame_nv12_phases = false;
                     }
                     last_successful_frame = Some(frame.clone_metadata_with_data());
+                    stage_totals.render += frame_render_start.elapsed();
+                    let send_start = Instant::now();
                     sender.send((frame, current_frame_number)).await?;
+                    stage_totals.send += send_start.elapsed();
                     channel_frames_sent += 1;
                     if stop_after_frames_sent.is_some_and(|m| channel_frames_sent >= m) {
                         stopped_after_frame_limit = true;
@@ -1557,6 +1670,7 @@ pub async fn render_video_to_channel_nv12(
         elapsed_secs = format!("{:.2}", total_time.as_secs_f32()),
         "NV12 render complete"
     );
+    stage_totals.log(total_time);
 
     Ok(())
 }
@@ -4504,6 +4618,67 @@ pub struct TransitionRenderInput<'a> {
     pub render_display: bool,
 }
 
+/// The RGBA render path's stage costs, accumulated across a run. The NV12
+/// export path has `NV12_RENDER_STAGES`; this is its counterpart for the
+/// preview and stream paths, which go through `render_with_timings` instead.
+#[derive(Default)]
+pub struct RgbaRenderStageTotals {
+    frames: std::sync::atomic::AtomicU64,
+    prepare_micros: std::sync::atomic::AtomicU64,
+    layer_render_micros: std::sync::atomic::AtomicU64,
+    finish_micros: std::sync::atomic::AtomicU64,
+    finish_wait_previous_micros: std::sync::atomic::AtomicU64,
+    finish_submit_readback_micros: std::sync::atomic::AtomicU64,
+}
+
+impl RgbaRenderStageTotals {
+    fn add(&self, timings: &FrameRenderStageTimings) {
+        use std::sync::atomic::Ordering::Relaxed;
+        let micros = |d: std::time::Duration| d.as_micros() as u64;
+        self.frames.fetch_add(1, Relaxed);
+        self.prepare_micros
+            .fetch_add(micros(timings.prepare_duration), Relaxed);
+        self.layer_render_micros
+            .fetch_add(micros(timings.layer_render_duration), Relaxed);
+        self.finish_micros
+            .fetch_add(micros(timings.finish_duration), Relaxed);
+        self.finish_wait_previous_micros
+            .fetch_add(micros(timings.finish_wait_previous_duration), Relaxed);
+        self.finish_submit_readback_micros
+            .fetch_add(micros(timings.finish_submit_readback_duration), Relaxed);
+    }
+
+    /// Reports the means and clears, so consecutive runs don't blur together.
+    pub fn log_and_reset(&self, context: &str) {
+        use std::sync::atomic::Ordering::Relaxed;
+        let frames = self.frames.swap(0, Relaxed);
+        if frames == 0 {
+            return;
+        }
+
+        let mean = |total: &std::sync::atomic::AtomicU64| {
+            format!(
+                "{:.1}",
+                total.swap(0, Relaxed) as f64 / 1000.0 / frames as f64
+            )
+        };
+
+        tracing::info!(
+            context,
+            frames,
+            prepare_ms = mean(&self.prepare_micros),
+            layer_render_ms = mean(&self.layer_render_micros),
+            finish_ms = mean(&self.finish_micros),
+            finish_wait_previous_ms = mean(&self.finish_wait_previous_micros),
+            finish_submit_readback_ms = mean(&self.finish_submit_readback_micros),
+            "rgba render breakdown"
+        );
+    }
+}
+
+pub static RGBA_RENDER_STAGES: std::sync::LazyLock<RgbaRenderStageTotals> =
+    std::sync::LazyLock::new(RgbaRenderStageTotals::default);
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct FrameRenderStageTimings {
     pub prepare_duration: std::time::Duration,
@@ -4617,7 +4792,10 @@ impl<'a> FrameRenderer<'a> {
             )
             .await
             {
-                Ok(result) => return Ok(result),
+                Ok(result) => {
+                    RGBA_RENDER_STAGES.add(&result.1);
+                    return Ok(result);
+                }
                 Err(RenderingError::BufferMapWaitingFailed) => {
                     tracing::warn!(
                         frame_number = uniforms.frame_number,
@@ -5076,6 +5254,7 @@ impl<'a> FrameRenderer<'a> {
                 }),
             );
 
+            let prepare_start = Instant::now();
             if let Err(e) = layers
                 .prepare_with_encoder(
                     self.constants,
@@ -5090,7 +5269,9 @@ impl<'a> FrameRenderer<'a> {
                 last_error = Some(e);
                 continue;
             }
+            let prepare_elapsed = prepare_start.elapsed();
 
+            let submit_start = Instant::now();
             layers.render(
                 &self.constants.device,
                 &self.constants.queue,
@@ -5099,7 +5280,9 @@ impl<'a> FrameRenderer<'a> {
                 &uniforms,
                 render_display,
             );
+            let submit_elapsed = submit_start.elapsed();
 
+            let readback_start = Instant::now();
             match finish_encoder_nv12_pooled(
                 session,
                 nv12_converter,
@@ -5111,7 +5294,14 @@ impl<'a> FrameRenderer<'a> {
             )
             .await
             {
-                Ok(opt_frame) => return Ok(opt_frame),
+                Ok(opt_frame) => {
+                    NV12_RENDER_STAGES.add(
+                        prepare_elapsed,
+                        submit_elapsed,
+                        readback_start.elapsed(),
+                    );
+                    return Ok(opt_frame);
+                }
                 Err(RenderingError::BufferMapWaitingFailed) => {
                     last_error = Some(RenderingError::BufferMapWaitingFailed);
                 }

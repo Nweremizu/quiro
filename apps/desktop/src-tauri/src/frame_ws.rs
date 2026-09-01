@@ -563,3 +563,110 @@ mod tests {
         assert_eq!(instant_subscribers.load(Ordering::Acquire), 0);
     }
 }
+
+/// A frame socket for sequential streaming rather than scrubbing.
+///
+/// The preview socket is built on a `watch` channel: last value wins, stale
+/// frames are dropped, which is exactly right for a playhead being dragged and
+/// exactly wrong for a compositor that must see every frame in order.
+///
+/// This one is fed by a bounded `mpsc`, so backpressure runs the whole way
+/// back: if the webview stops consuming, the socket write blocks, the queue
+/// fills, and the renderer stops producing. Nothing is dropped and nothing
+/// runs away with memory.
+pub async fn create_stream_frame_ws(
+    frame_rx: tokio::sync::mpsc::Receiver<WSFrame>,
+) -> (u16, CancellationToken) {
+    use axum::{
+        extract::ws::{Message, WebSocket, WebSocketUpgrade},
+        response::IntoResponse,
+        routing::get,
+    };
+
+    // One consumer only: a stream has a single reader by definition, so the
+    // receiver is handed to whichever socket connects first.
+    let receiver = std::sync::Arc::new(tokio::sync::Mutex::new(Some(frame_rx)));
+
+    async fn ws_handler(
+        ws: WebSocketUpgrade,
+        axum::extract::State(state): axum::extract::State<StreamState>,
+    ) -> impl IntoResponse {
+        let taken = state.lock().await.take();
+        ws.on_upgrade(move |socket| handle_socket(socket, taken))
+    }
+
+    type StreamState =
+        std::sync::Arc<tokio::sync::Mutex<Option<tokio::sync::mpsc::Receiver<WSFrame>>>>;
+
+    async fn handle_socket(
+        mut socket: WebSocket,
+        receiver: Option<tokio::sync::mpsc::Receiver<WSFrame>>,
+    ) {
+        let Some(mut receiver) = receiver else {
+            tracing::warn!("Frame stream already has a reader; refusing second connection");
+            return;
+        };
+
+        loop {
+            tokio::select! {
+                msg = socket.recv() => {
+                    match msg {
+                        Some(Ok(Message::Close(_))) | None => break,
+                        Some(Ok(_)) => {}
+                        Some(Err(e)) => {
+                            if !is_normal_socket_disconnect(&e) {
+                                tracing::error!("Frame stream socket error: {:?}", e);
+                            }
+                            break;
+                        }
+                    }
+                },
+                frame = receiver.recv() => {
+                    let Some(frame) = frame else {
+                        // The renderer finished: close cleanly so the client
+                        // knows the stream ended rather than timing out.
+                        let _ = socket.send(Message::Close(None)).await;
+                        break;
+                    };
+
+                    let packed = pack_ws_frame(&frame);
+
+                    // Awaited, so a slow client propagates backpressure into
+                    // the queue and from there into the renderer.
+                    if let Err(e) = socket.send(Message::Binary(packed)).await {
+                        if !is_normal_socket_disconnect(&e) {
+                            tracing::error!("Failed to send streamed frame: {:?}", e);
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    let router = axum::Router::new()
+        .route("/frames", get(ws_handler))
+        .with_state(receiver as StreamState);
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("Failed to bind frame stream socket");
+    let port = listener
+        .local_addr()
+        .expect("Frame stream socket has no address")
+        .port();
+
+    let token = CancellationToken::new();
+    let shutdown = token.clone();
+
+    tokio::spawn(async move {
+        let server = axum::serve(listener, router.into_make_service())
+            .with_graceful_shutdown(async move { shutdown.cancelled().await });
+
+        if let Err(error) = server.await {
+            tracing::error!(%error, "Frame stream socket stopped");
+        }
+    });
+
+    (port, token)
+}

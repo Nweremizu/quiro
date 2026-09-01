@@ -800,14 +800,14 @@ export function LaunchRoutePage() {
 					className="flex-1 min-h-0 w-full flex flex-col gap-2 overflow-auto pb-1"
 				>
 					{isExpanded && (
-						<div className="px-1 pb-0.5">
-							<h2 className="text-xs font-semibold text-gray-12 font-sans">
+						<div className="px-1">
+							<h2 className="text-xs font-semibold text-gray-11 font-sans">
 								Capture
 							</h2>
 						</div>
 					)}
 
-					<div className="flex flex-col gap-2 w-full text-xs text-gray-11">
+					<div className="flex flex-col gap-2 w-full text-xs text-gray-11 pt-1 px-1">
 						<div className="flex flex-row gap-2 items-stretch w-full">
 							<div
 								className={cn(
@@ -1137,8 +1137,8 @@ export function LaunchRoutePage() {
 								href="#"
 							>
 								<div className="flex items-center gap-2">
-									<div className="flex items-center justify-center gap-1 rounded-lg bg-accent-300 w-fit! p-1.5 transition-colors hover:bg-accent-400">
-										<IconQuiroLogo className="size-9 text-white" />
+									<div className="flex items-center justify-center gap-1 rounded-lg bg-accent-400 dark:bg-accent-500 w-fit! p-1.5 transition-colors hover:bg-accent-400">
+										<IconQuiroLogo className="size-8.5 text-white" />
 									</div>
 									<span className="text-4xl font-sans font-medium">Quiro</span>
 								</div>

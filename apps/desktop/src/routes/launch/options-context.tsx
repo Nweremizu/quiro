@@ -1,9 +1,5 @@
+import { createContext, type ReactNode, useContext } from "react";
 import { createOptionsQuery } from "@/utils/queries";
-import {
-	createContext,
-	useContext,
-	type ReactNode,
-} from "react";
 
 type RecordingOptionsContextValue = ReturnType<typeof createOptionsQuery>;
 

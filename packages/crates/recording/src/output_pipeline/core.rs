@@ -2855,21 +2855,21 @@ async fn process_audio_frame<TMutex: AudioMuxer>(
             return Ok(AudioFrameOutcome::DropFrame);
         }
 
-        if trim_samples > 0 {
-            if let Some(trimmed) = trim_audio_frame_front(&frame.inner, trim_samples) {
-                state
-                    .gap_tracker
-                    .record_overlap(overlap_duration, false, *state.frame_count);
-                debug!(
-                    frame_count = *state.frame_count,
-                    overlap_ms = overlap_duration.as_millis() as u64,
-                    frame_samples,
-                    trim_samples,
-                    kept_samples = trimmed.samples(),
-                    "Trimmed overlapping audio frame"
-                );
-                frame = AudioFrame::new(trimmed, frame.timestamp);
-            }
+        if trim_samples > 0
+            && let Some(trimmed) = trim_audio_frame_front(&frame.inner, trim_samples)
+        {
+            state
+                .gap_tracker
+                .record_overlap(overlap_duration, false, *state.frame_count);
+            debug!(
+                frame_count = *state.frame_count,
+                overlap_ms = overlap_duration.as_millis() as u64,
+                frame_samples,
+                trim_samples,
+                kept_samples = trimmed.samples(),
+                "Trimmed overlapping audio frame"
+            );
+            frame = AudioFrame::new(trimmed, frame.timestamp);
         }
     }
 

@@ -225,28 +225,26 @@ async fn run_memory_test(
         }
     }
 
-    if include_mic {
-        if let Some((mic_name, _, _)) = MicrophoneFeed::default_device() {
-            println!("Using microphone: {mic_name}");
+    if include_mic && let Some((mic_name, _, _)) = MicrophoneFeed::default_device() {
+        println!("Using microphone: {mic_name}");
 
-            let error_sender = flume::unbounded().0;
-            let mic_feed = MicrophoneFeed::spawn(MicrophoneFeed::new(error_sender));
+        let error_sender = flume::unbounded().0;
+        let mic_feed = MicrophoneFeed::spawn(MicrophoneFeed::new(error_sender));
 
-            mic_feed
-                .ask(microphone::SetInput {
-                    settings: None,
-                    label: mic_name.clone(),
-                })
-                .await?
-                .await?;
+        mic_feed
+            .ask(microphone::SetInput {
+                settings: None,
+                label: mic_name.clone(),
+            })
+            .await?
+            .await?;
 
-            tokio::time::sleep(Duration::from_millis(500)).await;
+        tokio::time::sleep(Duration::from_millis(500)).await;
 
-            let mic_lock = mic_feed.ask(microphone::Lock).await?;
-            builder = builder.with_mic_feed(Arc::new(mic_lock));
-        } else {
-            warn!("No microphone found");
-        }
+        let mic_lock = mic_feed.ask(microphone::Lock).await?;
+        builder = builder.with_mic_feed(Arc::new(mic_lock));
+    } else {
+        warn!("No microphone found");
     }
 
     memory_tracker.sample();
@@ -434,29 +432,27 @@ async fn run_cycles_test(
             }
         }
 
-        if include_mic {
-            if let Some((mic_name, _, _)) = MicrophoneFeed::default_device() {
-                let error_sender = flume::unbounded().0;
-                let mic_feed = MicrophoneFeed::spawn(MicrophoneFeed::new(error_sender));
+        if include_mic && let Some((mic_name, _, _)) = MicrophoneFeed::default_device() {
+            let error_sender = flume::unbounded().0;
+            let mic_feed = MicrophoneFeed::spawn(MicrophoneFeed::new(error_sender));
 
-                match mic_feed
-                    .ask(microphone::SetInput {
-                        settings: None,
-                        label: mic_name.clone(),
-                    })
-                    .await?
-                    .await
-                {
-                    Ok(_) => {
-                        tokio::time::sleep(Duration::from_millis(300)).await;
-                        let mic_lock = mic_feed.ask(microphone::Lock).await?;
-                        builder = builder.with_mic_feed(Arc::new(mic_lock));
-                    }
-                    Err(e) => {
-                        warn!(
-                            "Cycle {cycle}: mic SetInput failed ({e:?}) - recording without mic this cycle"
-                        );
-                    }
+            match mic_feed
+                .ask(microphone::SetInput {
+                    settings: None,
+                    label: mic_name.clone(),
+                })
+                .await?
+                .await
+            {
+                Ok(_) => {
+                    tokio::time::sleep(Duration::from_millis(300)).await;
+                    let mic_lock = mic_feed.ask(microphone::Lock).await?;
+                    builder = builder.with_mic_feed(Arc::new(mic_lock));
+                }
+                Err(e) => {
+                    warn!(
+                        "Cycle {cycle}: mic SetInput failed ({e:?}) - recording without mic this cycle"
+                    );
                 }
             }
         }

@@ -1,3 +1,7 @@
+//! macOS only: built on cidre/ScreenCaptureKit, which has no Windows or
+//! Linux equivalent here.
+#![cfg(target_os = "macos")]
+
 use kameo::Actor as _;
 use quiro_enc_ffmpeg::remux::{
     concatenate_m4s_segments_with_init, get_media_duration, merge_video_audio,

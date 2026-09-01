@@ -1,7 +1,5 @@
 import { Collapsible } from "@base-ui/react/collapsible";
 import { cn, Select, Switch } from "@quiro/ui";
-import { convertFileSrc } from "@tauri-apps/api/core";
-import { resolveResource } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useRef, useState } from "react";
 import type { BackgroundConfiguration } from "@/utils/tauri";
@@ -20,10 +18,17 @@ import {
 	DRAFT_GRADIENT,
 	ensureVisibleBackground,
 	ensureVisibleFraming,
-	WALLPAPER_FILENAMES,
 } from "./constants";
 import { useScreenshotEditorContext } from "./context";
-import { Field, PanelSection, RgbInput, rgbToHex, Slider } from "./ui";
+import {
+	Field,
+	ImageTab,
+	PanelSection,
+	RgbInput,
+	rgbToHex,
+	Slider,
+	WallpaperTab,
+} from "./ui";
 
 // Persistent right-hand inspector — the counterpart to LayersPanel on the
 // left, and a replacement for the toolbar's floating Background / Padding /
@@ -38,123 +43,6 @@ const ROUNDING_OPTIONS = [
 
 const SOURCE_TAB_ID = "bg-source-tab";
 const SOURCE_PANEL_ID = "bg-source-panel";
-
-function WallpaperThumbnail({
-	filename,
-	selectedPath,
-	onSelect,
-}: {
-	filename: string;
-	selectedPath: string | null;
-	onSelect: (resolvedPath: string) => void;
-}) {
-	// The renderer takes a real filesystem path, so each thumbnail resolves its
-	// bundled resource once and hands that same path to the config on click.
-	const [resolved, setResolved] = useState<string | null>(null);
-
-	useEffect(() => {
-		let cancelled = false;
-		resolveResource(`assets/backgrounds/${filename}`)
-			.then((path) => {
-				if (!cancelled) setResolved(path);
-			})
-			.catch(() => {});
-		return () => {
-			cancelled = true;
-		};
-	}, [filename]);
-
-	const selected = resolved !== null && resolved === selectedPath;
-
-	return (
-		<button
-			type="button"
-			disabled={!resolved}
-			onClick={() => resolved && onSelect(resolved)}
-			aria-label={filename.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ")}
-			aria-pressed={selected}
-			title={filename}
-			className={cn(
-				"aspect-square size-8 overflow-hidden rounded-lg bg-gray-4 transition-[box-shadow]",
-				selected
-					? "ring-2 ring-accent-400 ring-offset-2 ring-offset-gray-1"
-					: "hover:ring-1 hover:ring-gray-8",
-			)}
-		>
-			{resolved && (
-				<img
-					src={convertFileSrc(resolved)}
-					alt=""
-					loading="lazy"
-					draggable={false}
-					className="size-full object-cover"
-				/>
-			)}
-		</button>
-	);
-}
-
-function WallpaperTab({
-	selectedPath,
-	onSelect,
-}: {
-	selectedPath: string | null;
-	onSelect: (resolvedPath: string) => void;
-}) {
-	return (
-		<div className="grid max-h-56 grid-cols-6 gap-2 overflow-y-auto p-1 scrollbar-thin scrollbar-thumb-gray-6 scrollbar-track-transparent">
-			{WALLPAPER_FILENAMES.map((filename) => (
-				<WallpaperThumbnail
-					key={filename}
-					filename={filename}
-					selectedPath={selectedPath}
-					onSelect={onSelect}
-				/>
-			))}
-		</div>
-	);
-}
-
-function ImageTab({
-	path,
-	onPick,
-	onClear,
-}: {
-	path: string | null;
-	onPick: () => void;
-	onClear: () => void;
-}) {
-	if (!path) {
-		return (
-			<button
-				type="button"
-				onClick={onPick}
-				className="flex w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-gray-5 bg-gray-2 p-6 text-[13px] transition-colors hover:bg-gray-3"
-			>
-				<IconLucideImage className="size-6 text-gray-10" />
-				<span className="text-gray-10">Click to select an image</span>
-			</button>
-		);
-	}
-
-	return (
-		<div className="relative h-32 w-full overflow-hidden rounded-lg border border-gray-3">
-			<img
-				src={convertFileSrc(path)}
-				alt=""
-				className="size-full object-cover"
-			/>
-			<button
-				type="button"
-				onClick={onClear}
-				aria-label="Remove background image"
-				className="absolute right-2 top-2 rounded-full bg-black/50 p-1.5 text-white transition-colors hover:bg-black/70"
-			>
-				<IconLucideX className="size-3.5" />
-			</button>
-		</div>
-	);
-}
 
 /** Segmented control that switches which background picker is shown. Same
  * shape as the blur/pixelate toggle in AnnotationConfig — a recessed track

@@ -26,6 +26,7 @@
 @import "@fontsource/geist-sans/latin-600.css";
 @import "@fontsource/geist-sans/latin-700.css";
 
+
 @source "../../../apps/*/src/**/*.{js,ts,jsx,tsx,mdx}";
 @source "../../*/src/**/*.{ts,tsx,html,stories.tsx}";
 
@@ -102,12 +103,25 @@
 
     /* Brand accent (Cloudflare orange). --accent-300 is the exact brand
      * value and stays constant across both themes. */
-    --accent-50: oklch(97% 0.02 55);
+    /* --accent-50: oklch(97% 0.02 55);
     --accent-100: oklch(91% 0.06 55);
     --accent-200: oklch(84% 0.11 55);
-    --accent-300: oklch(71.6% 0.171 53.4); /* Cloudflare orange #F38020 */
+    --accent-300: oklch(71.6% 0.171 53.4);  
     --accent-400: oklch(66% 0.17 52);
-    --accent-500: oklch(58% 0.16 50);
+    --accent-500: oklch(58% 0.16 50); */
+
+    --accent-50: oklch(97.6% 0.015 61.3);
+    --accent-100: oklch(94.2% 0.037 60.7);
+    --accent-200: oklch(87.9% 0.075 55.5);
+    --accent-300: oklch(80.4% 0.126 52.1);
+    --accent-400: oklch(72.1% 0.182 43.3);
+    --accent-500: oklch(68.7% 0.208 38.8);
+    --accent-600: oklch(62.4% 0.224 33.5);
+    --accent-700: oklch(53.7% 0.199 32);
+    --accent-800: oklch(45.6% 0.164 31.3);
+    --accent-900: oklch(39.4% 0.135 31.3);
+    --accent-950: oklch(25.8% 0.089 30.7);
+ 
 
     --accent-transparent-0: oklch(40% 0.07 45 / 0);
     --accent-transparent-10: oklch(40% 0.07 45 / 0.1);
@@ -218,6 +232,18 @@
     /* Overshoot ("back-out") curve for enter transforms — a restrained
      * bounce that still reads as springy. */
     --ease-spring-out: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    /* Strong ease-out for UI that enters, exits, or answers a press. The
+     * built-in CSS easings are too weak to read as deliberate.
+     *
+     * Deliberately not named --ease-out: Tailwind v4 ships --ease-out and
+     * --ease-in-out as theme variables, so redefining those names here would
+     * silently retarget every `ease-out` utility in the app. */
+    --ease-snappy: cubic-bezier(0.23, 1, 0.32, 1);
+
+    /* Strong ease-in-out, for elements moving between two on-screen positions
+     * rather than entering or leaving. */
+    --ease-smooth: cubic-bezier(0.77, 0, 0.175, 1);
 }
 
 /* Dark theme variables */
@@ -261,14 +287,19 @@
 
     --solid-white: oklch(100% 0 0);
 
-    /* Brighter/more vivid than light theme so the brand pops on a dark
-     * background. --accent-300 stays pinned to the exact brand value. */
-    --accent-50: oklch(30% 0.05 55);
-    --accent-100: oklch(38% 0.08 55);
-    --accent-200: oklch(47% 0.12 55);
-    --accent-300: oklch(71.6% 0.171 53.4); /* Cloudflare orange #F38020 */
-    --accent-400: oklch(76% 0.18 56);
-    --accent-500: oklch(80% 0.19 58);
+    
+
+    --accent-950: oklch(97.6% 0.015 61.3);
+    --accent-900: oklch(94.2% 0.037 60.7);
+    --accent-800: oklch(87.9% 0.075 55.5);
+    --accent-700: oklch(80.4% 0.126 52.1);
+    --accent-600: oklch(72.1% 0.182 43.3);
+    --accent-500: oklch(68.7% 0.208 38.8);
+    --accent-400: oklch(62.4% 0.224 33.5);
+    --accent-300: oklch(53.7% 0.199 32);
+    --accent-200: oklch(45.6% 0.164 31.3);
+    --accent-100: oklch(39.4% 0.135 31.3);
+    --accent-50: oklch(25.8% 0.089 30.7);
 
     --accent-transparent-10: oklch(71.6% 0.171 53.4 / 0.1);
     --accent-transparent-20: oklch(71.6% 0.171 53.4 / 0.2);
@@ -390,6 +421,8 @@
  * their own. `inline` re-references them via var() instead of copying the
  * value, which is what keeps :root.dark's overrides working (a hard-coded
  * @theme value would freeze at light-mode's value forever). */
+
+ 
 @theme inline {
     --color-gray-1: var(--gray-1);
     --color-gray-2: var(--gray-2);
@@ -410,7 +443,12 @@
     --color-accent-300: var(--accent-300);
     --color-accent-400: var(--accent-400);
     --color-accent-500: var(--accent-500);
-
+    --color-accent-600: var(--accent-600);
+    --color-accent-700: var(--accent-700);
+    --color-accent-800: var(--accent-800);  
+    --color-accent-900: var(--accent-900);
+    --color-accent-950: var(--accent-950);
+    
     --color-red-50: var(--red-50);
     --color-red-100: var(--red-100);
     --color-red-200: var(--red-200);

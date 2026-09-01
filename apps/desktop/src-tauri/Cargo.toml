@@ -82,7 +82,9 @@ bytemuck = "1.23.1"
 thiserror = "1.0"
 sysinfo = "0.35"
 keyed_priority_queue = "0.4.2"
-tracing-subscriber = "0.3.19"
+# `env-filter` is required by main.rs; it currently arrives via feature
+# unification from quiro-editor, which would be a silent break if that changed.
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 relative-path = "1.9.3"
 tokio-tungstenite = "0.24"
 
@@ -102,6 +104,7 @@ windows = { workspace = true, features = [
     "Win32_System_WinRT",
     "Win32_UI_WindowsAndMessaging",
     "Win32_Graphics_Gdi",
+    "Win32_Media",
     "Graphics_Capture",
     "Globalization",
     "Graphics_Imaging",
@@ -118,6 +121,8 @@ quiro-camera = { path = "../../../packages/crates/camera", features = ["serde", 
 quiro-camera-effects = { path = "../../../packages/crates/camera-effects" }
 quiro-utils = { path = "../../../packages/crates/utils" }
 quiro-project = { path = "../../../packages/crates/project" }
+quiro-export = { path = "../../../packages/crates/export" }
+quiro-editor = { path = "../../../packages/crates/editor" }
 quiro-rendering = { path = "../../../packages/crates/rendering" }
 quiro-media = { path = "../../../packages/crates/media" }
 quiro-flags = { path = "../../../packages/crates/flags" }

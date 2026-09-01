@@ -384,9 +384,9 @@ pub async fn stop_recording(
 }
 
 /// `RecordingMeta::output_path()` always points at `output/result.mp4` —
-/// nothing in the capture pipeline writes there directly yet (that's Cap's
-/// export step, which needs the editor this app doesn't have), so a
-/// non-fragmented recording's one segment is moved into place here instead.
+/// nothing in the capture pipeline writes there directly yet (that's the
+/// export step, which the editor doesn't have yet), so a non-fragmented
+/// recording's one segment is copied into place here instead.
 fn finalize_recording_output(
     project_dir: &PathBuf,
     meta: &StudioRecordingMeta,
@@ -410,11 +410,10 @@ fn finalize_recording_output(
     std::fs::create_dir_all(&output_dir).map_err(|e| e.to_string())?;
     let output_path = output_dir.join("result.mp4");
 
-    std::fs::rename(&segment_path, &output_path)
-        // Cross-device rename (unlikely here — both paths share the project
-        // dir — but recordings are large, so fall back to copy+remove rather
-        // than assuming rename always works) falls back to copy.
-        .or_else(|_| std::fs::copy(&segment_path, &output_path).map(|_| ()))
+    // Copied, not moved: the editor loads its display track from the segment
+    // path recorded in `recording-meta.json`, so moving the file out of
+    // `content/segments/` leaves every recording un-editable.
+    std::fs::copy(&segment_path, &output_path)
         .map_err(|e| format!("Failed to finalize recording output: {e}"))?;
 
     Ok(output_path)

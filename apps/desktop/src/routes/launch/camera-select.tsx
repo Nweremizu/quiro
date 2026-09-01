@@ -12,7 +12,7 @@ import {
 } from "@/utils/tauri";
 import IconHeroiconsCog6Tooth from "~icons/heroicons/cog-6-tooth";
 import IconLucideEyeOff from "~icons/lucide/eye-off";
-import IconVideoCamera from "~icons/ph/video-camera";
+import IconCamera from "~icons/quiro/camera";
 import useRequestPermission from "./permission-request";
 import {
 	DEVICE_ROW_CLASS,
@@ -127,7 +127,7 @@ export default function CameraSelect({
 				className={cn(DEVICE_ROW_CLASS, "KSelect")}
 				aria-haspopup="menu"
 			>
-				<IconVideoCamera className={DEVICE_ROW_ICON_CLASS} />
+				<IconCamera className={DEVICE_ROW_ICON_CLASS} />
 				<p className={DEVICE_ROW_LABEL_CLASS}>{label()}</p>
 				<div className={DEVICE_ROW_TRAILING_CLASS}>
 					<Show when={showHiddenIndicator()}>

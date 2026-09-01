@@ -28,7 +28,7 @@ const QUIRO_MODE_BUTTONS: QuiroModeButtonConfig[] = [
 		description: "High-quality recording with advanced features.",
 		icon: IconFlimSlate,
 		settingsSection: "studio-quality",
-		iconClassName: "size-[0.9rem] invert dark:invert-0",
+		iconClassName: "size-[0.9rem] invert ",
 	},
 	{
 		mode: "screenshot",
@@ -36,7 +36,7 @@ const QUIRO_MODE_BUTTONS: QuiroModeButtonConfig[] = [
 		description: "Capture high-resolution screenshots.",
 		icon: IconStreamlineFlexScreenshot,
 		settingsSection: null,
-		iconClassName: "size-[0.9rem] invert dark:invert-0",
+		iconClassName: "size-[0.9rem] invert",
 	},
 ];
 
@@ -53,14 +53,14 @@ export function QuiroMode({ onInfoClick }: QuiroModeProps) {
 
 	return (
 		<div className="flex relative gap-2 items-center p-1.5 rounded-full border border-gray-5 bg-gray-3 w-fit">
-			<button
+			{/* <button
 				type="button"
 				onClick={handleInfoClick}
 				className="absolute -left-1.5 -top-2 p-1 rounded-full w-fit bg-gray-5 group focus:outline-none"
 				aria-label="Recording mode info"
 			>
 				<IconLucideInfo className="invert transition-opacity duration-200 size-2.5 dark:invert-0 group-hover:opacity-50" />
-			</button>
+			</button> */}
 			{QUIRO_MODE_BUTTONS.map((buttonConfig) => {
 				const isSelected = rawOptions.mode === buttonConfig.mode;
 				const Icon = buttonConfig.icon;

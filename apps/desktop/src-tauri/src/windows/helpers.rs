@@ -115,6 +115,19 @@ pub(crate) fn is_screenshot_editor_label(label: &str) -> bool {
     label.starts_with("screenshot-editor-")
 }
 
+/// Same path-hash scheme as [`screenshot_editor_label_for_path`], for the
+/// video editor's one-window-per-recording-project labels.
+pub(crate) fn editor_label_for_path(path: &std::path::Path) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    path.hash(&mut hasher);
+    format!("editor-{:x}", hasher.finish())
+}
+
+pub(crate) fn is_editor_label(label: &str) -> bool {
+    label.starts_with("editor-")
+}
+
 pub(crate) fn camera_window_rank(label: &str) -> u64 {
     if label == "camera" {
         return 0;
@@ -466,4 +479,62 @@ pub(crate) async fn cleanup_camera_window(
     app.state::<CameraWindowCloseGate>().set_allow_close(false);
 
     !still_exists
+}
+
+/// An editor is a full-screen workspace, not a companion to the launcher, so
+/// the main window steps aside while one is open and comes back when the last
+/// one closes. Hidden rather than closed: the same window is reused, keeping
+/// its React state and avoiding a rebuild on every editor round trip.
+pub(crate) fn hide_main_window_for_editor(app: &AppHandle) {
+    if let Some(main) = WindowId::Main.get(app) {
+        let _ = main.hide();
+    }
+}
+
+/// Counterpart to [`hide_main_window_for_editor`], called when an editor
+/// window is destroyed. `closing_label` is excluded because a window is still
+/// listed in `webview_windows()` while its own Destroyed event runs.
+pub(crate) fn restore_main_window_after_editor(app: &AppHandle, closing_label: &str) {
+    let another_editor_open = app.webview_windows().keys().any(|label| {
+        label != closing_label
+            && matches!(
+                WindowId::from_str(label),
+                Ok(WindowId::Editor | WindowId::ScreenshotEditor)
+            )
+    });
+
+    if another_editor_open {
+        return;
+    }
+
+    // A recording hides the main window on purpose (recording.rs) — closing an
+    // editor mid-recording must not pop it back over the capture.
+    let recording = app
+        .try_state::<ArcLock<App>>()
+        .and_then(|state| {
+            state
+                .try_read()
+                .ok()
+                .map(|s| s.is_recording_active_or_pending())
+        })
+        .unwrap_or(false);
+
+    if recording {
+        return;
+    }
+
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Err(err) = (ShowQuiroWindow::Main {
+            init_target_mode: None,
+        })
+        .show(&app)
+        .await
+        {
+            error!(
+                ?err,
+                "Failed to restore main window after closing an editor"
+            );
+        }
+    });
 }

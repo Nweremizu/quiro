@@ -63,7 +63,7 @@ pub(crate) async fn show_screenshot_editor(
         .window_builder_with_label(
             app,
             format!("/screenshot-editor?path={encoded_path}"),
-            label,
+            label.clone(),
         )
         .maximized(false)
         .resizable(true)
@@ -75,6 +75,24 @@ pub(crate) async fn show_screenshot_editor(
         .build()?;
 
     lock_window_text_scale(&window);
+
+    // Brings the main window back, and releases the instance's renderer and
+    // frame websocket — nothing was disposing them when the window closed.
+    let app_handle = app.clone();
+    let closed_window = window.clone();
+    window.on_window_event(move |event| {
+        if matches!(event, tauri::WindowEvent::Destroyed) {
+            restore_main_window_after_editor(&app_handle, &label);
+
+            let closed_window = closed_window.clone();
+            tauri::async_runtime::spawn(async move {
+                crate::screenshot_editor::ScreenshotEditorInstances::remove(
+                    closed_window.as_ref().window(),
+                )
+                .await;
+            });
+        }
+    });
 
     Ok(window)
 }

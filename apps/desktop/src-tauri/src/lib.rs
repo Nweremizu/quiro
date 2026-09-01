@@ -2,10 +2,13 @@ mod audio_meter;
 mod camera;
 mod camera_commands;
 mod camera_legacy;
+mod clip_thumbnails;
 mod capture;
 mod capture_targets;
 mod crash_sentinel;
 mod devices;
+mod editor;
+mod export;
 mod exit_shutdown;
 mod fake_window;
 pub mod frame_ws;
@@ -13,12 +16,14 @@ mod general_settings;
 mod gpu_context;
 mod library;
 mod permissions;
+mod presets;
 mod platform;
 mod power_observer;
 mod recording;
 mod recording_settings;
 mod screenshot_editor;
 mod target_select_overlay;
+mod three_spike;
 mod tray;
 mod window_exclusion;
 mod windows;
@@ -1024,6 +1029,31 @@ fn specta_bindings() -> tauri_specta::Builder {
             recording::discard_recording,
             recording::restart_recording,
             recording::set_recording_mic_muted,
+            editor::create_editor_instance,
+            editor::start_playback,
+            editor::stop_playback,
+            editor::set_playhead_position,
+            editor::start_frame_stream,
+            editor::set_project_config,
+            editor::update_project_config_in_memory,
+            editor::get_editor_meta,
+            editor::get_mic_waveforms,
+            editor::get_system_audio_waveforms,
+            editor::get_display_frame_for_cropping,
+            clip_thumbnails::get_clip_thumbnail,
+            editor::get_editor_project_path,
+            editor::set_pretty_name,
+            editor::generate_zoom_segments_from_clicks,
+            editor::generate_keyboard_segments,
+            editor::delete_editor_project,
+            export::export_video,
+            export::export_video_to_file,
+            export::cancel_export,
+            export::get_export_estimates,
+            export::generate_export_preview,
+            three_spike::spike_begin_capture,
+            three_spike::spike_write_chunk,
+            three_spike::spike_finish_capture,
             screenshot_editor::create_screenshot_editor_instance,
             screenshot_editor::update_screenshot_config,
             screenshot_editor::prewarm_screenshot_background,
@@ -1079,6 +1109,9 @@ fn specta_bindings() -> tauri_specta::Builder {
             target_select_overlay::TargetUnderCursor,
             audio_meter::AudioInputLevelChange,
             devices::DevicesUpdated,
+            editor::RenderFrameEvent,
+            editor::EditorStateChanged,
+            editor::FrameLayoutEvent,
         ])
         // No collected command's signature happens to reference these types
         // directly, so they need an explicit export or the frontend loses
@@ -1088,6 +1121,7 @@ fn specta_bindings() -> tauri_specta::Builder {
         // recording_settings.rs for the Rust side of that same data.
         .typ::<ScreenCaptureTarget>()
         .typ::<general_settings::GeneralSettingsStore>()
+        .typ::<presets::PresetsStore>()
         .typ::<recording_settings::RecordingSettingsStore>()
 }
 
@@ -1253,6 +1287,8 @@ pub fn run() {
                 app.manage(CameraWindowCloseGate::default());
                 app.manage(gpu_context::PendingScreenshots::default());
                 app.manage(screenshot_editor::ScreenshotEditorPaths::default());
+                app.manage(editor::EditorPaths::default());
+                app.manage(three_spike::SpikeSink::default());
                 app.manage(CameraWindowPositionGuard::default());
                 app.manage(CameraWindowOperationLock::default());
                 app.manage(AppExitState::default());

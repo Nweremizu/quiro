@@ -87,6 +87,229 @@ async setRecordingMicMuted(muted: boolean) : Promise<Result<boolean, string>> {
     else return { status: "error", error: e  as any };
 }
 },
+async createEditorInstance() : Promise<Result<SerializedEditorInstance, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("create_editor_instance") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async startPlayback(fps: number, resolutionBase: XY<number>) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("start_playback", { fps, resolutionBase }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async stopPlayback() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("stop_playback") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async setPlayheadPosition(frameNumber: number) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_playhead_position", { frameNumber }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Renders every frame of the project in order into a socket the frontend
+ * composites from.
+ * 
+ * This is the counterpart to `RenderFrameEvent`, which is a *scrub* API built
+ * on a watch channel: last value wins, so asking for frames back-to-back
+ * coalesces and a frontend compositor ends up serialised — request, wait,
+ * composite, request. Here the renderer runs ahead into a small bounded queue
+ * so compositing frame N overlaps rendering N+1, and backpressure runs the
+ * whole way back from the socket, so a slow consumer paces the renderer
+ * instead of building a backlog.
+ * 
+ * There is no stop command: closing the socket fails the renderer's `send`,
+ * which ends the render.
+ */
+async startFrameStream(fps: number, resolutionBase: XY<number>, nv12: boolean, maxFrames: number | null) : Promise<Result<string, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("start_frame_stream", { fps, resolutionBase, nv12, maxFrames }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async setProjectConfig(config: ProjectConfiguration) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_project_config", { config }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async updateProjectConfigInMemory(config: ProjectConfiguration, frameNumber: number | null, fps: number | null, resolutionBase: XY<number> | null) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("update_project_config_in_memory", { config, frameNumber, fps, resolutionBase }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getEditorMeta() : Promise<Result<RecordingMeta, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_editor_meta") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getMicWaveforms() : Promise<Result<number[][], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_mic_waveforms") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getSystemAudioWaveforms() : Promise<Result<number[][], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_system_audio_waveforms") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * A JPEG of the display track at the playhead, for the crop dialog to draw
+ * on. Downscaled: the cropper maps interactions back to full display
+ * dimensions, so the reference only has to be sharp enough to aim with.
+ */
+async getDisplayFrameForCropping(fps: number) : Promise<Result<number[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_display_frame_for_cropping", { fps }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getClipThumbnail(recordingSegment: number, time: number) : Promise<Result<string, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_clip_thumbnail", { recordingSegment, time }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getEditorProjectPath() : Promise<Result<string, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_editor_project_path") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async setPrettyName(prettyName: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_pretty_name", { prettyName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async generateZoomSegmentsFromClicks() : Promise<Result<ZoomSegment[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("generate_zoom_segments_from_clicks") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async generateKeyboardSegments(groupingThresholdMs: number, lingerDurationMs: number, showModifiers: boolean, showSpecialKeys: boolean) : Promise<Result<KeyboardTrackSegment[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("generate_keyboard_segments", { groupingThresholdMs, lingerDurationMs, showModifiers, showSpecialKeys }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Deletes the whole project directory and closes its editor window.
+ */
+async deleteEditorProject() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_editor_project") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async exportVideo(projectPath: string, progress: TAURI_CHANNEL<FramesRendered>, settings: ExportSettings, exportId: string) : Promise<Result<string, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("export_video", { projectPath, progress, settings, exportId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async exportVideoToFile(projectPath: string, progress: TAURI_CHANNEL<FramesRendered>, settings: ExportSettings, exportId: string, fileName: string, fileType: string) : Promise<Result<string, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("export_video_to_file", { projectPath, progress, settings, exportId, fileName, fileType }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cancelExport(exportId: string) : Promise<boolean> {
+    return await TAURI_INVOKE("cancel_export", { exportId });
+},
+async getExportEstimates(path: string, settings: ExportSettings) : Promise<Result<ExportEstimates, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_export_estimates", { path, settings }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * One frame rendered at the chosen export settings, as a base64 JPEG — what
+ * the export dialog shows so quality choices can be judged before committing
+ * to a full render.
+ */
+async generateExportPreview(frameTime: number, settings: ExportPreviewSettings) : Promise<Result<ExportPreviewResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("generate_export_preview", { frameTime, settings }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async spikeBeginCapture(name: string) : Promise<Result<string, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("spike_begin_capture", { name }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async spikeWriteChunk(chunk: number[]) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("spike_write_chunk", { chunk }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async spikeFinishCapture() : Promise<Result<SpikeResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("spike_finish_capture") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async createScreenshotEditorInstance() : Promise<Result<SerializedScreenshotEditorInstance, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("create_screenshot_editor_instance") };
@@ -360,10 +583,13 @@ export const events = __makeEvents__<{
 audioInputLevelChange: AudioInputLevelChange,
 currentRecordingChanged: CurrentRecordingChanged,
 devicesUpdated: DevicesUpdated,
+editorStateChanged: EditorStateChanged,
+frameLayoutEvent: FrameLayoutEvent,
 newNotification: NewNotification,
 newScreenshotAdded: NewScreenshotAdded,
 onEscapePress: OnEscapePress,
 recordingEvent: RecordingEvent,
+renderFrameEvent: RenderFrameEvent,
 requestScreenCapturePrewarm: RequestScreenCapturePrewarm,
 requestSetTargetMode: RequestSetTargetMode,
 targetUnderCursor: TargetUnderCursor
@@ -371,10 +597,13 @@ targetUnderCursor: TargetUnderCursor
 audioInputLevelChange: "audio-input-level-change",
 currentRecordingChanged: "current-recording-changed",
 devicesUpdated: "devices-updated",
+editorStateChanged: "editor-state-changed",
+frameLayoutEvent: "frame-layout-event",
 newNotification: "new-notification",
 newScreenshotAdded: "new-screenshot-added",
 onEscapePress: "on-escape-press",
 recordingEvent: "recording-event",
+renderFrameEvent: "render-frame-event",
 requestScreenCapturePrewarm: "request-screen-capture-prewarm",
 requestSetTargetMode: "request-set-target-mode",
 targetUnderCursor: "target-under-cursor"
@@ -386,12 +615,44 @@ targetUnderCursor: "target-under-cursor"
 
 /** user-defined types **/
 
-export type Annotation = { id: string; type: AnnotationType; x: number; y: number; width: number; height: number; strokeColor: string; strokeWidth: number; fillColor: string; opacity: number; rotation: number; text: string | null; maskType?: MaskType | null; maskLevel?: number | null; focus?: FocusConfig | null }
+export type Annotation = { id: string; type: AnnotationType; x: number; y: number; width: number; height: number; strokeColor: string; strokeWidth: number; fillColor: string; opacity: number; rotation: number; text: string | null; maskType?: MaskType | null; maskLevel?: number | null; focus?: FocusConfig | null; arrowCurve?: ArrowCurve | null; arrowBend?: number | null; arrowStartHead?: ArrowHead | null; arrowEndHead?: ArrowHead | null; arrowHeadSize?: number | null; lineStyle?: LineStyle | null; arrowTaper?: boolean | null }
 export type AnnotationType = "arrow" | "circle" | "rectangle" | "text" | "mask" | "focus"
 export type AppTheme = "system" | "light" | "dark"
+/**
+ * Arrow-only shape/style. All optional on `Annotation`: absent reproduces the
+ * original straight arrow with a single solid head. Geometry lives in the
+ * frontend's `arrow.ts`; the renderer never draws annotations.
+ */
+export type ArrowCurve = "straight" | "quadratic" | "cubic" | "elbow"
+export type ArrowHead = "none" | "arrow" | "triangle" | "circle" | "square"
 export type AspectRatio = "wide" | "vertical" | "square" | "classic" | "tall"
+export type Audio = { duration: number; sample_rate: number; channels: number; start_time: number }
 export type AudioConfiguration = { mute: boolean; improve: boolean; micVolumeDb: number; micStereoMode: StereoMode; systemVolumeDb: number }
+/**
+ * Overlap-trim accounting captured by the recorder's audio gap tracker, persisted so the
+ * editor can compensate for stale-startup audio drift from typed data instead of scraping
+ * the recording log. See `cap-editor`'s `audio_timing_repair_offset`.
+ */
+export type AudioGapSummary = { 
+/**
+ * Total audio trimmed from overlapping frames over the whole recording, in milliseconds.
+ */
+total_overlap_trimmed_ms: number; 
+/**
+ * Startup-window trim used for stale-startup repair, excluding mid-recording trims.
+ */
+startup_overlap_trimmed_ms?: number; 
+/**
+ * Number of whole audio frames dropped because they fully overlapped the committed timeline.
+ */
+overlap_dropped_frames: number; 
+/**
+ * Subset of `overlap_dropped_frames` that dropped within the first few frames — the
+ * signature of a stale buffered burst at capture start.
+ */
+startup_overlap_drops: number }
 export type AudioInputLevelChange = number
+export type AudioMeta = { path: string; start_time?: number | null; device_id?: string | null; gap_summary?: AudioGapSummary | null }
 /**
  * A timeline-positioned audio clip (background music or imported audio).
  * 
@@ -494,12 +755,20 @@ export type Crop = { position: XY<number>; size: XY<number> }
 export type CurrentRecordingChanged = null
 export type CursorAnimationStyle = "slow" | "smooth" | "mellow" | "fast" | "custom"
 export type CursorConfiguration = { hide: boolean; hideWhenIdle: boolean; hideWhenIdleDelay: number; size: number; type: CursorType; animationStyle: CursorAnimationStyle; tension: number; mass: number; friction: number; raw: boolean; motionBlur: number; useSvg: boolean; rotationAmount?: number; baseRotation?: number; clickSpring?: ClickSpringConfig | null; stopMovementInLastSeconds?: number | null }
+export type CursorMeta = { imagePath: string; hotspot: XY<number>; shape?: string | null }
 export type CursorType = "auto" | "pointer" | "circle"
+export type Cursors = { [key in string]: string } | { [key in string]: CursorMeta }
 export type DeviceOrModelID = { DeviceID: string } | { ModelID: ModelIDType }
 export type DevicesUpdated = { cameras: CameraInfo[]; microphones: string[]; permissions: OSPermissionsCheck }
 export type DisplayId = string
 export type DisplayInformation = { name: string | null; physical_size: PhysicalSize | null; logical_size: LogicalSize | null; logical_bounds: LogicalBounds | null; refresh_rate: string }
 export type EditorPreviewQuality = "quarter" | "half" | "full"
+export type EditorStateChanged = { playhead_position: number }
+export type ExportCompression = "Maximum" | "Social" | "Web" | "Potato"
+export type ExportEstimates = { duration_seconds: number; estimated_time_seconds: number; estimated_size_mb: number }
+export type ExportPreviewResult = { jpeg_base64: string; estimated_size_mb: number; actual_width: number; actual_height: number; total_frames: number }
+export type ExportPreviewSettings = { fps: number; resolution_base: XY<number>; compression_bpp: number; cursor_only?: boolean }
+export type ExportSettings = ({ format: "Mp4" } & Mp4ExportSettings) | ({ format: "Gif" } & GifExportSettings) | ({ format: "Mov" } & MovExportSettings)
 export type FocusConfig = { x: number; y: number; radiusX: number; radiusY: number; 
 /**
  * Degrees, clockwise. Lets the plane of focus follow a diagonal subject.
@@ -539,6 +808,12 @@ url: string;
  */
 title: string }
 /**
+ * Rendered display/camera placement of the latest preview frame, in
+ * output-frame pixels — lets on-canvas overlays line up with what was
+ * actually rendered.
+ */
+export type FrameLayoutEvent = { display: [number, number, number, number]; camera: [number, number, number, number] | null; output_width: number; output_height: number }
+/**
  * Decorative frame drawn around the screen recording (browser window,
  * macOS window, MacBook bezel, ...). The video is inset inside the frame's
  * chrome; the framed card as a whole follows padding / position / zoom
@@ -566,6 +841,7 @@ export type FrameStyle =
  */
 "macbook"
 export type FrameTheme = "dark" | "light"
+export type FramesRendered = { rendered_count: number; total_frames: number }
 export type GeneralSettingsStore = { instanceId?: string; hideDockIcon?: boolean; enableNotifications?: boolean; disableAutoOpenLinks?: boolean; hasCompletedStartup?: boolean; theme?: AppTheme; lastVersion?: string | null; windowTransparency?: boolean; postStudioRecordingBehaviour?: PostStudioRecordingBehaviour; mainWindowRecordingStartBehaviour?: MainWindowRecordingStartBehaviour; custom_cursor_capture2?: boolean; recordingCountdown?: number | null; enableNativeCameraPreview: boolean; autoZoomOnClicks?: boolean; captureKeyboardEvents?: boolean; postDeletionBehaviour?: PostDeletionBehaviour; excludedWindows?: WindowExclusion[]; instantModeMaxResolution?: number; defaultProjectNameTemplate?: string | null; crashRecoveryRecording?: boolean; maxFps?: number; transcriptionHints?: string[]; editorPreviewQuality?: EditorPreviewQuality; studioRecordingQuality?: StudioRecordingQuality; mainWindowPosition?: WindowPosition | null; cameraWindowPosition?: WindowPosition | null; cameraWindowPositionsByMonitorName?: { [key in string]: WindowPosition }; hasCompletedOnboarding?: boolean; outOfProcessMuxer?: boolean; recordingsPath?: string | null; 
 /**
  * Custom recordings folders that were used before; recordings left in
@@ -579,14 +855,26 @@ previousRecordingsPaths?: string[];
  * update, since a new ort/wgpu/driver stack may have fixed the crash).
  */
 cameraBlurDisabledByCrash?: string | null }
+export type GifExportSettings = { fps: number; resolution_base: XY<number>; quality: GifQuality | null }
+export type GifQuality = { 
+/**
+ * Encoding quality from 1-100 (default: 90)
+ */
+quality: number | null; 
+/**
+ * Whether to prioritize speed over quality (default: false)
+ */
+fast: boolean | null }
 export type GlideDirection = "none" | "left" | "right" | "up" | "down"
 export type HapticPattern = "alignment" | "levelChange" | "generic"
 export type HapticPerformanceTime = "default" | "now" | "drawCompleted"
 export type HotkeysConfiguration = { show: boolean }
+export type InstantRecordingMeta = { recording: boolean } | { error: string } | { fps: number; sample_rate: number | null }
 export type KeyPressDisplay = { key: string; timeOffset: number }
 export type KeyboardData = { settings: KeyboardSettings }
 export type KeyboardSettings = { enabled: boolean; font: string; size: number; color: string; backgroundColor: string; backgroundOpacity: number; position: string; fontWeight: number; fadeDuration: number; lingerDuration: number; groupingThresholdMs: number; showModifiers: boolean; showSpecialKeys: boolean; uppercase: boolean }
 export type KeyboardTrackSegment = { id: string; start: number; end: number; displayText: string; keys?: KeyPressDisplay[]; fadeDurationOverride?: number | null; positionOverride?: string | null; colorOverride?: string | null; backgroundColorOverride?: string | null; fontSizeOverride?: number | null; uppercaseOverride?: boolean | null }
+export type LineStyle = "solid" | "dashed" | "dotted"
 export type LogicalBounds = { position: LogicalPosition; size: LogicalSize }
 export type LogicalPosition = { x: number; y: number }
 export type LogicalSize = { width: number; height: number }
@@ -601,6 +889,10 @@ export type MicrophoneDeviceSettings = { sampleRate: number | null; channels: nu
 export type MicrophoneFormatInfo = { sampleRate: number; channels: number }
 export type MicrophoneInfo = { name: string; sampleRate: number; channels: number; formats: MicrophoneFormatInfo[] }
 export type ModelIDType = string
+export type MovExportSettings = { fps: number; resolution_base: XY<number>; cursor_only?: boolean }
+export type Mp4ExportSettings = { fps: number; resolution_base: XY<number>; compression: ExportCompression; custom_bpp: number | null; force_ffmpeg_decoder?: boolean; optimize_filesize?: boolean }
+export type MultipleSegment = { display: VideoMeta; camera?: VideoMeta | null; mic?: AudioMeta | null; system_audio?: AudioMeta | null; cursor?: string | null; keyboard?: string | null }
+export type MultipleSegments = { segments: MultipleSegment[]; cursors: Cursors; status?: StudioRecordingStatus | null }
 export type NewNotification = { title: string; body: string; is_error: boolean }
 /**
  * Emitted once a screenshot is fully written to disk, so an open library
@@ -642,8 +934,11 @@ rotate: number;
  */
 depth: number }
 export type PhysicalSize = { width: number; height: number }
+export type Platform = "MacOS" | "Windows" | "Linux"
 export type PostDeletionBehaviour = "doNothing" | "reopenRecordingWindow"
 export type PostStudioRecordingBehaviour = "openEditor" | "showOverlay"
+export type Preset = { name: string; config: ProjectConfiguration }
+export type PresetsStore = { presets: Preset[]; default: number | null }
 export type ProjectConfiguration = { aspectRatio: AspectRatio | null; background: BackgroundConfiguration; camera: Camera; audio: AudioConfiguration; cursor: CursorConfiguration; hotkeys: HotkeysConfiguration; timeline: TimelineConfiguration | null; captions: CaptionsData | null; keyboard: KeyboardData | null; clips: ClipConfiguration[]; annotations: Annotation[]; screenMotionBlur?: number; screenMovementSpring?: ScreenMovementSpring; 
 /**
  * How text segment font sizes are interpreted. 0 (legacy): the renderer
@@ -654,6 +949,7 @@ export type ProjectConfiguration = { aspectRatio: AspectRatio | null; background
  * `Default::default()` produces the current version.
  */
 textSizeVersion?: number }
+export type ProjectRecordingsMeta = { segments: SegmentRecordings[] }
 export type RecordingEvent = { variant: "Countdown"; value: number } | { variant: "Started" } | { variant: "Stopped" } | { variant: "Paused" } | { variant: "Resumed" } | { variant: "Failed"; error: string } | { variant: "StartFailed"; error: string } | { variant: "InputLost"; input: RecordingInputKind } | { variant: "InputRestored"; input: RecordingInputKind }
 /**
  * Which of the optional recording inputs a lifecycle event refers to. The
@@ -661,12 +957,19 @@ export type RecordingEvent = { variant: "Countdown"; value: number } | { variant
  * disappear mid-recording.
  */
 export type RecordingInputKind = "microphone" | "camera"
+export type RecordingMeta = (StudioRecordingMeta | InstantRecordingMeta) & { platform?: Platform | null; pretty_name: string; sharing?: SharingMeta | null; upload?: UploadMeta | null }
 export type RecordingMetaWithMetadata = { prettyName: string; sortTimeMillis: number }
 export type RecordingMode = "studio" | "instant" | "screenshot"
 export type RecordingSettingsStore = { target: ScreenCaptureTarget | null; micName: string | null; cameraId: DeviceOrModelID | null; mode: RecordingMode | null; systemAudio: boolean; cameraDeviceSettings: { [key in string]: CameraDeviceSettings }; microphoneDeviceSettings: { [key in string]: MicrophoneDeviceSettings } }
 export type RecordingTargetMode = "display" | "window" | "area" | "camera"
+/**
+ * Frontend -> backend: which frame the preview should show while paused.
+ * An event rather than a command because it fires on every scrub tick.
+ */
+export type RenderFrameEvent = { frame_number: number; fps: number; resolution_base: XY<number> }
 export type RequestScreenCapturePrewarm = { force?: boolean }
 export type RequestSetTargetMode = { target_mode: RecordingTargetMode | null; display_id: string | null }
+export type S3UploadMeta = { id: string }
 export type SceneMode = "default" | "cameraOnly" | "hideCamera" | "splitScreen" | 
 /**
  * Like [`SceneMode::SplitScreen`], but the screen and camera render as
@@ -682,8 +985,11 @@ export type ScreenshotOcrLine = { text: string; confidence: number | null; bound
 export type ScreenshotOcrRegion = { x: number; y: number; width: number; height: number }
 export type ScreenshotOcrResult = { text: string; lines: ScreenshotOcrLine[]; engine: string }
 export type ScreenshotProjectExport = { imageBytes: number[]; config: ProjectConfiguration; imageWidth: number; imageHeight: number }
+export type SegmentRecordings = { display: Video; camera: Video | null; mic: Audio | null; system_audio: Audio | null }
+export type SerializedEditorInstance = { framesSocketUrl: string; recordingDuration: number; savedProjectConfig: ProjectConfiguration; recordings: ProjectRecordingsMeta; path: string; prettyName: string }
 export type SerializedScreenshotEditorInstance = { framesSocketUrl: string; path: string; config: ProjectConfiguration | null; prettyName: string; imageWidth: number; imageHeight: number }
 export type ShadowConfiguration = { size: number; opacity: number; blur: number }
+export type SharingMeta = { id: string; link: string; content_hash?: string | null }
 export type ShowQuiroWindow = { Main: { init_target_mode: RecordingTargetMode | null } } | { Settings: { page: string | null } } | "RecordingsOverlay" | { WindowCaptureOccluder: { screen_id: DisplayId; 
 /**
  * Display-relative bounds of the window/area being recorded — the
@@ -692,14 +998,27 @@ export type ShowQuiroWindow = { Main: { init_target_mode: RecordingTargetMode | 
  * since a target whose bounds couldn't be resolved is the one case
  * where covering the entire screen would be actively misleading.
  */
-target_bounds: LogicalBounds | null } } | { TargetSelectOverlay: { display_id: DisplayId; target_mode: RecordingTargetMode | null } } | { CaptureArea: { screen_id: DisplayId } } | { Camera: { centered: boolean } } | { InProgressRecording: { countdown: number | null; capture_target?: ScreenCaptureTarget | null } } | "ModeSelect" | { ScreenshotEditor: { path: string } }
+target_bounds: LogicalBounds | null } } | { TargetSelectOverlay: { display_id: DisplayId; target_mode: RecordingTargetMode | null } } | { CaptureArea: { screen_id: DisplayId } } | { Camera: { centered: boolean } } | { InProgressRecording: { countdown: number | null; capture_target?: ScreenCaptureTarget | null } } | "ModeSelect" | { ScreenshotEditor: { path: string } } | { Editor: { path: string } }
+export type SingleSegment = { display: VideoMeta; camera?: VideoMeta | null; audio?: AudioMeta | null; cursor?: string | null }
+export type SpikeResult = { path: string; chunks: number; bytes: number; seconds: number; 
+/**
+ * Throughput of the JS -> Rust hop alone, which is the part of the
+ * pipeline this prototype can't measure from the webview side.
+ */
+megabytesPerSecond: number }
 export type SplitLayout = { screenZoom: number; screenPosition: XY<number>; cameraZoom: number; cameraPosition: XY<number> }
 export type StereoMode = "stereo" | "monoL" | "monoR"
+export type StudioRecordingMeta = { segment: SingleSegment } | { inner: MultipleSegments }
 export type StudioRecordingQuality = "compatibility" | "balanced" | "ultra"
+export type StudioRecordingStatus = { status: "InProgress" } | { status: "NeedsRemux" } | { status: "Failed"; error: string } | { status: "Complete" }
 export type TargetUnderCursor = { display_id: DisplayId | null; window: WindowUnderCursor | null }
 export type TextSegment = { start: number; end: number; track?: number; enabled?: boolean; content?: string; center?: XY<number>; size?: XY<number>; fontFamily?: string; fontSize?: number; fontWeight?: number; italic?: boolean; color?: string; fadeDuration?: number }
 export type TimelineConfiguration = { segments: TimelineSegment[]; transitions: ClipTransition[]; zoomSegments: ZoomSegment[]; sceneSegments?: SceneSegment[]; maskSegments?: MaskSegment[]; textSegments?: TextSegment[]; captionSegments?: CaptionTrackSegment[]; keyboardSegments?: KeyboardTrackSegment[]; audioSegments?: AudioTrackSegment[] }
 export type TimelineSegment = { recordingSegment?: number; timescale: number; start: number; end: number; name?: string | null; speedAudioMode?: ClipSpeedAudioMode | null }
+export type UploadMeta = { state: "MultipartUpload"; video_id: string; file_path: string; pre_created_video: VideoUploadInfo; recording_dir: string } | { state: "SinglePartUpload"; video_id: string; recording_dir: string; file_path: string; screenshot_path: string } | { state: "SegmentUpload"; video_id: string; pre_created_video: VideoUploadInfo; recording_dir: string } | { state: "Failed"; error: string } | { state: "Complete" }
+export type Video = { duration: number; width: number; height: number; fps: number; start_time: number }
+export type VideoMeta = { path: string; fps?: number; start_time?: number | null; device_id?: string | null }
+export type VideoUploadInfo = { id: string; link: string; config: S3UploadMeta }
 export type WindowExclusion = { bundleIdentifier?: string | null; ownerName?: string | null; windowTitle?: string | null }
 export type WindowId = string
 export type WindowPosition = { x: number; y: number; displayId?: DisplayId | null }
