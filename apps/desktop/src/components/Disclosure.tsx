@@ -31,7 +31,7 @@ export function Disclosure({
 				aria-expanded={open}
 				aria-controls={panelId}
 				onClick={() => onOpenChange(!open)}
-				className="flex items-center gap-1 rounded-md py-1 text-xs font-medium text-gray-11 outline-none transition-colors duration-100 hover:text-gray-12 focus-visible:ring-2 focus-visible:ring-accent-400/50 motion-reduce:transition-none"
+				className="flex items-center gap-1 rounded-md py-1 text-xs font-medium text-gray-11 outline-none transition-colors duration-100 hover:text-gray-12 focus-visible:ring-2 focus-visible:ring-accent-focus-ring/50 motion-reduce:transition-none"
 			>
 				<IconLucideChevronDown
 					className={cn(

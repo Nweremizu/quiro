@@ -129,7 +129,7 @@ export function CropDialog({
 										className="relative"
 									>
 										{aspect ? (
-											<span className="text-xs font-medium leading-none tracking-tight text-accent-400">
+											<span className="text-xs font-medium leading-none tracking-tight text-accent-text">
 												{aspect[0]}:{aspect[1]}
 											</span>
 										) : (

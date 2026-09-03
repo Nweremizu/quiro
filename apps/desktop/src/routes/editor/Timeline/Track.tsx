@@ -54,7 +54,9 @@ export function SegmentRoot({
 		<div
 			className={cn(
 				"absolute inset-y-0 overflow-visible rounded-xl border border-transparent",
-				selected && "ring-2 ring-accent-700",
+				// Neutral rather than the accent: clip is now the brand orange, so
+				// an accent-coloured ring would be invisible on the primary track.
+				selected && "track-segment-selected",
 				className,
 			)}
 			style={{ transform: `translateX(${left}px)`, width: `${width}px` }}

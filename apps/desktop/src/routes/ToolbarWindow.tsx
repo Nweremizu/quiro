@@ -277,7 +277,7 @@ export function ToolbarWindow() {
 					className={cn(
 						"pr-0.5 text-[13px] font-bold tabular-nums leading-none",
 						state === "recording" && "text-red-9",
-						paused && "text-accent-400",
+						paused && "text-accent-text",
 						(state === "countdown" || idle) && "text-gray-10",
 					)}
 				>
@@ -298,7 +298,7 @@ export function ToolbarWindow() {
 						<span className="size-2 rounded-[3px] bg-red-10" />
 					</div>
 					{issue && (
-						<span className="absolute -right-1 -top-1 flex size-3.5 items-center justify-center rounded-full bg-gray-1 text-accent-400 shadow-sm">
+						<span className="absolute -right-1 -top-1 flex size-3.5 items-center justify-center rounded-full bg-gray-1 text-accent-text shadow-sm">
 							<IconWarning className="size-2.5" />
 						</span>
 					)}

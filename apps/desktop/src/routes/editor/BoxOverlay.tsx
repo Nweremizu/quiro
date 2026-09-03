@@ -115,7 +115,7 @@ export function BoxOverlay({
 							left: `${handle.x * 100}%`,
 							top: `${handle.y * 100}%`,
 						}}
-						className="absolute -ml-1.5 -mt-1.5 size-3 rounded-full border border-gray-1 bg-accent-800"
+						className="absolute -ml-1.5 -mt-1.5 size-3 rounded-full border border-gray-1 bg-accent-border-selected"
 						onPointerDown={(event) =>
 							drag(event, (dx, dy) => {
 								// Dragging a corner moves that edge only, so the opposite

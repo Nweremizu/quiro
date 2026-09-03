@@ -491,6 +491,41 @@ pub(crate) fn hide_main_window_for_editor(app: &AppHandle) {
     }
 }
 
+/// Counterpart to opening Settings, which hides Main via `hide_recording_
+/// windows` in show_window.rs — brings Main back once Settings closes, unless
+/// a recording is intentionally keeping it hidden or the app is shutting down.
+pub(crate) fn restore_main_window_after_settings(app: &AppHandle) {
+    if crate::app_is_exiting(app) {
+        return;
+    }
+
+    let recording = app
+        .try_state::<ArcLock<App>>()
+        .and_then(|state| {
+            state
+                .try_read()
+                .ok()
+                .map(|s| s.is_recording_active_or_pending())
+        })
+        .unwrap_or(false);
+
+    if recording {
+        return;
+    }
+
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Err(err) = (ShowQuiroWindow::Main {
+            init_target_mode: None,
+        })
+        .show(&app)
+        .await
+        {
+            error!(?err, "Failed to restore main window after closing settings");
+        }
+    });
+}
+
 /// Counterpart to [`hide_main_window_for_editor`], called when an editor
 /// window is destroyed. `closing_label` is excluded because a window is still
 /// listed in `webview_windows()` while its own Destroyed event runs.

@@ -1,2 +1,15 @@
 /target
 node_modules
+.turbo
+apps/desktop/dist
+
+# Secrets / local config
+.env
+.env.*
+!.env.example
+*.key
+*.key.pub
+
+# Release scratch
+/manifest
+/artifacts

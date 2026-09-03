@@ -7,6 +7,7 @@ import IconLucideCircle from "~icons/lucide/circle";
 import IconLucideEyeOff from "~icons/lucide/eye-off";
 import IconLucideFocus from "~icons/lucide/focus";
 import IconLucideGripVertical from "~icons/lucide/grip-vertical";
+import IconLucideImage from "~icons/lucide/image";
 import IconLucideLayers from "~icons/lucide/layers";
 import IconLucideSquare from "~icons/lucide/square";
 import IconLucideTrash2 from "~icons/lucide/trash-2";
@@ -48,6 +49,8 @@ export function LayersPanel() {
 		setAnnotations,
 		selectedAnnotationId,
 		setSelectedAnnotationId,
+		captureSelected,
+		setCaptureSelected,
 		setLayersPanelOpen,
 		setActiveTool,
 	} = useScreenshotEditorContext();
@@ -154,13 +157,32 @@ export function LayersPanel() {
 					</p>
 				)}
 
+				{/* The capture is an object like any other and belongs in the list
+				    that says so — it is also the only place the panel can tell you
+				    it is selectable at all, now that there is no tool for it.
+				    Pinned to the bottom because it is behind everything else, and
+				    not draggable for the same reason: nothing goes under it. */}
+				<button
+					type="button"
+					onClick={() => setCaptureSelected(!captureSelected)}
+					className={cn(
+						"order-last flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors",
+						captureSelected
+							? "bg-blue-3 text-blue-11"
+							: "text-gray-11 hover:bg-gray-3 hover:text-gray-12",
+					)}
+				>
+					<IconLucideImage className="size-3.5 shrink-0" />
+					<span className="truncate">Screenshot</span>
+				</button>
+
 				{ordered.map((annotation, index) => {
 					const Icon = TYPE_ICONS[annotation.type];
 					const isSelected = selectedAnnotationId === annotation.id;
 					return (
 						<div key={annotation.id} data-layer-item>
 							{dropIndex === index && (
-								<div className="mx-1 h-0.5 rounded-full bg-accent-400" />
+								<div className="mx-1 h-0.5 rounded-full bg-accent-border-selected" />
 							)}
 							<div
 								className={cn(
@@ -206,7 +228,7 @@ export function LayersPanel() {
 										);
 										if (isSelected) setSelectedAnnotationId(null);
 									}}
-									className="flex size-6 shrink-0 items-center justify-center rounded text-gray-10 opacity-0 transition-opacity hover:bg-red-3 hover:text-red-9 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/50 group-hover:opacity-100"
+									className="flex size-6 shrink-0 items-center justify-center rounded text-gray-10 opacity-0 transition-opacity hover:bg-red-3 hover:text-red-9 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-focus-ring/50 group-hover:opacity-100"
 								>
 									<IconLucideTrash2 className="size-3.5" />
 								</button>
@@ -216,7 +238,7 @@ export function LayersPanel() {
 				})}
 
 				{dropIndex === ordered.length && ordered.length > 0 && (
-					<div className="mx-1 h-0.5 rounded-full bg-accent-400" />
+					<div className="mx-1 h-0.5 rounded-full bg-accent-border-selected" />
 				)}
 			</div>
 
@@ -252,7 +274,7 @@ export function LayersPanel() {
 								if (selectedAnnotationId === focusAnnotation.id)
 									setSelectedAnnotationId(null);
 							}}
-							className="flex size-6 shrink-0 items-center justify-center rounded text-gray-10 opacity-0 transition-opacity hover:bg-red-3 hover:text-red-9 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/50 group-hover:opacity-100"
+							className="flex size-6 shrink-0 items-center justify-center rounded text-gray-10 opacity-0 transition-opacity hover:bg-red-3 hover:text-red-9 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-focus-ring/50 group-hover:opacity-100"
 						>
 							<IconLucideTrash2 className="size-3.5" />
 						</button>

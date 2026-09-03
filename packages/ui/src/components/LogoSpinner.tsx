@@ -18,7 +18,7 @@ export function LogoSpinner({ className, children }: LogoSpinnerProps) {
 				className,
 			)}
 		>
-			<div className="absolute inset-0 animate-spin rounded-full border-2 border-accent-100 border-t-accent-300" />
+			<div className="absolute inset-0 animate-spin rounded-full border-2 border-accent-border border-t-accent-solid" />
 			{children}
 		</div>
 	);

@@ -1,34 +1,44 @@
 {
-  "name": "quiro",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "setup:onnxruntime": "node scripts/setup-onnxruntime.js"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "^11.2.2",
-      "onFail": "download"
-    }
-  },
-  "type": "module",
-  "dependencies": {
-    "@biomejs/biome": "^2.5.9",
-    "@clack/prompts": "^1.7.0",
-    "@effect/language-service": "^0.87.2",
-    "dotenv-cli": "^11.0.0",
-    "mysql2": "^3.23.4",
-    "tsdown": "^0.22.14",
-    "turbo": "^2.10.11",
-    "typescript": "~5.8.3"
-  },
-  "devDependencies": {
-    "unplugin-auto-import": "^21.1.0"
-  }
+	"name": "quiro",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Beautiful screen recordings, owned by you.",
+	"type": "module",
+	"packageManager": "pnpm@11.22.0",
+	"engines": {
+		"node": ">=20"
+	},
+	"scripts": {
+		"dev": "pnpm --filter desktop tauri dev",
+		"build": "turbo run build",
+		"build:web": "pnpm --filter desktop build",
+		"tauri:build": "node scripts/build-local.mjs",
+		"tauri:build:debug": "node scripts/build-local.mjs --debug",
+		"tauri:build:nightly": "node scripts/build-local.mjs -c src-tauri/tauri.nightly.conf.json",
+		"lint": "biome check .",
+		"lint:fix": "biome check --write .",
+		"format": "biome format --write .",
+		"typecheck": "turbo run typecheck",
+		"check": "node scripts/run-checks.mjs",
+		"test": "pnpm check",
+		"release": "node scripts/version.mjs",
+		"setup:signing": "node scripts/setup-signing.mjs",
+		"setup:release-url": "node scripts/set-release-url.mjs",
+		"setup:native": "node scripts/setup-onnxruntime.js && node scripts/setup-ffmpeg.mjs",
+		"setup:onnxruntime": "node scripts/setup-onnxruntime.js",
+		"setup:ffmpeg": "node scripts/setup-ffmpeg.mjs"
+	},
+	"dependencies": {
+		"@biomejs/biome": "^2.5.9",
+		"@clack/prompts": "^1.7.0",
+		"@effect/language-service": "^0.87.2",
+		"dotenv-cli": "^11.0.0",
+		"mysql2": "^3.23.4",
+		"tsdown": "^0.22.14",
+		"turbo": "^2.10.11",
+		"typescript": "~5.8.3"
+	},
+	"devDependencies": {
+		"unplugin-auto-import": "^21.1.0"
+	}
 }

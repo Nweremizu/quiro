@@ -20,7 +20,7 @@ export function MaskOverlay({ size }: { size: OverlaySize }) {
 					box={{ center: segment.center, size: segment.size }}
 					size={size}
 					tint={
-						segment.maskType === "highlight" ? "border-amber-9" : "border-red-9"
+						segment.mode === "spotlight" ? "border-amber-9" : "border-red-9"
 					}
 					selected={selection?.type === "mask" && selection.index === index}
 					onSelect={() => setSelection({ type: "mask", index })}

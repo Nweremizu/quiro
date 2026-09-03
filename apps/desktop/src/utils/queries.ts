@@ -23,6 +23,8 @@ import { useRecordingOptions } from "@/routes/launch/options-context";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 type CameraCaptureTarget = ScreenCaptureTarget | { variant: "cameraOnly" };
+
+const DEFAULT_CAPTURE_TARGET = { variant: "display", id: "0" } as const;
 type ExtendedRecordingTargetMode = RecordingTargetMode | "camera" | null;
 type RecordingTargetModeSource = "main" | "editor" | "editorRecording" | null;
 
@@ -51,21 +53,26 @@ export function createOptionsQuery() {
       const persisted = localStorage.getItem(PERSIST_KEY);
 
       if (persisted) {
-        return {
-          captureTarget: { variant: "display", id: "0" },
+        const merged = {
+          captureTarget: DEFAULT_CAPTURE_TARGET,
           micName: null,
           cameraLabel: null,
           mode: "studio",
           organizationId: null,
           ...JSON.parse(persisted),
         };
+        // A persisted `captureTarget: null` (written by an older build) makes
+        // every `rawOptions.captureTarget.variant` read throw.
+        if (merged.captureTarget == null)
+          merged.captureTarget = DEFAULT_CAPTURE_TARGET;
+        return merged;
       }
     } catch {
       // Ignore invalid persisted state
     }
 
     return {
-      captureTarget: { variant: "display", id: "0" },
+      captureTarget: DEFAULT_CAPTURE_TARGET,
       micName: null,
       cameraLabel: null,
       mode: "studio",
@@ -90,7 +97,7 @@ export function createOptionsQuery() {
       // @ts-ignore
       setState((current) => ({
         ...current,
-        ...(data.target !== undefined && {
+        ...(data.target != null && {
           captureTarget: data.target,
         }),
         ...(data.micName !== undefined && {
@@ -158,10 +165,12 @@ export function createOptionsQuery() {
       try {
         const nextState = JSON.parse(event.newValue);
 
-        setState((current) => ({
-          ...current,
-          ...nextState,
-        }));
+        setState((current) => {
+          const next = { ...current, ...nextState };
+          if (next.captureTarget == null)
+            next.captureTarget = current.captureTarget ?? DEFAULT_CAPTURE_TARGET;
+          return next;
+        });
       } catch {
         // Ignore invalid persisted state
       }
@@ -220,7 +229,12 @@ export function createOptionsQuery() {
   );
 
   return {
-    rawOptions: state,
+    // Final guard: no consumer should ever see a null capture target, whatever
+    // an old persisted value or another window pushed in.
+    rawOptions:
+      state.captureTarget == null
+        ? { ...state, captureTarget: DEFAULT_CAPTURE_TARGET }
+        : state,
     setOptions,
   };
 }

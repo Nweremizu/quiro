@@ -2,7 +2,8 @@ import { Select, Switch } from "@quiro/ui";
 import type {
 	CameraXPosition,
 	CameraYPosition,
-	MaskKind,
+	MaskMode,
+	MaskShape,
 	SceneMode,
 	ZoomSegment,
 } from "@/utils/tauri";
@@ -20,9 +21,32 @@ const SCENE_MODES: Array<{ label: string; value: SceneMode }> = [
 	{ label: "Split screen", value: "splitScreen" },
 ];
 
-const MASK_KINDS: Array<{ label: string; value: MaskKind }> = [
-	{ label: "Blur sensitive area", value: "sensitive" },
-	{ label: "Highlight", value: "highlight" },
+const MASK_MODES: Array<{ label: string; value: MaskMode }> = [
+	{ label: "Blur", value: "blur" },
+	{ label: "Pixelate", value: "pixelate" },
+	{ label: "Redact (irreversible)", value: "redact" },
+	{ label: "Spotlight", value: "spotlight" },
+];
+
+/** Blur and pixelate transform the pixels; the originals are still in there in
+ * principle. Say so, rather than letting someone cover a password with a blur
+ * and believe it is gone. */
+const REVERSIBLE_MODES: ReadonlySet<MaskMode> = new Set<MaskMode>([
+	"blur",
+	"pixelate",
+]);
+
+/** The effect amount is in the mask contract's units, not 0..1 — the slider
+ * that wrote 0..1 into this field made every value collapse to the minimum.
+ * Kept in step with `mask-effects.json`. */
+const MASK_AMOUNT_MIN = 4;
+const MASK_AMOUNT_MAX = 80;
+const MASK_AMOUNT_DEFAULT = 16;
+
+const MASK_SHAPES: Array<{ label: string; value: MaskShape }> = [
+	{ label: "Rectangle", value: "rect" },
+	{ label: "Ellipse", value: "ellipse" },
+	{ label: "Rounded", value: "roundedRect" },
 ];
 
 export function SegmentConfig() {
@@ -174,49 +198,83 @@ export function SegmentConfig() {
 		case "mask": {
 			const segment = timeline?.maskSegments?.[selection.index];
 			if (!segment) return null;
+			// `mode` is optional in the bindings because it carries a serde
+			// default; migrated configs always have one.
+			const mode: MaskMode = segment.mode ?? "blur";
 
 			return (
 				<Panel title="Mask segment">
 					<Field name="Effect">
 						<Select
-							value={segment.maskType}
-							onValueChange={(maskType) =>
-								patchAt("maskSegments", selection.index, { maskType })
+							value={mode}
+							onValueChange={(next) =>
+								patchAt("maskSegments", selection.index, {
+									mode: next as MaskMode,
+								})
 							}
-							options={MASK_KINDS.map(({ label, value }) => ({
+							options={MASK_MODES.map(({ label, value }) => ({
 								label,
 								value: String(value),
 							}))}
 						/>
 					</Field>
 
-					<Slider
-						size="sm"
-						label="Feather"
-						format={(v) => `${Math.round(v * 100)}%`}
-						min={0}
-						max={1}
-						step={0.01}
-						value={segment.feather ?? 0}
-						onChange={(feather) =>
-							patchAt("maskSegments", selection.index, { feather })
-						}
-					/>
+					<Field name="Shape">
+						<Select
+							value={segment.shape ?? "rect"}
+							onValueChange={(next) =>
+								patchAt("maskSegments", selection.index, {
+									shape: next as MaskShape,
+								})
+							}
+							options={MASK_SHAPES.map(({ label, value }) => ({
+								label,
+								value: String(value),
+							}))}
+						/>
+					</Field>
 
-					{segment.maskType === "sensitive" ? (
+					{REVERSIBLE_MODES.has(mode) ? (
+						<p className="text-xs text-gray-11">
+							Obscures the area but does not destroy it — the original pixels
+							can in principle be recovered. Use Redact for anything sensitive.
+						</p>
+					) : null}
+
+					{/* Redaction is deliberately hard-edged: a feathered boundary
+					    leaves partially-original pixels, which would break the one
+					    promise this mode makes. */}
+					{mode === "redact" ? null : (
 						<Slider
 							size="sm"
-							label="Pixelation"
+							label="Feather"
 							format={(v) => `${Math.round(v * 100)}%`}
 							min={0}
 							max={1}
 							step={0.01}
-							value={segment.pixelation ?? 0}
-							onChange={(pixelation) =>
-								patchAt("maskSegments", selection.index, { pixelation })
+							value={segment.feather ?? 0}
+							onChange={(feather) =>
+								patchAt("maskSegments", selection.index, { feather })
 							}
 						/>
-					) : (
+					)}
+
+					{mode === "blur" || mode === "pixelate" ? (
+						<Slider
+							size="sm"
+							label={mode === "blur" ? "Blur radius" : "Block size"}
+							format={(v) => `${Math.round(v)}`}
+							min={MASK_AMOUNT_MIN}
+							max={MASK_AMOUNT_MAX}
+							step={1}
+							value={segment.amount ?? MASK_AMOUNT_DEFAULT}
+							onChange={(amount) =>
+								patchAt("maskSegments", selection.index, { amount })
+							}
+						/>
+					) : null}
+
+					{mode === "spotlight" ? (
 						<Slider
 							size="sm"
 							label="Outside darkness"
@@ -229,7 +287,7 @@ export function SegmentConfig() {
 								patchAt("maskSegments", selection.index, { darkness })
 							}
 						/>
-					)}
+					) : null}
 
 					<Field name="Enabled">
 						<Switch

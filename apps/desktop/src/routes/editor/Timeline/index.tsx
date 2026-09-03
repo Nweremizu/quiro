@@ -367,7 +367,9 @@ export function Timeline() {
 				...(timeline.maskSegments ?? []),
 				{
 					...span,
-					maskType: "sensitive" as const,
+					// Blur is the safest default that still shows something is
+					// covered; Redact is opt-in because it is destructive.
+					mode: "blur" as const,
 					center: { x: 0.5, y: 0.5 },
 					size: { x: 0.25, y: 0.15 },
 				},
@@ -642,7 +644,7 @@ export function Timeline() {
 									segments={timeline?.maskSegments ?? []}
 									color="var(--track-mask)"
 									selectionType="mask"
-									label={(segment) => segment.maskType}
+									label={(segment) => segment.mode ?? "blur"}
 									onChange={(index, next) =>
 										updateTimeline((current) => ({
 											...current,

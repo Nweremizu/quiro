@@ -10,6 +10,7 @@ import MACOSTitlebarControls from "@/components/titlebar/macos-titlebar-control"
 import WindowControlsWindows from "@/components/titlebar/windows11-titlebar-control";
 import { generalSettingsStore } from "@/store";
 import { applyMacOSWindowMaterial } from "@/utils/macos-window-material";
+import { commands } from "@/utils/tauri";
 import { initializeTitlebar } from "@/utils/titlebar-state";
 import { useWindowContext, WindowProvider } from "./launch/Context";
 
@@ -59,12 +60,22 @@ export default function WindowLayout() {
 
 		const handleKeyDown = (e: KeyboardEvent) => {
 			const isMac = ostype() === "macos";
-			const closeShortcut = isMac
-				? e.metaKey && e.key === "w"
-				: e.ctrlKey && e.key === "w";
-			if (closeShortcut) {
+			const accel = isMac ? e.metaKey : e.ctrlKey;
+
+			if (accel && e.key === "w") {
 				e.preventDefault();
 				getCurrentWindow().close();
+				return;
+			}
+
+			// The conventional settings shortcut. Deliberately window-local rather
+			// than a global shortcut: registering it with the OS would take Cmd+,
+			// away from every other app for as long as Quiro is running, and Quiro
+			// runs in the tray all day. This way it only fires when one of our own
+			// windows has focus, which is what the convention actually means.
+			if (accel && e.key === ",") {
+				e.preventDefault();
+				void commands.showWindow({ Settings: { page: null } });
 			}
 		};
 		window.addEventListener("keydown", handleKeyDown);

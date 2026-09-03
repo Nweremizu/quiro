@@ -16,6 +16,7 @@ import IconLucideBookmark from "~icons/lucide/bookmark";
 import IconLucideClapperboard from "~icons/lucide/clapperboard";
 import IconLucideFolder from "~icons/lucide/folder";
 import IconLucideRedo2 from "~icons/lucide/redo-2";
+import IconLucideSettings from "~icons/lucide/settings";
 import IconLucideStar from "~icons/lucide/star";
 import IconLucideTrash2 from "~icons/lucide/trash-2";
 import IconLucideUndo2 from "~icons/lucide/undo-2";
@@ -82,6 +83,16 @@ export function Header() {
 					}}
 					leftIcon={<IconLucideFolder className="size-5" />}
 				/>
+				{/* App-level, unlike its neighbours — but the editor is a window of
+				    its own, so without this the only way to reach settings from
+				    here is the tray. */}
+				<EditorButton
+					tooltip="Settings"
+					kbd={["meta", ","]}
+					aria-label="Open settings"
+					onClick={() => void commands.showWindow({ Settings: { page: null } })}
+					leftIcon={<IconLucideSettings className="size-5" />}
+				/>
 
 				<NameEditor name={prettyName} onRename={rename} />
 
@@ -139,10 +150,10 @@ export function Header() {
 					disabled={!instance}
 					className={cn(
 						"flex h-[40px] w-full max-w-[100px] items-center justify-center gap-1.5 rounded-xl px-4 text-[0.8125rem] font-medium text-white outline-hidden",
-						"bg-linear-to-b from-[#3b82f6] to-[#2563eb]",
-						"shadow-[0_4px_14px_-6px_rgba(37,99,235,0.5),inset_0_1px_0_0_rgba(255,255,255,0.22)]",
+						"bg-linear-to-b from-accent-300 to-accent-400 dark:from-accent-400 dark:to-accent-500",
+						"shadow-[0_4px_14px_-6px_rgba(243,128,31,0.5),inset_0_1px_0_0_rgba(255,255,255,0.22)]",
 						"transition-[box-shadow,filter] duration-200 ease-out",
-						"hover:brightness-[1.08] hover:shadow-[0_8px_22px_-8px_rgba(37,99,235,0.6),inset_0_1px_0_0_rgba(255,255,255,0.28)]",
+						"hover:brightness-[1.08] hover:shadow-[0_8px_22px_-8px_rgba(243,128,31,0.6),inset_0_1px_0_0_rgba(255,255,255,0.28)]",
 						"active:brightness-95 disabled:opacity-50",
 					)}
 					onClick={() => {

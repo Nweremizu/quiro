@@ -283,7 +283,7 @@ function BackgroundConfig() {
 						className={cn(
 							"*:*bg-gray-4 text-gray-12 rounded-lg px-2 py-1 hover:cursor-pointer text-sm font-medium transition-colors focus:outline-none	",
 							background.source.type === "wallpaper" &&
-								"bg-accent-300 text-gray-1!",
+								"bg-accent-solid text-accent-on-solid!",
 						)}
 						onClick={() =>
 							setBackground({ source: { type: "wallpaper", path: null } })
@@ -295,7 +295,7 @@ function BackgroundConfig() {
 						className={cn(
 							"*:*bg-gray-4 text-gray-12 rounded-lg px-2 py-1 hover:cursor-pointer text-sm font-medium transition-colors focus:outline-none	",
 							background.source.type === "image" &&
-								"bg-accent-300 text-gray-1!",
+								"bg-accent-solid text-accent-on-solid!",
 						)}
 						onClick={() =>
 							setBackground({ source: { type: "image", path: null } })
@@ -307,7 +307,7 @@ function BackgroundConfig() {
 						className={cn(
 							"*:*bg-gray-4 text-gray-12 rounded-lg px-2 py-1 hover:cursor-pointer text-sm font-medium transition-colors focus:outline-none	",
 							background.source.type === "color" &&
-								"bg-accent-300 text-gray-1!",
+								"bg-accent-solid text-accent-on-solid!",
 						)}
 						onClick={() =>
 							setBackground({ source: { type: "color", value: [16, 16, 16] } })
@@ -319,7 +319,7 @@ function BackgroundConfig() {
 						className={cn(
 							"*:*bg-gray-4 text-gray-12 rounded-lg px-2 py-1 hover:cursor-pointer text-sm font-medium transition-colors focus:outline-none	",
 							background.source.type === "gradient" &&
-								"bg-accent-300 text-gray-1!",
+								"bg-accent-solid text-accent-on-solid!",
 						)}
 						onClick={() =>
 							setBackground({
@@ -435,7 +435,7 @@ function BackgroundConfig() {
 										className={cn(
 											"size-7 rounded-lg border border-gray-5 transition-[opacity,box-shadow] duration-150 ease-[var(--ease-snappy)]",
 											isActive
-												? "ring-2 ring-accent-400 ring-offset-2 ring-offset-gray-1"
+												? "ring-2 ring-accent-border-selected ring-offset-2 ring-offset-gray-1"
 												: "hover:opacity-70",
 										)}
 									/>

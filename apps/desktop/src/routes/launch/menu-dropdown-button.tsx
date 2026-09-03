@@ -22,8 +22,8 @@ export default function MenuDropdownButton({
 			aria-expanded={expanded}
 			data-expanded={expanded ? "true" : "false"}
 			className={cn(
-				"flex w-7 shrink-0 items-center justify-center rounded-lg bg-gray-4 text-gray-12 transition-colors duration-150 hover:bg-gray-6 active:bg-gray-7 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-300 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-1",
-				expanded && "bg-accent-100 text-accent-500",
+				"flex w-7 shrink-0 items-center justify-center rounded-lg bg-gray-4 text-gray-12 transition-colors duration-150 hover:bg-gray-6 active:bg-gray-7 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-gray-1",
+				expanded && "bg-accent-surface text-accent-text",
 				disabled && "pointer-events-none opacity-60",
 				className,
 			)}

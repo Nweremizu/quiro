@@ -1,5 +1,6 @@
 mod configuration;
 pub mod cursor;
+pub mod frame_layout;
 pub mod keyboard;
 mod meta;
 

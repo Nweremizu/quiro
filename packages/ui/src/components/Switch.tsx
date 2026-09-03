@@ -38,8 +38,8 @@ export function Switch({ className, size = "sm", ...props }: SwitchProps) {
 				"transition-[background-color,transform] duration-150 ease-[var(--ease-snappy)]",
 				"active:scale-[0.97] disabled:active:scale-100",
 				"motion-reduce:transition-[background-color] motion-reduce:active:scale-100",
-				"bg-gray-5 data-[checked]:bg-accent-300",
-				"focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-300",
+				"bg-gray-5 data-[checked]:bg-accent-solid",
+				"focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-focus-ring",
 				"disabled:cursor-not-allowed disabled:opacity-40 disabled:data-[checked]:bg-gray-5",
 				className,
 			)}

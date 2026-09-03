@@ -1,4 +1,6 @@
-import type { AspectRatio, XY } from "@/utils/tauri";
+import type { AspectRatio, LayerTransform, XY } from "@/utils/tauri";
+import { type FramePx, frameRect, type Rect } from "./space";
+import { resolveTransform, transformRect } from "./transform";
 
 export const SCREEN_MAX_PADDING = 0.4;
 
@@ -147,20 +149,25 @@ export function calculateImageTransform(
 	};
 }
 
+/**
+ * Where the screenshot content sits inside the rendered frame.
+ *
+ * This rect is the anchor every image-normalized coordinate is defined
+ * against, so it is returned in an explicit space rather than as bare
+ * numbers — see `space.ts`. It moves and resizes whenever padding, crop or
+ * aspect ratio changes, which is exactly why nothing durable may be stored
+ * in the frame pixels it is expressed in.
+ */
 export function getImageRect(
 	frameSize: { width: number; height: number },
 	imageSize: { width: number; height: number } | null,
 	padding: number,
 	crop: { position: XY<number>; size: XY<number> } | null,
 	aspectRatio: AspectRatio | null,
-) {
+	displayTransform: LayerTransform | null = null,
+): Rect<FramePx> {
 	if (!imageSize) {
-		return {
-			x: 0,
-			y: 0,
-			width: frameSize.width,
-			height: frameSize.height,
-		};
+		return frameRect(0, 0, frameSize.width, frameSize.height);
 	}
 
 	const transform = calculateImageTransform(
@@ -171,10 +178,18 @@ export function getImageRect(
 		aspectRatio,
 	);
 
-	return {
-		x: transform.offset.x,
-		y: transform.offset.y,
-		width: transform.size.width,
-		height: transform.size.height,
-	};
+	const laidOut = frameRect(
+		transform.offset.x,
+		transform.offset.y,
+		transform.size.width,
+		transform.size.height,
+	);
+
+	// The layer transform is applied last, on top of the layout, exactly as
+	// `frame_layout::content_rect` does it. Rotation is not folded in: this
+	// rect stays the capture's unrotated bounds, which is what the renderer's
+	// `target_bounds` and every annotation anchored to the capture are
+	// measured in.
+	const layer = resolveTransform(displayTransform);
+	return layer ? transformRect(laidOut, layer, frameSize) : laidOut;
 }

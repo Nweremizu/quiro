@@ -113,7 +113,7 @@ function ConfirmPanel({
 					onClick={available ? onSelect : undefined}
 					className={`flex h-11 min-w-0 flex-1 items-center gap-3 rounded-full pl-4 pr-5 text-white transition-[filter] ${
 						available
-							? "bg-linear-60 from-accent-400 via-accent-500 to-accent-600 hover:brightness-110"
+							? "bg-linear-60 from-accent-solid via-accent-solid-hover to-accent-solid-active hover:brightness-110"
 							: "cursor-not-allowed bg-gray-7 text-gray-12"
 					}`}
 				>
@@ -323,7 +323,7 @@ function DisplaySelectOverlay({
 			<div
 				className={`absolute inset-0 h-full w-full border-[3px] transition-colors duration-100 ${
 					active
-						? "border-accent-500 bg-accent-400/30"
+						? "border-accent-border-selected bg-accent-solid/30"
 						: "border-transparent bg-transparent"
 				}`}
 			>
@@ -399,7 +399,7 @@ function WindowSelectOverlay({
 		<OverlayRoot onContextMenu={onCancel}>
 			{window ? (
 				<div
-					className="absolute border-[3px] border-accent-500 bg-accent-400/30 transition-[left,top,width,height] duration-75"
+					className="absolute border-[3px] border-accent-border-selected bg-accent-solid/30 transition-[left,top,width,height] duration-75"
 					style={{
 						left: `${window.bounds.position.x}px`,
 						top: `${window.bounds.position.y}px`,
@@ -831,7 +831,7 @@ function AreaSelectOverlay({
 						<div
 							onPointerDown={beginMove}
 							className={`absolute inset-0 cursor-move border-2 ${
-								isValid ? "border-accent-500" : "border-red-500"
+								isValid ? "border-accent-border-selected" : "border-red-500"
 							}`}
 						>
 							{/* Rule-of-thirds guides, hidden while idle to keep it calm. */}
@@ -852,7 +852,7 @@ function AreaSelectOverlay({
 								tabIndex={-1}
 								aria-label={`Resize ${handle.direction}`}
 								onPointerDown={(event) => beginResize(event, handle.direction)}
-								className="absolute size-3 -translate-x-1/2 -translate-y-1/2  border-[1.5px] border-accent-500 bg-gray-1 shadow-sm focus:outline-none"
+								className="absolute size-3 -translate-x-1/2 -translate-y-1/2  border-[1.5px] border-accent-border-selected bg-gray-1 shadow-sm focus:outline-none"
 								style={{
 									left: handle.left,
 									top: handle.top,
@@ -896,7 +896,7 @@ function AreaSelectOverlay({
 										disabled={!isValid || !confirmAvailable}
 										onPointerDown={(event) => event.stopPropagation()}
 										onClick={confirm}
-										className="rounded-lg bg-accent-400 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-500 disabled:cursor-not-allowed disabled:opacity-40"
+										className="rounded-lg bg-accent-solid px-3 py-1.5 text-xs font-medium text-accent-on-solid transition-colors hover:bg-accent-solid-hover disabled:cursor-not-allowed disabled:opacity-40"
 									>
 										{confirmLabel}
 									</button>
@@ -1037,7 +1037,7 @@ function AreaToolbar({
 					}
 					className={`flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-xs font-normal transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
 						locked
-							? "bg-accent-400 text-white shadow-sm"
+							? "bg-accent-solid text-accent-on-solid shadow-sm"
 							: "text-gray-11 hover:bg-gray-12/8 hover:text-gray-12"
 					}`}
 				>

@@ -1,12 +1,19 @@
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
 
+use quiro_project::MaskShape;
+
 use crate::{MaskRenderMode, PreparedMask, RenderSession};
 
 const PIXELATE_MODE: u32 = 0;
 const HIGHLIGHT_MODE: u32 = 1;
 const BLUR_HORIZONTAL_MODE: u32 = 2;
 const BLUR_VERTICAL_MODE: u32 = 3;
+const REDACT_MODE: u32 = 4;
+
+const SHAPE_RECT: u32 = 0;
+const SHAPE_ELLIPSE: u32 = 1;
+const SHAPE_ROUNDED_RECT: u32 = 2;
 
 pub struct MaskLayer {
     sampler: wgpu::Sampler,
@@ -75,6 +82,9 @@ impl MaskLayer {
             }
             MaskRenderMode::Highlight => {
                 self.render_single_pass(device, session, encoder, mask, HIGHLIGHT_MODE);
+            }
+            MaskRenderMode::Redact => {
+                self.render_single_pass(device, session, encoder, mask, REDACT_MODE);
             }
         }
     }
@@ -153,9 +163,10 @@ struct MaskUniforms {
     effect_size: f32,
     darkness: f32,
     mode: u32,
-    padding0: u32,
+    shape: u32,
     output_size: [f32; 2],
-    padding1: [f32; 2],
+    corner_radius: f32,
+    _padding: f32,
 }
 
 impl Default for MaskUniforms {
@@ -174,9 +185,14 @@ impl MaskUniforms {
             effect_size: mask.effect_size,
             darkness: mask.darkness,
             mode,
-            padding0: 0,
+            shape: match mask.shape {
+                MaskShape::Rect => SHAPE_RECT,
+                MaskShape::Ellipse => SHAPE_ELLIPSE,
+                MaskShape::RoundedRect => SHAPE_ROUNDED_RECT,
+            },
             output_size: [mask.output_size.x as f32, mask.output_size.y as f32],
-            padding1: [0.0; 2],
+            corner_radius: mask.corner_radius,
+            _padding: 0.0,
         }
     }
 }

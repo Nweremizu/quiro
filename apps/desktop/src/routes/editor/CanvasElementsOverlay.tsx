@@ -139,8 +139,8 @@ export function CanvasElementsOverlay({ size }: { size: OverlaySize }) {
 				className={cn(
 					"absolute cursor-move rounded-lg border-2 border-transparent transition-colors",
 					dragging === "display"
-						? "border-accent-800"
-						: "hover:border-accent-800/60",
+						? "border-accent-border-selected"
+						: "hover:border-accent-border-selected/60",
 				)}
 			/>
 
@@ -153,8 +153,8 @@ export function CanvasElementsOverlay({ size }: { size: OverlaySize }) {
 					className={cn(
 						"absolute cursor-move rounded-full border-2 border-transparent transition-colors",
 						dragging === "camera"
-							? "border-accent-800"
-							: "hover:border-accent-800/60",
+							? "border-accent-border-selected"
+							: "hover:border-accent-border-selected/60",
 					)}
 				/>
 			)}

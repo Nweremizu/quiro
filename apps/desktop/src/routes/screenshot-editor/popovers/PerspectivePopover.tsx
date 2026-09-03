@@ -59,7 +59,7 @@ function PresetSwatch({ config }: { config: PerspectiveConfiguration | null }) {
 				className={cn(
 					"h-4 w-6 rounded-[2px] border",
 					config
-						? "border-accent-400/70 bg-accent-400/20"
+						? "border-accent-border-selected/70 bg-accent-solid/20"
 						: "border-gray-7 bg-gray-4",
 				)}
 				style={{
@@ -127,7 +127,7 @@ export function PerspectivePopover({
 								className={cn(
 									"flex flex-col items-center gap-1 rounded-lg border py-1.5 text-[11px] transition-colors",
 									matchesPreset(perspective, preset.config)
-										? "border-accent-400/60 bg-accent-300/10 text-gray-12"
+										? "border-accent-border-selected/60 bg-accent-solid/10 text-gray-12"
 										: "border-transparent text-gray-11 hover:bg-gray-3",
 								)}
 							>

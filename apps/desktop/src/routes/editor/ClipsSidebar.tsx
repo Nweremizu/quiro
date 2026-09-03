@@ -234,10 +234,10 @@ export function ClipsSidebar({ onClose }: { onClose: () => void }) {
 										className="relative"
 									>
 										{showTopBar && (
-											<div className="absolute -top-1 right-0 left-0 z-10 h-0.5 rounded-full bg-accent-700" />
+											<div className="absolute -top-1 right-0 left-0 z-10 h-0.5 rounded-full bg-accent-border-selected" />
 										)}
 										{showBottomBar && (
-											<div className="absolute right-0 -bottom-1 left-0 z-10 h-0.5 rounded-full bg-accent-700" />
+											<div className="absolute right-0 -bottom-1 left-0 z-10 h-0.5 rounded-full bg-accent-border-selected" />
 										)}
 
 										<div
@@ -272,7 +272,7 @@ export function ClipsSidebar({ onClose }: { onClose: () => void }) {
 																setEditingIndex(null);
 														}}
 														onBlur={() => renameClip(index, draft)}
-														className="w-full rounded border border-gray-6 bg-gray-1 px-1.5 py-0.5 text-sm text-gray-12 outline-none focus:border-accent-700 dark:bg-gray-4"
+														className="w-full rounded border border-gray-6 bg-gray-1 px-1.5 py-0.5 text-sm text-gray-12 outline-none focus:border-accent-focus-ring dark:bg-gray-4"
 													/>
 												) : (
 													<span

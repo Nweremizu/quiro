@@ -1,0 +1,54 @@
+name: Nightly
+
+# Builds current `main` onto the nightly channel every night and on demand.
+# Nightly installs side by side with stable (own identifier + product name) and
+# updates from its own manifest, so testers opt in without touching stable.
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      changed: ${{ steps.v.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: v
+        run: |
+          BASE=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version.split('-')[0]")
+          STAMP=$(date -u +%Y%m%d%H%M)
+          SHA=$(git rev-parse --short HEAD)
+          echo "version=${BASE}-nightly.${STAMP}.${SHA}" >> "$GITHUB_OUTPUT"
+          # Skip the scheduled run if nothing landed in the last day.
+          if [ "${{ github.event_name }}" = "schedule" ] && [ -z "$(git log --since='24 hours ago' --oneline)" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Move the rolling nightly tag to HEAD
+        if: steps.v.outputs.changed == 'true'
+        run: |
+          git tag -f nightly
+          git push -f origin nightly
+
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.changed == 'true'
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      channel: nightly
+      tag: nightly
+      prerelease: true
+      tauri-args: "-c src-tauri/tauri.nightly.conf.json"

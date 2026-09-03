@@ -254,7 +254,7 @@ export function CameraPanel({
 						className={cn(
 							"flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm outline-hidden transition-colors",
 							selectedId === null
-								? "bg-accent-400 text-white"
+								? "bg-accent-solid text-accent-on-solid"
 								: focusedIndex === 0
 									? "bg-gray-5 text-gray-12"
 									: "hover:bg-gray-4 text-gray-12",
@@ -287,7 +287,7 @@ export function CameraPanel({
 									className={cn(
 										"flex items-stretch text-sm outline-hidden transition-colors",
 										selected
-											? "bg-accent-400 text-white"
+											? "bg-accent-solid text-accent-on-solid"
 											: focusedIndex === index + 1
 												? "bg-gray-5 text-gray-12"
 												: "hover:bg-gray-4 text-gray-12",
@@ -540,7 +540,7 @@ export function MicrophonePanel({
 						className={cn(
 							"flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm outline-hidden transition-colors",
 							selectedName === null
-								? "bg-accent-400 text-white"
+								? "bg-accent-solid text-accent-on-solid"
 								: focusedIndex === 0
 									? "bg-gray-5 text-gray-12"
 									: "hover:bg-gray-4 text-gray-12",
@@ -571,7 +571,7 @@ export function MicrophonePanel({
 									className={cn(
 										"relative flex items-stretch overflow-hidden text-sm outline-hidden transition-colors",
 										selected
-											? "bg-accent-400 text-white"
+											? "bg-accent-solid text-accent-on-solid"
 											: focusedIndex === index + 1
 												? "bg-gray-5 text-gray-12"
 												: "hover:bg-gray-4 text-gray-12",

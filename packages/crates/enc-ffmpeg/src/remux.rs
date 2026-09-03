@@ -841,6 +841,118 @@ fn rescale_video_timestamps_inner(
     Ok(())
 }
 
+/// Stream-copies the first video track of `input_path` to `video_out` and the
+/// first audio track to `audio_out`, in a single pass. Returns whether an audio
+/// track was found and written.
+///
+/// This is the inverse of [`merge_video_audio`], and exists for importing an
+/// arbitrary media file into a studio project: that format keeps audio in its
+/// own file alongside a video-only `display.mp4`, and the editor decides whether
+/// a segment has sound from the presence of that separate file rather than by
+/// inspecting the video container. An imported MP4 has its audio muxed in, so
+/// without this split it would play silently.
+///
+/// `audio_out` should be a Matroska container (`.mka`) — it accepts a straight
+/// copy of essentially any codec an input might carry (AAC, Opus, Vorbis, MP3,
+/// FLAC, PCM), where an MP4 audio container would reject several of them and
+/// force a transcode.
+pub fn split_media_tracks(
+    input_path: &Path,
+    video_out: &Path,
+    audio_out: &Path,
+) -> Result<bool, RemuxError> {
+    suppress_ffmpeg_logs();
+    let result = split_media_tracks_inner(input_path, video_out, audio_out);
+    restore_ffmpeg_logs();
+    result
+}
+
+fn split_media_tracks_inner(
+    input_path: &Path,
+    video_out: &Path,
+    audio_out: &Path,
+) -> Result<bool, RemuxError> {
+    let mut ictx = avformat::input(input_path)?;
+
+    let video_index = ictx
+        .streams()
+        .best(ffmpeg::media::Type::Video)
+        .map(|s| s.index())
+        .ok_or(ffmpeg::Error::StreamNotFound)?;
+    let audio_index = ictx
+        .streams()
+        .best(ffmpeg::media::Type::Audio)
+        .map(|s| s.index());
+
+    let (video_in_tb, video_params) = {
+        let stream = ictx
+            .stream(video_index)
+            .ok_or(ffmpeg::Error::StreamNotFound)?;
+        (stream.time_base(), stream.parameters())
+    };
+
+    let mut video_octx = avformat::output(video_out)?;
+    {
+        let mut out = video_octx.add_stream(None)?;
+        out.set_parameters(video_params);
+    }
+    video_octx.write_header()?;
+
+    let mut audio_octx = match audio_index {
+        Some(index) => {
+            let params = ictx
+                .stream(index)
+                .ok_or(ffmpeg::Error::StreamNotFound)?
+                .parameters();
+            let mut octx = avformat::output(audio_out)?;
+            {
+                let mut out = octx.add_stream(None)?;
+                out.set_parameters(params);
+            }
+            octx.write_header()?;
+            Some(octx)
+        }
+        None => None,
+    };
+
+    let audio_in_tb = audio_index
+        .and_then(|index| ictx.stream(index))
+        .map(|stream| stream.time_base());
+
+    let video_out_tb = video_octx.stream(0).unwrap().time_base();
+    let audio_out_tb = audio_octx
+        .as_ref()
+        .and_then(|octx| octx.stream(0))
+        .map(|stream| stream.time_base());
+
+    for (stream, mut packet) in ictx.packets() {
+        let index = stream.index();
+
+        if index == video_index {
+            packet.rescale_ts(video_in_tb, video_out_tb);
+            packet.set_stream(0);
+            packet.set_position(-1);
+            packet.write_interleaved(&mut video_octx)?;
+        } else if Some(index) == audio_index
+            && let Some(octx) = audio_octx.as_mut()
+            && let (Some(in_tb), Some(out_tb)) = (audio_in_tb, audio_out_tb)
+        {
+            packet.rescale_ts(in_tb, out_tb);
+            packet.set_stream(0);
+            packet.set_position(-1);
+            packet.write_interleaved(octx)?;
+        }
+    }
+
+    video_octx.write_trailer()?;
+    if let Some(mut octx) = audio_octx {
+        octx.write_trailer()?;
+        return Ok(true);
+    }
+
+    Ok(false)
+}
+
 pub fn merge_video_audio(
     video_path: &Path,
     audio_path: &Path,

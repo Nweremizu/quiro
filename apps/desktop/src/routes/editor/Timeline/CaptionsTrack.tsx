@@ -32,7 +32,7 @@ export function CaptionsTrack() {
 						}}
 					>
 						<SegmentContent width={width}>
-							<span className="pointer-events-none truncate text-[0.625rem] font-medium text-white/90">
+							<span className="pointer-events-none truncate text-[0.625rem] font-semibold text-[var(--track-label)]">
 								{segment.text}
 							</span>
 						</SegmentContent>

@@ -2,7 +2,12 @@ import { cn } from "@quiro/ui";
 import { getVersion } from "@tauri-apps/api/app";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
+import IconLucideBell from "~icons/lucide/bell";
+import IconLucideImage from "~icons/lucide/image";
+import IconLucideKeyboard from "~icons/lucide/keyboard";
+import IconLucideMessageSquarePlus from "~icons/lucide/message-square-plus";
 import IconLucideSettings from "~icons/lucide/settings";
+import IconLucideSquarePlay from "~icons/lucide/square-play";
 
 // React port of Cap's (window-chrome)/settings.tsx sidebar shell, trimmed to
 // what Quiro actually has: no cloud account/sign-in (no cloud backend), no
@@ -11,8 +16,17 @@ import IconLucideSettings from "~icons/lucide/settings";
 // for this route (see its isSettings branch), so this only needs its own
 // drag-region spacer for macOS, where WindowLayout's header renders nothing
 // for /settings.
+//
+// Automations is deliberately absent: it needs a rule engine (triggers,
+// conditions, action dispatch) rather than a page, and a builder that saves
+// rules nothing executes would be worse than no page at all.
 const NAV_ITEMS = [
 	{ href: "general", name: "General", icon: IconLucideSettings },
+	{ href: "shortcuts", name: "Shortcuts", icon: IconLucideKeyboard },
+	{ href: "recordings", name: "Recordings", icon: IconLucideSquarePlay },
+	{ href: "screenshots", name: "Screenshots", icon: IconLucideImage },
+	{ href: "feedback", name: "Feedback", icon: IconLucideMessageSquarePlus },
+	{ href: "changelog", name: "Changelog", icon: IconLucideBell },
 ];
 
 export default function Settings() {

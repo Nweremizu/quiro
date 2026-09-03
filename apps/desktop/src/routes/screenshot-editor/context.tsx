@@ -17,6 +17,12 @@ import {
 	type SerializedScreenshotEditorInstance,
 } from "@/utils/tauri";
 import { connectFrameSocket, type SocketFrame } from "./frameSocket";
+import {
+	type FramePx,
+	normalizeAnnotation,
+	type Rect,
+	resolveAnnotation,
+} from "./space";
 
 // React port of Cap's screenshot-editor `context.tsx`. Same responsibilities:
 // own the ProjectConfiguration, own the annotation list and its history, push
@@ -48,8 +54,18 @@ export type ScreenshotEditorContextValue = {
 		patch: Partial<ProjectConfiguration["background"]>,
 	) => void;
 
+	/** Resolved into frame pixels against [`anchorRect`]. Stored geometry is
+	 * normalized (`annotationSpaceVersion` 1); the whole interaction layer
+	 * works in pixels, so the conversion happens here, once, rather than at
+	 * every consumer. */
 	annotations: Annotation[];
 	setAnnotations: (next: Annotation[]) => void;
+	/** The capture's rect inside the rendered frame — `getImageRect`'s result.
+	 * Published by the preview, which is the only place that knows the frame
+	 * size. Until it arrives there is nothing on screen to place annotations
+	 * against, and they pass through unresolved. */
+	anchorRect: Rect<FramePx> | null;
+	setAnchorRect: (rect: Rect<FramePx> | null) => void;
 	addAnnotation: (annotation: Annotation) => void;
 	updateAnnotation: (id: string, patch: Partial<Annotation>) => void;
 	removeAnnotation: (id: string) => void;
@@ -68,8 +84,19 @@ export type ScreenshotEditorContextValue = {
 	activePopover: ActivePopover;
 	setActivePopover: (popover: ActivePopover) => void;
 
-	/** Newest frame from the renderer, already decoded. */
+	/** Newest canvas layer from the renderer — background source, blur and
+	 * noise, with nothing on it. Already decoded.
+	 *
+	 * The preview is composited in the browser rather than by the renderer: the
+	 * canvas and the capture arrive as two images on two sockets, stacked with
+	 * the capture placed by a CSS transform. That is what lets a drag cost a
+	 * compositor transform instead of a GPU render and a full frame over a
+	 * socket. Export is unaffected — it renders the whole composition in one
+	 * pass, on demand. */
 	latestFrame: SocketFrame | null;
+	/** Newest capture layer: the card alone on transparency, drawn where layout
+	 * alone would put it, with the placement left for the preview to apply. */
+	latestCardFrame: SocketFrame | null;
 	originalImageSize: { width: number; height: number } | null;
 
 	/** Revision of the config last pushed at the renderer. `screenshot_editor.rs`
@@ -77,12 +104,20 @@ export type ScreenshotEditorContextValue = {
 	 * this has caught up with the newest edit — export waits for that rather than
 	 * encoding whatever stale frame happens to be on screen. */
 	configRevision: number;
-	/** The two live preview canvases. Export reuses them verbatim when they are
-	 * already at full resolution, which skips a second GPU render. */
-	previewCanvas: HTMLCanvasElement | null;
-	setPreviewCanvas: (canvas: HTMLCanvasElement | null) => void;
+	/** The capture layer's mask and depth-of-field overlay, painted in the
+	 * capture's own space and carried along by that layer's transform. */
 	previewMaskCanvas: HTMLCanvasElement | null;
 	setPreviewMaskCanvas: (canvas: HTMLCanvasElement | null) => void;
+	/** The rendered capture, on transparency, in its own untransformed space.
+	 * Published because it is also the hit test: whether a click landed on the
+	 * capture is a question about its alpha, not about its bounding box. */
+	cardCanvas: HTMLCanvasElement | null;
+	setCardCanvas: (canvas: HTMLCanvasElement | null) => void;
+	/** The capture is selectable like any annotation, and the two are mutually
+	 * exclusive — `setSelectedAnnotationId` and `setCaptureSelected` each clear
+	 * the other, so there is never a moment with two things selected. */
+	captureSelected: boolean;
+	setCaptureSelected: (selected: boolean) => void;
 
 	history: {
 		undo: () => void;
@@ -124,14 +159,19 @@ export function ScreenshotEditorProvider({
 	const [project, setProjectState] = useState<ProjectConfiguration | null>(
 		null,
 	);
+	// Canonical, normalized form. Everything the UI sees is resolved below.
 	const [annotations, setAnnotationsState] = useState<Annotation[]>([]);
+	const [anchorRect, setAnchorRect] = useState<Rect<FramePx> | null>(null);
 	const [latestFrame, setLatestFrame] = useState<SocketFrame | null>(null);
+	const [latestCardFrame, setLatestCardFrame] = useState<SocketFrame | null>(
+		null,
+	);
 	const [originalImageSize, setOriginalImageSize] = useState<{
 		width: number;
 		height: number;
 	} | null>(null);
 
-	const [selectedAnnotationId, setSelectedAnnotationId] = useState<
+	const [selectedAnnotationId, setSelectedAnnotationIdState] = useState<
 		string | null
 	>(null);
 	const [activeTool, setActiveTool] = useState<ScreenshotEditorTool>("select");
@@ -211,9 +251,31 @@ export function ScreenshotEditorProvider({
 		});
 	}, [instance?.framesSocketUrl]);
 
+	useEffect(() => {
+		if (!instance?.cardSocketUrl) return;
+		return connectFrameSocket(
+			instance.cardSocketUrl,
+			(frame) => {
+				setLatestCardFrame((previous) => {
+					previous?.bitmap.close();
+					return frame;
+				});
+			},
+			undefined,
+			// The card is drawn onto transparency, so it comes back premultiplied
+			// and its shadow and antialiased edge would darken if handed to
+			// `ImageData` as-is. The canvas layer is opaque and needs none of it.
+			{ unpremultiply: true },
+		);
+	}, [instance?.cardSocketUrl]);
+
 	useEffect(
 		() => () => {
 			setLatestFrame((previous) => {
+				previous?.bitmap.close();
+				return null;
+			});
+			setLatestCardFrame((previous) => {
 				previous?.bitmap.close();
 				return null;
 			});
@@ -308,11 +370,23 @@ export function ScreenshotEditorProvider({
 
 	const revisionRef = useRef(0);
 	const [configRevision, setConfigRevision] = useState(0);
-	const [previewCanvas, setPreviewCanvas] = useState<HTMLCanvasElement | null>(
-		null,
-	);
 	const [previewMaskCanvas, setPreviewMaskCanvas] =
 		useState<HTMLCanvasElement | null>(null);
+	const [cardCanvas, setCardCanvas] = useState<HTMLCanvasElement | null>(null);
+	const [captureSelected, setCaptureSelectedState] = useState(false);
+
+	const setSelectedAnnotationId = useCallback(
+		(id: string | null | ((previous: string | null) => string | null)) => {
+			setSelectedAnnotationIdState(id);
+			if (id !== null) setCaptureSelectedState(false);
+		},
+		[],
+	);
+
+	const setCaptureSelected = useCallback((selected: boolean) => {
+		setCaptureSelectedState(selected);
+		if (selected) setSelectedAnnotationIdState(null);
+	}, []);
 	const renderTimer = useRef<number | undefined>(undefined);
 	const saveTimer = useRef<number | undefined>(undefined);
 	const lastRenderAt = useRef(0);
@@ -381,18 +455,36 @@ export function ScreenshotEditorProvider({
 		[commit],
 	);
 
+	// The storage boundary. Stored geometry is normalized to `anchorRect`;
+	// callers hand us — and receive — frame pixels. With no anchor yet there is
+	// no frame on screen either, so values pass through untouched rather than
+	// being divided by a rect that does not exist.
+	const toStored = useCallback(
+		(a: Annotation): Annotation =>
+			anchorRect ? normalizeAnnotation(a, anchorRect) : a,
+		[anchorRect],
+	);
+
+	const resolvedAnnotations = useMemo(
+		() =>
+			anchorRect
+				? annotations.map((a) => resolveAnnotation(a, anchorRect))
+				: annotations,
+		[annotations, anchorRect],
+	);
+
 	const setAnnotations = useCallback(
-		(next: Annotation[]) => commit({ annotations: next }),
-		[commit],
+		(next: Annotation[]) => commit({ annotations: next.map(toStored) }),
+		[commit, toStored],
 	);
 
 	const addAnnotation = useCallback(
 		(annotation: Annotation) => {
 			const current = live.current;
 			if (!current) return;
-			commit({ annotations: [...current.annotations, annotation] });
+			commit({ annotations: [...current.annotations, toStored(annotation)] });
 		},
-		[commit],
+		[commit, toStored],
 	);
 
 	const updateAnnotation = useCallback(
@@ -400,12 +492,17 @@ export function ScreenshotEditorProvider({
 			const current = live.current;
 			if (!current) return;
 			commit({
-				annotations: current.annotations.map((a) =>
-					a.id === id ? { ...a, ...patch } : a,
-				),
+				annotations: current.annotations.map((a) => {
+					if (a.id !== id) return a;
+					// The patch is in frame pixels, so it has to be applied to the
+					// resolved shape and the result re-normalized — patching the
+					// stored one directly would mix the two spaces in one record.
+					const resolved = anchorRect ? resolveAnnotation(a, anchorRect) : a;
+					return toStored({ ...resolved, ...patch });
+				}),
 			});
 		},
-		[commit],
+		[commit, toStored, anchorRect],
 	);
 
 	const removeAnnotation = useCallback(
@@ -417,7 +514,7 @@ export function ScreenshotEditorProvider({
 				selected === id ? null : selected,
 			);
 		},
-		[commit],
+		[commit, setSelectedAnnotationId],
 	);
 
 	const value = useMemo<ScreenshotEditorContextValue>(
@@ -428,13 +525,19 @@ export function ScreenshotEditorProvider({
 			project,
 			setProject,
 			updateBackground,
-			annotations,
+			annotations: resolvedAnnotations,
 			setAnnotations,
 			addAnnotation,
+			anchorRect,
+			setAnchorRect,
 			updateAnnotation,
 			removeAnnotation,
 			selectedAnnotationId,
 			setSelectedAnnotationId,
+			cardCanvas,
+			setCardCanvas,
+			captureSelected,
+			setCaptureSelected,
 			activeTool,
 			setActiveTool,
 			layersPanelOpen,
@@ -444,10 +547,9 @@ export function ScreenshotEditorProvider({
 			activePopover,
 			setActivePopover,
 			latestFrame,
+			latestCardFrame,
 			originalImageSize,
 			configRevision,
-			previewCanvas,
-			setPreviewCanvas,
 			previewMaskCanvas,
 			setPreviewMaskCanvas,
 			history: {
@@ -465,7 +567,8 @@ export function ScreenshotEditorProvider({
 			project,
 			setProject,
 			updateBackground,
-			annotations,
+			resolvedAnnotations,
+			anchorRect,
 			setAnnotations,
 			addAnnotation,
 			updateAnnotation,
@@ -476,10 +579,14 @@ export function ScreenshotEditorProvider({
 			stylePanelOpen,
 			activePopover,
 			latestFrame,
+			latestCardFrame,
 			originalImageSize,
 			configRevision,
-			previewCanvas,
 			previewMaskCanvas,
+			cardCanvas,
+			captureSelected,
+			setCaptureSelected,
+			setSelectedAnnotationId,
 			undo,
 			redo,
 			past.length,

@@ -178,7 +178,7 @@ export function ColorPicker({
 						type="button"
 						onClick={() => void pickWithEyeDropper()}
 						aria-label="Pick a colour from the screen"
-						className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-gray-5 text-gray-11 transition-colors hover:bg-gray-3 hover:text-gray-12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/50"
+						className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-gray-5 text-gray-11 transition-colors hover:bg-gray-3 hover:text-gray-12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-focus-ring/50"
 					>
 						<IconLucidePipette className="size-4" />
 					</button>
@@ -259,7 +259,7 @@ export function ColorPicker({
 							onChange={(next) => next && emit(next.toFormat("hsb"))}
 							className="min-w-0 flex-1"
 						>
-							<Input className="w-full rounded-md border border-gray-5 bg-gray-1 px-2 py-1 text-center text-[13px] uppercase tabular-nums text-gray-12 outline-none focus:ring-1 focus:ring-accent-400" />
+							<Input className="w-full rounded-md border border-gray-5 bg-gray-1 px-2 py-1 text-center text-[13px] uppercase tabular-nums text-gray-12 outline-none focus:ring-1 focus:ring-accent-focus-ring" />
 						</ColorField>
 					</div>
 				) : (
@@ -331,7 +331,7 @@ function ChannelInput({
 			<span className="text-[10px] font-medium uppercase tracking-wide text-gray-10">
 				{isAlpha ? "A" : (CHANNEL_LABEL[channel] ?? channel)}
 			</span>
-			<div className="flex w-full items-center rounded-md border border-gray-5 bg-gray-1 focus-within:ring-1 focus-within:ring-accent-400">
+			<div className="flex w-full items-center rounded-md border border-gray-5 bg-gray-1 focus-within:ring-1 focus-within:ring-accent-focus-ring">
 				<input
 					type="text"
 					inputMode="numeric"
@@ -388,7 +388,7 @@ export function ColorPickerPopover({
 						type="button"
 						aria-label={label}
 						className={cn(
-							"flex h-8 items-center gap-2 rounded-lg border border-gray-5 bg-gray-1 py-1 pl-1 pr-2 text-[13px] text-gray-12 outline-none transition-colors hover:bg-gray-2 focus-visible:ring-2 focus-visible:ring-accent-400/50",
+							"flex h-8 items-center gap-2 rounded-lg border border-gray-5 bg-gray-1 py-1 pl-1 pr-2 text-[13px] text-gray-12 outline-none transition-colors hover:bg-gray-2 focus-visible:ring-2 focus-visible:ring-accent-focus-ring/50",
 							className,
 						)}
 					>

@@ -44,9 +44,9 @@ export function EditorButton({
 				aria-label={tooltip}
 				className={cn(
 					"flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-[13px] outline-none transition-colors duration-100",
-					"focus-visible:ring-2 focus-visible:ring-accent-400/50 disabled:pointer-events-none disabled:opacity-45",
+					"focus-visible:ring-2 focus-visible:ring-accent-focus-ring/50 disabled:pointer-events-none disabled:opacity-45",
 					active
-						? "bg-accent-300 text-gray-1"
+						? "bg-accent-solid text-accent-on-solid"
 						: "text-gray-11 hover:bg-gray-3 hover:text-gray-12",
 				)}
 			>
@@ -157,7 +157,7 @@ export function RgbInput({
 					}
 				}}
 				onBlur={(e) => commit(e.target.value)}
-				className="h-8 w-24 rounded-lg border border-gray-5 bg-gray-1 px-2 text-[13px] text-gray-12 outline-none transition-shadow focus:ring-1 focus:ring-accent-400"
+				className="h-8 w-24 rounded-lg border border-gray-5 bg-gray-1 px-2 text-[13px] text-gray-12 outline-none transition-shadow focus:ring-1 focus:ring-accent-focus-ring"
 			/>
 		</div>
 	);
@@ -222,7 +222,7 @@ export function WallpaperThumbnail({
 			className={cn(
 				"aspect-square size-8 overflow-hidden rounded-lg bg-gray-4 transition-[box-shadow]",
 				selected
-					? "ring-2 ring-accent-400 ring-offset-2 ring-offset-gray-1"
+					? "ring-2 ring-accent-border-selected ring-offset-2 ring-offset-gray-1"
 					: "hover:ring-1 hover:ring-gray-8",
 			)}
 		>

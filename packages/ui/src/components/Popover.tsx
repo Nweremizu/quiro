@@ -24,7 +24,7 @@ export function PopoverContent({
 			>
 				<PopoverPrimitive.Popup
 					className={cn(
-						"ui-popover w-72 rounded-2xl border border-gray-3 bg-gray-1 p-4 text-gray-12 shadow-overlay outline-none focus-visible:ring-2 focus-visible:ring-accent-400/50",
+						"ui-popover w-72 rounded-2xl border border-gray-3 bg-gray-1 p-4 text-gray-12 shadow-overlay outline-none focus-visible:ring-2 focus-visible:ring-accent-focus-ring/50",
 						className,
 					)}
 					{...props}

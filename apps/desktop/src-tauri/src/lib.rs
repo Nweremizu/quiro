@@ -7,6 +7,7 @@ mod capture;
 mod capture_targets;
 mod crash_sentinel;
 mod devices;
+mod diagnostics;
 mod editor;
 mod export;
 mod exit_shutdown;
@@ -14,6 +15,8 @@ mod fake_window;
 pub mod frame_ws;
 mod general_settings;
 mod gpu_context;
+mod hotkeys;
+mod import;
 mod library;
 mod permissions;
 mod presets;
@@ -1029,6 +1032,9 @@ fn specta_bindings() -> tauri_specta::Builder {
             recording::discard_recording,
             recording::restart_recording,
             recording::set_recording_mic_muted,
+            recording::toggle_pause_recording,
+            hotkeys::set_hotkey,
+            hotkeys::get_hotkeys,
             editor::create_editor_instance,
             editor::start_playback,
             editor::stop_playback,
@@ -1068,8 +1074,12 @@ fn specta_bindings() -> tauri_specta::Builder {
             devices::get_camera_formats,
             devices::get_microphone_info,
             devices::get_devices_snapshot,
+            import::import_video,
+            import::import_screenshot,
             library::list_recordings,
             library::list_screenshots,
+            diagnostics::get_system_diagnostics,
+            diagnostics::get_logs_dir,
             general_settings::get_default_excluded_windows,
             recording_settings::set_recording_mode,
             target_select_overlay::get_window_icon,
@@ -1106,6 +1116,7 @@ fn specta_bindings() -> tauri_specta::Builder {
             CurrentRecordingChanged,
             NewScreenshotAdded,
             OnEscapePress,
+            hotkeys::RequestStartRecording,
             target_select_overlay::TargetUnderCursor,
             audio_meter::AudioInputLevelChange,
             devices::DevicesUpdated,
@@ -1129,8 +1140,48 @@ fn specta_bindings() -> tauri_specta::Builder {
 // Entrypoint
 // ---------------------------------------------------------------------------
 
+/// Opens a Chrome DevTools Protocol endpoint on the WebView2 instance, so the
+/// running app's webview can be inspected and driven from outside — reading the
+/// preview canvas back, clicking through the editor, screenshotting a real
+/// composition. Windows only: WebView2 is Chromium and speaks CDP, while
+/// macOS's WKWebView does not.
+///
+/// **Debug builds only, by construction.** The whole function is compiled out
+/// of release, because a CDP port grants full control of the webview — script
+/// execution, DOM, storage — to anything that can reach localhost. It is a
+/// development affordance and must never ship.
+///
+/// `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` is read by the WebView2 loader when
+/// it creates the environment, which happens the first time a window is built,
+/// so this has to run before any of that. `QUIRO_CDP_PORT` overrides the port
+/// for anyone who needs 9222 for something else.
+#[cfg(all(debug_assertions, windows))]
+fn enable_webview_remote_debugging() {
+    const VAR: &str = "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS";
+
+    // Respect an existing value rather than clobbering it — someone may have
+    // set other WebView2 flags deliberately.
+    if std::env::var_os(VAR).is_some() {
+        return;
+    }
+
+    let port = std::env::var("QUIRO_CDP_PORT").unwrap_or_else(|_| "9222".to_string());
+
+    // SAFETY: `set_var` is unsound only when another thread may be reading the
+    // environment concurrently. This is the first statement of `run()`, before
+    // Tauri, the runtime, or any of our own threads exist.
+    unsafe {
+        std::env::set_var(VAR, format!("--remote-debugging-port={port}"));
+    }
+
+    eprintln!("webview remote debugging enabled on http://127.0.0.1:{port} (debug build only)");
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(all(debug_assertions, windows))]
+    enable_webview_remote_debugging();
+
     let specta_builder = specta_bindings();
 
     // Regenerated on every debug launch so the frontend's bindings can never
@@ -1169,23 +1220,11 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_store::Builder::new().build())
-        .plugin(
-            tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, shortcut, event| {
-                    use tauri_plugin_global_shortcut::{Code, ShortcutState};
-
-                    if !matches!(event.state(), ShortcutState::Pressed) {
-                        return;
-                    }
-
-                    // Escape is only ever registered while a target-select
-                    // overlay is open, so this is scoped to cancelling it.
-                    if shortcut.key == Code::Escape {
-                        let _ = OnEscapePress.emit(app);
-                    }
-                })
-                .build(),
-        )
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        // The global-shortcut plugin now lives in `hotkeys::init` (called from
+        // setup below) rather than here: it needs the hotkeys store to dispatch
+        // user bindings, and that store isn't loadable until the app handle
+        // exists. Escape still behaves exactly as it did.
         .manage(recording::RecordingSession::default())
         .setup(move |app| {
             // Required for any `.emit()` call on a tauri-specta Event type
@@ -1299,6 +1338,8 @@ pub fn run() {
                 spawn_device_watchers(app.clone());
             });
 
+            hotkeys::init(&app);
+
             power_observer::install(&app);
 
             app.listen_any("main-window-ready", {
@@ -1385,3 +1426,4 @@ fn total_system_memory() -> u64 {
     system.refresh_memory();
     system.total_memory()
 }
+

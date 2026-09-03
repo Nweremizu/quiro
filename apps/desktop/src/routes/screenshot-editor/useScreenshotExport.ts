@@ -38,8 +38,6 @@ export function useScreenshotExport() {
 		latestFrame,
 		annotations,
 		project,
-		previewCanvas,
-		previewMaskCanvas,
 		configRevision,
 		originalImageSize,
 	} = useScreenshotEditorContext();
@@ -60,26 +58,6 @@ export function useScreenshotExport() {
 	useEffect(() => {
 		configRevisionRef.current = configRevision;
 	}, [configRevision]);
-
-	/** Whether the on-screen frame is already at full source resolution. With no
-	 * aspect ratio set the renderer emits the image at native size, so it always
-	 * is; otherwise the preview may be letterboxed down and exporting from it
-	 * would quietly downscale the result. */
-	const canUsePreviewFrameForExport = useCallback(
-		(frame: SocketFrame | null) => {
-			if (!frame?.bitmap || !project) return false;
-			if (project.aspectRatio === null) return true;
-
-			const crop = project.background.crop;
-			const sourceWidth =
-				crop?.size.x ?? originalImageSize?.width ?? frame.width;
-			const sourceHeight =
-				crop?.size.y ?? originalImageSize?.height ?? frame.height;
-
-			return frame.width >= sourceWidth && frame.height >= sourceHeight;
-		},
-		[project, originalImageSize],
-	);
 
 	/** Blocks until the renderer has caught up with the newest edit. Without
 	 * this, exporting right after a slider drag encodes the frame from before
@@ -107,46 +85,33 @@ export function useScreenshotExport() {
 		if (!project) throw new Error("Screenshot is still loading");
 
 		const frame = await waitForSyncedPreview();
-		const usePreviewFrame = canUsePreviewFrameForExport(frame);
 
-		const renderedBitmap = usePreviewFrame
-			? frame.bitmap
-			: await createImageBitmap(
-					new Blob(
-						[
-							new Uint8Array(
-								await (async () => {
-									const result = await commands.renderScreenshotForExport();
-									if (result.status === "error") throw new Error(result.error);
-									return result.data;
-								})(),
-							),
-						],
-						{ type: "image/png" },
+		// Always a fresh render, never the frame on screen. The preview is a
+		// layer stack the browser composites — canvas and capture as separate
+		// images, placed by a CSS transform — so there is no composited frame
+		// there to copy. This is the renderer's single-pass composition, at full
+		// output resolution, and it is the only thing that reaches a file.
+		const renderedBitmap = await createImageBitmap(
+			new Blob(
+				[
+					new Uint8Array(
+						await (async () => {
+							const result = await commands.renderScreenshotForExport();
+							if (result.status === "error") throw new Error(result.error);
+							return result.data;
+						})(),
 					),
-				);
+				],
+				{ type: "image/png" },
+			),
+		);
 
 		try {
-			// Reusing the two live canvases skips re-blurring every mask, but only
-			// when they match the bitmap exactly — a stale size would paste the
-			// previous frame over the new one.
-			const canReusePreviewCanvases =
-				usePreviewFrame &&
-				!!previewCanvas &&
-				!!previewMaskCanvas &&
-				previewCanvas.width === renderedBitmap.width &&
-				previewCanvas.height === renderedBitmap.height &&
-				previewMaskCanvas.width === renderedBitmap.width &&
-				previewMaskCanvas.height === renderedBitmap.height;
-
 			return renderScreenshotExportCanvas({
 				renderedBitmap,
 				project,
 				annotations,
 				frame,
-				previewCanvas,
-				previewMaskCanvas,
-				canReusePreviewCanvases,
 				// Where the screenshot sits inside the preview frame; the export
 				// scales it up so the depth-of-field pass runs at output size.
 				imageRect: frame
@@ -156,22 +121,14 @@ export function useScreenshotExport() {
 							project.background.padding,
 							project.background.crop,
 							project.aspectRatio,
+							project.background.displayTransform,
 						)
 					: null,
 			});
 		} finally {
-			// The preview owns its own bitmap; only close one made here.
-			if (!usePreviewFrame) renderedBitmap.close();
+			renderedBitmap.close();
 		}
-	}, [
-		project,
-		annotations,
-		previewCanvas,
-		previewMaskCanvas,
-		originalImageSize,
-		waitForSyncedPreview,
-		canUsePreviewFrameForExport,
-	]);
+	}, [project, annotations, originalImageSize, waitForSyncedPreview]);
 
 	const exportImage = useCallback(
 		async (destination: "file" | "clipboard") => {

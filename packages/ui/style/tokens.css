@@ -101,31 +101,61 @@
 
     --solid-white: oklch(100% 0 0);
 
-    /* Brand accent (Cloudflare orange). --accent-300 is the exact brand
-     * value and stays constant across both themes. */
-    /* --accent-50: oklch(97% 0.02 55);
-    --accent-100: oklch(91% 0.06 55);
-    --accent-200: oklch(84% 0.11 55);
-    --accent-300: oklch(71.6% 0.171 53.4);  
-    --accent-400: oklch(66% 0.17 52);
-    --accent-500: oklch(58% 0.16 50); */
+    /* Brand accent (Cloudflare orange). --accent-400 is the exact brand
+     * value — oklch(71.6% 0.171 53.4) === #F38020 — and is pinned to it in
+     * BOTH themes; it's the fixed point the rest of the scale is built
+     * around. Below 400 each theme descends toward its own ground, above it
+     * each climbs toward its own text end, so the two ramps are genuinely
+     * different curves rather than one reversed (same approach the red,
+     * blue and jade ramps further down already take).
+     *
+     * Hue sits near 53-58 through the light steps and drifts gently toward
+     * red as it darkens, which keeps the dark end reading as deep orange
+     * instead of mud. Every value is inside the sRGB gamut — verified by
+     * oklch -> linear sRGB conversion, not by eye. */
+    --accent-50: oklch(97.5% 0.013 58);
+    --accent-100: oklch(94.5% 0.033 57);
+    --accent-200: oklch(89.6% 0.056 56);
+    --accent-300: oklch(81.8% 0.112 55);
+    --accent-400: oklch(71.6% 0.171 53.4); /* brand — #F38020 */
+    --accent-500: oklch(65.4% 0.166 51);
+    --accent-600: oklch(57.8% 0.15 48.5);
+    --accent-700: oklch(49.8% 0.13 46.5);
+    --accent-800: oklch(42.2% 0.11 45);
+    --accent-900: oklch(34.8% 0.098 43.5);
+    --accent-950: oklch(24.5% 0.066 42);
 
-    --accent-50: oklch(97.6% 0.015 61.3);
-    --accent-100: oklch(94.2% 0.037 60.7);
-    --accent-200: oklch(87.9% 0.075 55.5);
-    --accent-300: oklch(80.4% 0.126 52.1);
-    --accent-400: oklch(72.1% 0.182 43.3);
-    --accent-500: oklch(68.7% 0.208 38.8);
-    --accent-600: oklch(62.4% 0.224 33.5);
-    --accent-700: oklch(53.7% 0.199 32);
-    --accent-800: oklch(45.6% 0.164 31.3);
-    --accent-900: oklch(39.4% 0.135 31.3);
-    --accent-950: oklch(25.8% 0.089 30.7);
- 
+    /* Semantic accent roles. Components ask for a job (a surface, a border,
+     * a solid, a piece of text), never for a numbered step — that's what
+     * stops the editor's selection-outline needs from dictating the weight
+     * of a menu chip, which is how accent-700/800 ended up on both.
+     *
+     * The light/dark mapping is deliberately NOT symmetric: --accent-border-
+     * selected is 500 here but 400 in dark, because step 400 only reaches
+     * 2.6:1 against a light canvas (under the 3:1 a meaningful boundary
+     * needs) while hitting 7.1:1 against a dark one. The role is fixed, the
+     * step bends to the theme. */
+    --accent-surface: var(--accent-50);
+    --accent-surface-hover: var(--accent-100);
+    --accent-border: var(--accent-200);
+    --accent-border-selected: var(--accent-500);
+    --accent-solid: var(--accent-400);
+    --accent-solid-hover: var(--accent-500);
+    --accent-solid-active: var(--accent-600);
+    --accent-text: var(--accent-700);
+    --accent-text-strong: var(--accent-800);
+    --accent-focus-ring: var(--accent-500);
 
-    --accent-transparent-0: oklch(40% 0.07 45 / 0);
-    --accent-transparent-10: oklch(40% 0.07 45 / 0.1);
-    --accent-transparent-20: oklch(40% 0.07 45 / 0.2);
+    /* Text/icons on --accent-solid. The brand orange is light (71.6%), so
+     * white on it is 2.66:1 — a fail at any text size. This deep warm
+     * near-black is 6.27:1 on the solid and 4.94:1 on solid-hover. It is
+     * pinned to the same value in BOTH themes precisely because the solid
+     * it sits on is also the same in both. */
+    --accent-on-solid: oklch(24% 0.05 45);
+
+    --accent-transparent-0: oklch(71.6% 0.171 53.4 / 0);
+    --accent-transparent-10: oklch(71.6% 0.171 53.4 / 0.1);
+    --accent-transparent-20: oklch(71.6% 0.171 53.4 / 0.2);
 
     --red-50: oklch(95.7% 0.022 7.2);
     --red-100: oklch(83% 0.097 8.2);
@@ -287,20 +317,42 @@
 
     --solid-white: oklch(100% 0 0);
 
-    
+    /* Dark accent ramp — its own curve, not light's reversed. Step 400 holds
+     * the identical brand value so #F38020 is literally the same colour in
+     * both themes; below it the steps descend to a near-black warm tint that
+     * sits just above --gray-1, above it they climb to a pale wash used for
+     * text. See the light-mode block for the full rationale. */
+    --accent-50: oklch(23% 0.03 47);
+    --accent-100: oklch(31% 0.055 48.5);
+    --accent-200: oklch(42% 0.09 50);
+    --accent-300: oklch(56% 0.14 52);
+    --accent-400: oklch(71.6% 0.171 53.4); /* brand — #F38020, same as light */
+    --accent-500: oklch(76.5% 0.15 55);
+    --accent-600: oklch(81.5% 0.11 57);
+    --accent-700: oklch(86.5% 0.084 59);
+    --accent-800: oklch(90.5% 0.06 61);
+    --accent-900: oklch(94.2% 0.038 63);
+    --accent-950: oklch(97.4% 0.016 65);
 
-    --accent-950: oklch(97.6% 0.015 61.3);
-    --accent-900: oklch(94.2% 0.037 60.7);
-    --accent-800: oklch(87.9% 0.075 55.5);
-    --accent-700: oklch(80.4% 0.126 52.1);
-    --accent-600: oklch(72.1% 0.182 43.3);
-    --accent-500: oklch(68.7% 0.208 38.8);
-    --accent-400: oklch(62.4% 0.224 33.5);
-    --accent-300: oklch(53.7% 0.199 32);
-    --accent-200: oklch(45.6% 0.164 31.3);
-    --accent-100: oklch(39.4% 0.135 31.3);
-    --accent-50: oklch(25.8% 0.089 30.7);
+    /* Same roles, dark-appropriate steps. Only three differ from light:
+     * border-selected (400 — already 7.1:1 here, no need to darken),
+     * solid-active (300, so a press still darkens against a light solid),
+     * and focus-ring (400, for the same reason as border-selected). */
+    --accent-surface: var(--accent-50);
+    --accent-surface-hover: var(--accent-100);
+    --accent-border: var(--accent-200);
+    --accent-border-selected: var(--accent-400);
+    --accent-solid: var(--accent-400);
+    --accent-solid-hover: var(--accent-500);
+    --accent-solid-active: var(--accent-300);
+    --accent-text: var(--accent-700);
+    --accent-text-strong: var(--accent-800);
+    --accent-focus-ring: var(--accent-400);
 
+    /* Unchanged from light on purpose — it sits on the same brand orange. */
+    --accent-on-solid: oklch(24% 0.05 45);
+
+    --accent-transparent-0: oklch(71.6% 0.171 53.4 / 0);
     --accent-transparent-10: oklch(71.6% 0.171 53.4 / 0.1);
     --accent-transparent-20: oklch(71.6% 0.171 53.4 / 0.2);
 
@@ -448,7 +500,27 @@
     --color-accent-800: var(--accent-800);  
     --color-accent-900: var(--accent-900);
     --color-accent-950: var(--accent-950);
-    
+
+    /* Role tokens need their own entries here for the same reason the
+     * numbered steps do — without them Tailwind never generates
+     * bg-accent-solid / border-accent-border-selected / text-accent-text
+     * and the classes silently no-op. */
+    --color-accent-surface: var(--accent-surface);
+    --color-accent-surface-hover: var(--accent-surface-hover);
+    --color-accent-border: var(--accent-border);
+    --color-accent-border-selected: var(--accent-border-selected);
+    --color-accent-solid: var(--accent-solid);
+    --color-accent-solid-hover: var(--accent-solid-hover);
+    --color-accent-solid-active: var(--accent-solid-active);
+    --color-accent-on-solid: var(--accent-on-solid);
+    --color-accent-text: var(--accent-text);
+    --color-accent-text-strong: var(--accent-text-strong);
+    --color-accent-focus-ring: var(--accent-focus-ring);
+
+    --color-accent-transparent-0: var(--accent-transparent-0);
+    --color-accent-transparent-10: var(--accent-transparent-10);
+    --color-accent-transparent-20: var(--accent-transparent-20);
+
     --color-red-50: var(--red-50);
     --color-red-100: var(--red-100);
     --color-red-200: var(--red-200);

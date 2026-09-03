@@ -35,7 +35,7 @@ export function KeyboardTrack() {
 						}}
 					>
 						<SegmentContent width={width} className="justify-center">
-							<span className="pointer-events-none truncate text-[0.625rem] font-medium text-white/90">
+							<span className="pointer-events-none truncate text-[0.625rem] font-semibold text-[var(--track-label)]">
 								{segment.displayText}
 							</span>
 						</SegmentContent>

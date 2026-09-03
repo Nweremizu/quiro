@@ -77,24 +77,118 @@
     display: none;
 }
 
+/* Editor timeline track colours. Each track owns one hue so a glance at the
+   timeline reads as structure.
+ *
+ * Clip is the brand orange because it's the primary track — which forces two
+ * other decisions, since the old selection ring was *also* the brand orange:
+ * the ring is now neutral (see .track-segment-selected), and labels are dark
+ * rather than white (see --track-label). Bright fills and white 10px text
+ * don't coexist: white on these measures 2.3-2.9:1, whereas the dark label
+ * clears 4.5:1 on every track.
+ *
+ * Hues are spread 33-58° apart around the wheel, and every value is inside
+ * the sRGB gamut — verified by conversion, not by eye. Unlike before, these
+ * are theme-aware: the light set would read as heavy against a dark
+ * timeline, so the dark set lifts lightness and eases chroma. */
 :root {
-    /* Editor timeline track colours, ported from Cap's theme.css. Each track
-       type owns one hue so a glance at the timeline reads as structure. */
-    --track-clip: #3f8ae0;
-    --track-zoom: #4a4f5c;
-    --track-caption: #6f747d;
-    --track-keyboard: #d4742c;
-    --track-text: #2898ac;
-    --track-mask: #d2444b;
-    --track-scene: #975cfa;
-    --track-audio: #29a383;
+    --track-mask: #e14754;
+    --track-clip: #f3801f; /* --accent-solid, the brand orange */
+    --track-keyboard: #e2cc3f;
+    --track-audio: #33ae78;
+    --track-text: #17a9b6;
+    --track-zoom: #4ca0f1;
+    --track-scene: #9167ea;
+    --track-caption: #d05faf;
+
+    /* One dark label for every fill: the tracks span the whole hue wheel, so
+       a neutral reads consistently where a hue-tinted one (e.g.
+       --accent-on-solid, which is warm) would look off on the blues. */
+    --track-label: oklch(20% 0.015 260);
 }
 
-/* A segment fills with its track colour and takes a darker mix of the same
-   hue as its border, so every track is one colour rather than two. */
+:root.dark {
+    --track-mask: #f1636a;
+    --track-clip: #f3801f; /* identical in both themes, like the brand itself */
+    --track-keyboard: #e8d557;
+    --track-audio: #52c08a;
+    --track-text: #4bbac0;
+    --track-zoom: #6fb2fb;
+    --track-scene: #a27ef7;
+    --track-caption: #e176c0;
+
+    --track-label: oklch(20% 0.015 260);
+}
+
+/* Segments wear the Export button's treatment — a vertical gradient, a
+   colour-tinted drop shadow and an inset top highlight — but every value is
+   derived from `--seg-color` rather than hard-coded, so each track keeps its
+   own hue and a new track type needs no new CSS.
+ *
+ * Scaled down from the button on purpose: that's a lone 40px CTA with room to
+ * breathe, whereas segments sit shoulder to shoulder and can be a few pixels
+ * wide, so the shadow is tighter and the gradient shallower. At full button
+ * strength a packed timeline turns to mud.
+ *
+ * The border stays a darker mix of the same hue, so a segment still reads as
+ * one colour rather than two. */
 .track-segment-fill {
-    background: var(--seg-color);
+    background: linear-gradient(
+        to bottom,
+        color-mix(in oklab, var(--seg-color) 84%, white),
+        var(--seg-color)
+    );
     border: 1px solid color-mix(in srgb, var(--seg-color) 58%, black);
+    box-shadow:
+        0 2px 8px -4px color-mix(in srgb, var(--seg-color) 55%, transparent),
+        inset 0 1px 0 0 rgb(255 255 255 / 0.22);
+    transition:
+        box-shadow 200ms ease-out,
+        filter 200ms ease-out;
+}
+
+/* `group` on this element is what the drag handles already hover off, so the
+   lift and the handles appear together as one response. */
+.track-segment-fill:hover {
+    filter: brightness(1.08);
+    box-shadow:
+        0 4px 12px -5px color-mix(in srgb, var(--seg-color) 65%, transparent),
+        inset 0 1px 0 0 rgb(255 255 255 / 0.28);
+}
+
+.track-segment-fill:active {
+    filter: brightness(0.95);
+}
+
+/* Same one-step-darker shift the Export button makes in dark mode. The track
+   colours are already lifted for dark above, so this is only about the light
+   *direction*: keeping the highlight at the top edge and the shade below it,
+   rather than mixing toward white on a colour that is already bright. */
+:root.dark .track-segment-fill {
+    background: linear-gradient(
+        to bottom,
+        var(--seg-color),
+        color-mix(in oklab, var(--seg-color) 86%, black)
+    );
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .track-segment-fill {
+        transition: none;
+    }
+}
+
+/* Selection. This used to be a brand-orange ring, which stopped working the
+   moment clip became the brand orange — an orange ring on an orange fill is
+   no selection at all. A neutral pair solves it for every track at once: the
+   white ring hugs the fill (worst-case separation across the palette is 24,
+   against 6 for the old orange ring on clip), and the dark ring outside it
+   keeps the white edge visible against a light timeline background, where a
+   lone white ring would simply vanish. */
+.track-segment-selected {
+    box-shadow:
+        0 0 0 2px oklch(100% 0 0 / 0.95),
+        0 0 0 4px oklch(20% 0.02 260 / 0.5);
 }
 
 .timeline-scissors-cursor,

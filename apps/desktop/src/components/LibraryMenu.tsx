@@ -52,7 +52,7 @@ function RecentCard({ item }: { item: RecentMediaItem }) {
 			onClick={() => void openMediaFile(item.path)}
 			title={item.prettyName}
 			aria-label={`Open ${isScreenshot ? "screenshot" : "recording"} ${item.prettyName}`}
-			className="group relative h-24 w-38 shrink-0 snap-start overflow-hidden rounded-lg border border-gray-6 bg-gray-3 text-left outline-none ring-1 ring-transparent transition-[border-color,box-shadow] duration-150 hover:border-accent-400 hover:ring-accent-400/30 focus-visible:ring-2 focus-visible:ring-accent-300 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-1"
+			className="group relative h-24 w-38 shrink-0 snap-start overflow-hidden rounded-lg border border-gray-6 bg-gray-3 text-left outline-none ring-1 ring-transparent transition-[border-color,box-shadow] duration-150 hover:border-accent-border-selected hover:ring-accent-border-selected/30 focus-visible:ring-2 focus-visible:ring-accent-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-gray-1"
 		>
 			<div className="absolute inset-0 flex items-center justify-center bg-gray-4">
 				{isScreenshot ? (
@@ -219,7 +219,7 @@ function RecentsCarousel({ children }: { children: React.ReactNode }) {
 				)}
 			>
 				<div
-					className="h-full rounded-full bg-accent-400"
+					className="h-full rounded-full bg-accent-solid"
 					style={{
 						width: `${metrics.thumbFraction * 100}%`,
 						marginInlineStart: `${

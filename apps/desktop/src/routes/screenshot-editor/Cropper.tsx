@@ -383,7 +383,7 @@ export const Cropper = forwardRef<
 				role="group"
 				tabIndex={0}
 				aria-label="Crop selection — arrow keys move it"
-				className="absolute cursor-move border border-white ring-1 ring-black/35 outline-none focus-visible:ring-2 focus-visible:ring-accent-300"
+				className="absolute cursor-move border border-white ring-1 ring-black/35 outline-none focus-visible:ring-2 focus-visible:ring-accent-focus-ring"
 				style={{
 					left: pct(rect.x),
 					top: pct(rect.y),
@@ -432,7 +432,7 @@ export const Cropper = forwardRef<
 								cursor: HANDLE_CURSOR[key],
 							}}
 						>
-							<span className="size-3 rounded-[3px] border border-black/25 bg-accent-200 shadow-sm" />
+							<span className="size-3 rounded-[3px] border border-black/25 bg-accent-border-selected shadow-sm" />
 						</button>
 					);
 				})}

@@ -48,7 +48,7 @@ export function PanelSection({
 					aria-expanded={open}
 					aria-controls={panelId}
 					onClick={() => setOpen((v) => !v)}
-					className="flex flex-1 items-center gap-1.5 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-accent-400/50"
+					className="flex flex-1 items-center gap-1.5 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-accent-focus-ring/50"
 				>
 					<span className="text-gray-11">{icon}</span>
 					<span className="text-sm font-semibold text-gray-12">{title}</span>

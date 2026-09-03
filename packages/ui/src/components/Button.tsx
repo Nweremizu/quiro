@@ -25,8 +25,11 @@ export const buttonVariants = cva(
 			variant: {
 				primary:
 					"bg-gray-12 text-gray-1 disabled:bg-gray-6 disabled:text-gray-9",
+				// text-accent-on-solid, not white: the brand orange is light
+				// enough that white on it is 2.66:1 (and the old accent-300
+				// was 1.91:1). The warm near-black is 6.27:1.
 				accent:
-					"bg-accent-300 text-white hover:bg-accent-400 disabled:bg-gray-7 disabled:text-gray-10",
+					"bg-accent-solid text-accent-on-solid hover:bg-accent-solid-hover active:bg-accent-solid-active disabled:bg-gray-7 disabled:text-gray-10",
 				destructive:
 					"bg-red-400 text-white hover:bg-red-500 disabled:bg-gray-7 disabled:text-gray-10",
 				outline:

@@ -4,7 +4,19 @@
     {
       "name": "desktop",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "desktop", "dev"],
+      "runtimeArgs": [
+        "--filter",
+        "desktop",
+        "dev"
+      ],
+      "port": 1420
+    },
+    {
+      "name": "desktop-app",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev"
+      ],
       "port": 1420
     }
   ]

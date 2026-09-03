@@ -155,7 +155,7 @@ export function CropDialog({
 
 						{frameUrl && (
 							<div
-								className="absolute border-2 border-accent-700 shadow-[0_0_0_9999px_rgba(0,0,0,0.55)]"
+								className="absolute border-2 border-accent-border-selected shadow-[0_0_0_9999px_rgba(0,0,0,0.55)]"
 								style={box}
 							>
 								<button
@@ -190,7 +190,7 @@ export function CropDialog({
 											left: `${handle.x * 100}%`,
 											top: `${handle.y * 100}%`,
 										}}
-										className="absolute -mt-1.5 -ml-1.5 size-3 rounded-full border border-gray-1 bg-accent-700"
+										className="absolute -mt-1.5 -ml-1.5 size-3 rounded-full border border-gray-1 bg-accent-border-selected"
 										onPointerDown={(event) => {
 											const origin = crop;
 											drag(event, (dx, dy) => {

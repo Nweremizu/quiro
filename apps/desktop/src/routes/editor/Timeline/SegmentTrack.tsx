@@ -90,7 +90,7 @@ export function SegmentTrack<T extends TimeSpan>({
 
 						<SegmentContent width={width} className="justify-center">
 							{renderContent?.(segment, index, width) ?? (
-								<span className="pointer-events-none truncate text-[0.625rem] font-medium text-white/90">
+								<span className="pointer-events-none truncate text-[0.625rem] font-semibold text-[var(--track-label)]">
 									{label(segment, index)}
 								</span>
 							)}

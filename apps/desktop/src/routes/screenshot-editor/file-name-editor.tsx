@@ -118,13 +118,13 @@ export function FileNameEditor({
 						spellCheck={false}
 						autoComplete="off"
 						style={{ width: inputWidth }}
-						className="min-w-[3ch] max-w-[52vw] rounded-md bg-gray-3 px-1.5 py-0.5 text-sm font-medium text-gray-12 outline-none ring-1 ring-accent-300/50"
+						className="min-w-[3ch] max-w-[52vw] rounded-md bg-gray-3 px-1.5 py-0.5 text-sm font-medium text-gray-12 outline-none ring-1 ring-accent-focus-ring/50"
 					/>
 					<span
 						aria-hidden
 						className={cn(
 							"file-name-rule pointer-events-none absolute inset-x-1.5 bottom-0 h-px rounded-full",
-							rejected ? "bg-red-9" : "bg-accent-300",
+							rejected ? "bg-red-9" : "bg-accent-solid",
 						)}
 					/>
 				</span>
@@ -145,7 +145,7 @@ export function FileNameEditor({
 						}
 					}}
 					title={`${name} — double-click to rename`}
-					className="group flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 outline-none transition-colors duration-150 hover:bg-gray-3 focus-visible:ring-2 focus-visible:ring-accent-400/50"
+					className="group flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 outline-none transition-colors duration-150 hover:bg-gray-3 focus-visible:ring-2 focus-visible:ring-accent-focus-ring/50"
 				>
 					<span className="truncate text-sm font-medium text-gray-12">
 						{name}

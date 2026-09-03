@@ -1,9 +1,17 @@
 {
-  "$schema": "https://schema.tauri.app/config/2",
-  "bundle": {
-    "resources": {
-      "../../../target/native-deps/onnxruntime/lib/onnxruntime.dll": "onnxruntime.dll",
-      "../../../target/native-deps/onnxruntime/lib/onnxruntime_providers_shared.dll": "onnxruntime_providers_shared.dll"
-    }
-  }
+	"$schema": "https://schema.tauri.app/config/2",
+	"bundle": {
+		"resources": {
+			"../../../target/native-deps/onnxruntime/lib/onnxruntime.dll": "onnxruntime.dll",
+			"../../../target/native-deps/onnxruntime/lib/onnxruntime_providers_shared.dll": "onnxruntime_providers_shared.dll",
+			"../../../target/ffmpeg/bin/avcodec-61.dll": "avcodec-61.dll",
+			"../../../target/ffmpeg/bin/avdevice-61.dll": "avdevice-61.dll",
+			"../../../target/ffmpeg/bin/avfilter-10.dll": "avfilter-10.dll",
+			"../../../target/ffmpeg/bin/avformat-61.dll": "avformat-61.dll",
+			"../../../target/ffmpeg/bin/avutil-59.dll": "avutil-59.dll",
+			"../../../target/ffmpeg/bin/postproc-58.dll": "postproc-58.dll",
+			"../../../target/ffmpeg/bin/swresample-5.dll": "swresample-5.dll",
+			"../../../target/ffmpeg/bin/swscale-8.dll": "swscale-8.dll"
+		}
+	}
 }

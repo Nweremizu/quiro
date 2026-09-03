@@ -383,7 +383,7 @@ export function ExportDialog({
 						<div className="flex flex-col gap-1">
 							<div className="h-1.5 overflow-hidden rounded-full bg-gray-4">
 								<div
-									className="h-full bg-accent-700 transition-[width]"
+									className="h-full bg-accent-solid transition-[width]"
 									style={{ width: `${percent}%` }}
 								/>
 							</div>

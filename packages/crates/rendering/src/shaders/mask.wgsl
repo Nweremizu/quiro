@@ -6,9 +6,10 @@ struct Uniforms {
     effect_size: f32,
     darkness: f32,
     mode: u32,
-    padding0: u32,
+    shape: u32,
     output_size: vec2<f32>,
-    padding1: vec2<f32>,
+    corner_radius: f32,
+    _padding: f32,
 }
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
@@ -19,6 +20,11 @@ const MODE_PIXELATE: u32 = 0u;
 const MODE_HIGHLIGHT: u32 = 1u;
 const MODE_BLUR_HORIZONTAL: u32 = 2u;
 const MODE_BLUR_VERTICAL: u32 = 3u;
+const MODE_REDACT: u32 = 4u;
+
+const SHAPE_RECT: u32 = 0u;
+const SHAPE_ELLIPSE: u32 = 1u;
+const SHAPE_ROUNDED_RECT: u32 = 2u;
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
@@ -40,14 +46,59 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     return out;
 }
 
-fn rect_mask(uv: vec2<f32>) -> f32 {
-    let half_size = uniforms.rect_size * 0.5;
-    let delta = abs(uv - uniforms.rect_center) - half_size;
-    let outside = max(delta, vec2<f32>(0.0));
-    let outside_dist = length(outside);
-    let inside_dist = min(max(delta.x, delta.y), 0.0);
-    let sdf = outside_dist + inside_dist;
-    let edge = max(uniforms.feather, 1e-4);
+// All of the region maths runs in PIXELS, not UV.
+//
+// UV space is stretched by the frame's aspect: one unit across is 1920px on a
+// 16:9 frame and one unit down is 1080px. Measuring a distance with `length()`
+// in that space mixes the two, so a feather that should be round came out
+// ~1.78x wider horizontally than vertically, and every corner was elliptical
+// in the wrong direction. Converting to pixels first makes every distance
+// below isotropic and lets one feather value mean one thing.
+
+fn region_half_extent_px() -> vec2<f32> {
+    return uniforms.rect_size * 0.5 * uniforms.output_size;
+}
+
+/// Signed distance to the region edge, in pixels. Negative inside.
+fn region_sdf_px(uv: vec2<f32>) -> f32 {
+    let half_px = region_half_extent_px();
+    let delta = abs(uv - uniforms.rect_center) * uniforms.output_size;
+
+    if uniforms.shape == SHAPE_ELLIPSE {
+        // Exact ellipse SDF is iterative; this is the standard cheap
+        // approximation, which is accurate near the boundary — the only place
+        // the feather actually samples it.
+        let safe = max(half_px, vec2<f32>(1e-3));
+        let normalized = delta / safe;
+        let k = length(normalized);
+        // Scale the normalized overshoot back into pixels along the gradient.
+        return (k - 1.0) * min(safe.x, safe.y);
+    }
+
+    var corner = 0.0;
+    if uniforms.shape == SHAPE_ROUNDED_RECT {
+        corner = clamp(uniforms.corner_radius, 0.0, 0.5)
+            * 2.0
+            * min(half_px.x, half_px.y);
+    }
+
+    // Rounded-box SDF: shrink the box by the radius, then measure to it and
+    // subtract. With corner = 0 this is the plain box SDF.
+    let inner = max(half_px - vec2<f32>(corner), vec2<f32>(0.0));
+    let d = delta - inner;
+    let outside = length(max(d, vec2<f32>(0.0)));
+    let inside = min(max(d.x, d.y), 0.0);
+    return outside + inside - corner;
+}
+
+fn region_mask(uv: vec2<f32>) -> f32 {
+    let sdf = region_sdf_px(uv);
+    // Feather is a fraction of the region's shorter axis, resolved here where
+    // the frame size is known. The 1e-3 floor keeps the smoothstep from
+    // dividing by zero and gives a hard edge when feather is 0 — which Redact
+    // and Spotlight rely on.
+    let half_px = region_half_extent_px();
+    let edge = max(uniforms.feather * min(half_px.x, half_px.y), 1e-3);
     return clamp(smoothstep(0.0, edge, -sdf), 0.0, 1.0);
 }
 
@@ -86,22 +137,24 @@ fn blur_sample(uv: vec2<f32>, direction: vec2<f32>) -> vec4<f32> {
     return color / weight_sum;
 }
 
+/// The horizontal pass has to cover every texel the vertical pass will later
+/// sample, so it runs over the region grown by the blur radius. In pixels, for
+/// the same reason as everything else here.
 fn horizontal_blur_support(uv: vec2<f32>) -> bool {
-    let half_size = uniforms.rect_size * 0.5;
-    let delta = abs(uv - uniforms.rect_center);
-    let vertical_radius = uniforms.effect_size / uniforms.output_size.y;
-    return delta.x <= half_size.x && delta.y <= half_size.y + vertical_radius;
+    let half_px = region_half_extent_px();
+    let delta = abs(uv - uniforms.rect_center) * uniforms.output_size;
+    return delta.x <= half_px.x && delta.y <= half_px.y + uniforms.effect_size;
 }
 
 @fragment
 fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
     let base = textureSample(source_texture, source_sampler, uv);
-    let mask = rect_mask(uv);
+    let mask = region_mask(uv);
 
     if uniforms.mode == MODE_PIXELATE {
         let pixelated = pixelate_sample(uv);
         let effect = vec4<f32>(pixelated.rgb, base.a);
-        return mix(base, effect, mask);
+        return mix(base, effect, mask * uniforms.opacity);
     }
 
     if uniforms.mode == MODE_BLUR_HORIZONTAL {
@@ -117,7 +170,21 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
             discard;
         }
         let blurred = blur_sample(uv, vec2<f32>(0.0, 1.0));
-        return vec4<f32>(blurred.rgb, mask);
+        // Alpha carries the mask for the composite; opacity rides along with
+        // it rather than being a second, separate blend.
+        return vec4<f32>(blurred.rgb, mask * uniforms.opacity);
+    }
+
+    if uniforms.mode == MODE_REDACT {
+        // Redaction is a security property, not a visual effect: inside the
+        // region no source pixel may survive. `interpolate_masks` forces the
+        // feather to zero for this mode so `mask` is effectively binary, and
+        // the fill is opaque rather than blended, so nothing leaks through a
+        // soft edge or a partial opacity.
+        // Deliberately ignores `opacity`: a translucent redaction is not a
+        // redaction. This is the one branch that must not blend.
+        let fill = vec4<f32>(0.0, 0.0, 0.0, base.a);
+        return select(base, fill, mask >= 0.5);
     }
 
     if uniforms.mode == MODE_HIGHLIGHT {

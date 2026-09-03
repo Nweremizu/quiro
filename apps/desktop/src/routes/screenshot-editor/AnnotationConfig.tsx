@@ -1,8 +1,36 @@
 import { cn, Select, Switch } from "@quiro/ui";
 import { useRef } from "react";
-import type { Annotation } from "@/utils/tauri";
+import type { Annotation, MaskMode, MaskShape } from "@/utils/tauri";
 import { useScreenshotEditorContext } from "./context";
 import { Field, hexToRgb, RgbInput, rgbToHex, Slider } from "./ui";
+
+/** The same four modes the timeline's mask inspector offers — one taxonomy,
+ * so a screenshot mask and a video mask mean the same thing. */
+const MASK_MODES: Array<{ label: string; value: MaskMode }> = [
+	{ label: "Blur", value: "blur" },
+	{ label: "Pixelate", value: "pixelate" },
+	{ label: "Redact", value: "redact" },
+	{ label: "Spotlight", value: "spotlight" },
+];
+
+/** Blur and pixelate transform the pixels rather than destroying them, so the
+ * original is recoverable in principle. The inspector says so. */
+const REVERSIBLE_MASK_MODES: ReadonlySet<MaskMode> = new Set<MaskMode>([
+	"blur",
+	"pixelate",
+]);
+
+/** Mask strength is in the contract's units (`mask-effects.json`), which are
+ * 1080p-relative and scaled by frame height at paint time. */
+const MASK_AMOUNT_MIN = 4;
+const MASK_AMOUNT_MAX = 80;
+const MASK_AMOUNT_DEFAULT = 16;
+
+const MASK_SHAPES: Array<{ label: string; value: MaskShape }> = [
+	{ label: "Rect", value: "rect" },
+	{ label: "Ellipse", value: "ellipse" },
+	{ label: "Rounded", value: "roundedRect" },
+];
 
 const CURVE_OPTIONS = [
 	{ value: "straight", label: "Straight" },
@@ -54,6 +82,9 @@ export function AnnotationConfig() {
 	};
 
 	const isMask = annotation.type === "mask";
+	// Optional in the bindings because it carries a serde default; migrated
+	// configs always have one.
+	const maskMode: MaskMode = annotation.maskMode ?? "blur";
 	const isText = annotation.type === "text";
 	const isArrow = annotation.type === "arrow";
 	const isFocus = annotation.type === "focus";
@@ -304,7 +335,7 @@ export function AnnotationConfig() {
 							className={cn(
 								"h-8 flex-1 rounded-lg border text-xs transition-colors",
 								annotation.fillColor === "transparent"
-									? "border-accent-400 bg-accent-300/20 text-gray-12"
+									? "border-accent-border-selected bg-accent-solid/20 text-gray-12"
 									: "border-gray-5 text-gray-11 hover:bg-gray-3",
 							)}
 						>
@@ -322,31 +353,70 @@ export function AnnotationConfig() {
 				<>
 					<Field name="Style">
 						<div className="flex items-center gap-1 rounded-lg bg-gray-3 p-1">
-							{(["blur", "pixelate"] as const).map((style) => (
+							{MASK_MODES.map(({ label, value }) => (
 								<button
-									key={style}
+									key={value}
 									type="button"
-									onClick={() => update("maskType", style)}
+									onClick={() => update("maskMode", value)}
 									className={cn(
-										"h-7 flex-1 rounded-md text-xs capitalize transition-colors",
-										(annotation.maskType ?? "blur") === style
+										"h-7 flex-1 rounded-md text-xs transition-colors",
+										maskMode === value
 											? "bg-gray-1 text-gray-12 shadow-sm"
 											: "text-gray-10 hover:text-gray-12",
 									)}
 								>
-									{style}
+									{label}
 								</button>
 							))}
 						</div>
 					</Field>
-					<SliderWithHistory
-						label="Strength"
-						value={annotation.maskLevel ?? 16}
-						min={1}
-						max={50}
-						onChange={(v) => update("maskLevel", v)}
-						dragScope={dragScope}
-					/>
+					<Field name="Shape">
+						<div className="flex items-center gap-1 rounded-lg bg-gray-3 p-1">
+							{MASK_SHAPES.map(({ label, value }) => (
+								<button
+									key={value}
+									type="button"
+									onClick={() => update("maskShape", value)}
+									className={cn(
+										"h-7 flex-1 rounded-md text-xs transition-colors",
+										(annotation.maskShape ?? "rect") === value
+											? "bg-gray-1 text-gray-12 shadow-sm"
+											: "text-gray-10 hover:text-gray-12",
+									)}
+								>
+									{label}
+								</button>
+							))}
+						</div>
+					</Field>
+					{REVERSIBLE_MASK_MODES.has(maskMode) ? (
+						<p className="px-1 text-[11px] leading-snug text-gray-11">
+							Obscures the area but does not destroy it. Use Redact for
+							passwords, keys or anything else that must not be recoverable.
+						</p>
+					) : null}
+					{maskMode === "blur" || maskMode === "pixelate" ? (
+						<SliderWithHistory
+							label={maskMode === "blur" ? "Blur radius" : "Block size"}
+							value={annotation.maskAmount ?? MASK_AMOUNT_DEFAULT}
+							min={MASK_AMOUNT_MIN}
+							max={MASK_AMOUNT_MAX}
+							onChange={(v) => update("maskAmount", v)}
+							dragScope={dragScope}
+						/>
+					) : null}
+					{maskMode === "spotlight" ? (
+						<SliderWithHistory
+							label="Outside darkness"
+							value={annotation.maskDarkness ?? 0.5}
+							format={(v) => `${Math.round(v * 100)}%`}
+							min={0}
+							max={1}
+							step={0.01}
+							onChange={(v) => update("maskDarkness", v)}
+							dragScope={dragScope}
+						/>
+					) : null}
 				</>
 			)}
 

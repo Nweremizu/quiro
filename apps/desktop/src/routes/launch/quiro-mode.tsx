@@ -84,7 +84,7 @@ export function QuiroMode({ onInfoClick }: QuiroModeProps) {
 								className={cn(
 									"relative flex justify-center items-center rounded-full transition-all duration-200 size-7 focus:outline-none",
 									isSelected
-										? "ring-2 ring-offset-1 ring-offset-gray-1 bg-gray-7 hover:bg-gray-7 ring-accent-400"
+										? "ring-2 ring-offset-1 ring-offset-gray-1 bg-gray-7 hover:bg-gray-7 ring-accent-border-selected"
 										: "bg-gray-3 hover:bg-gray-7",
 								)}
 							>

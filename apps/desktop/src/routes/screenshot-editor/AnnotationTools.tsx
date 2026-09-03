@@ -51,6 +51,7 @@ export function AnnotationTools() {
 		activeTool,
 		setActiveTool,
 		setSelectedAnnotationId,
+		setCaptureSelected,
 		layersPanelOpen,
 		setLayersPanelOpen,
 	} = useScreenshotEditorContext();
@@ -74,6 +75,7 @@ export function AnnotationTools() {
 				event.preventDefault();
 				setActiveTool("select");
 				setSelectedAnnotationId(null);
+				setCaptureSelected(false);
 				return;
 			}
 
@@ -98,6 +100,7 @@ export function AnnotationTools() {
 		setLayersPanelOpen,
 		setActiveTool,
 		setSelectedAnnotationId,
+		setCaptureSelected,
 	]);
 
 	// A tool is armed for the canvas, so clicking anywhere that is not the

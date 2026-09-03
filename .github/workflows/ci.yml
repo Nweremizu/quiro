@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# One in-flight run per ref; a new push cancels the old one.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Lint · typecheck · checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          rust: "false"
+      - name: Biome
+        run: pnpm lint
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Geometry / arrow self-checks
+        run: pnpm check
+      - name: Frontend bundle
+        run: pnpm --filter desktop build:app
+
+  rust:
+    name: rustfmt · clippy · test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          cache-key: ci-rust
+      - name: Fetch native deps
+        run: |
+          node scripts/setup-onnxruntime.js
+          node scripts/setup-ffmpeg.mjs
+      - name: rustfmt
+        run: cargo fmt --all --check
+      - name: clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: test
+        run: cargo test --workspace
+
+  # Proves the installers still bundle, without publishing. Skipped on PRs to
+  # keep them fast — runs on merges to main and on demand.
+  bundle-smoke:
+    name: Bundle (${{ matrix.os }})
+    if: github.event_name != 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          cache-key: smoke-${{ matrix.os }}
+      - name: Fetch native deps
+        run: |
+          node scripts/setup-onnxruntime.js
+          node scripts/setup-ffmpeg.mjs
+      - name: Build bundles
+        # No signing key on CI — build the installers without updater artifacts.
+        run: pnpm --filter desktop tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle-smoke-${{ matrix.os }}
+          path: |
+            target/release/bundle/**/*.exe
+            target/release/bundle/**/*.dmg
+            target/release/bundle/**/*.AppImage
+            target/release/bundle/**/*.deb
+          retention-days: 5
+          if-no-files-found: error

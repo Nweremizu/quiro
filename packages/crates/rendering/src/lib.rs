@@ -14,11 +14,12 @@ use layers::{
     Background, BackgroundLayer, BackgroundNoise, BlurLayer, CameraLayer, CaptionsLayer,
     CursorLayer, DisplayLayer, FrameLayer, KeyboardLayer, MaskLayer, TextLayer,
 };
+use quiro_project::frame_layout;
 use quiro_project::{
-    AspectRatio, Camera, CameraShape, CameraXPosition, CameraYPosition, ClipOffsets,
-    ClipTransitionType, CornerStyle, Crop, CursorEvents, CursorType, FrameConfiguration,
-    FrameStyle, ProjectConfiguration, RecordingMeta, SceneMode, StudioRecordingMeta,
-    TimelineFrameMapping, TimelineSource, XY,
+    Camera, CameraShape, CameraXPosition, CameraYPosition, ClipOffsets, ClipTransitionType,
+    CornerStyle, Crop, CursorEvents, CursorType, FrameConfiguration, FrameStyle, MaskShape,
+    ProjectConfiguration, RecordingMeta, SceneMode, StudioRecordingMeta, TimelineFrameMapping,
+    TimelineSource, XY,
 };
 use specta::Type;
 use spring_mass_damper::SpringMassDamperSimulationConfig;
@@ -38,6 +39,7 @@ pub mod d3d_texture;
 pub mod decoder;
 pub mod frame_chrome;
 mod frame_pipeline;
+mod gpu_test_harness;
 #[cfg(target_os = "macos")]
 pub mod iosurface_texture;
 mod layers;
@@ -225,17 +227,31 @@ pub enum MaskRenderMode {
     Pixelate,
     Highlight,
     Blur,
+    /// Opaque fill. The only mode that destroys the source pixels rather than
+    /// transforming them, and so the only one safe for credentials.
+    Redact,
 }
 
 #[derive(Debug, Clone)]
 pub struct PreparedMask {
     pub center: XY<f32>,
     pub size: XY<f32>,
+    /// Softness as a plain 0..1 fraction of the region's **shorter pixel
+    /// axis**, resolved to pixels in the shader.
+    ///
+    /// It used to be pre-multiplied here against the normalized size, which
+    /// made it a length in UV space — and UV space is anisotropic on any
+    /// non-square frame, so the same number meant 1.78x more pixels
+    /// horizontally than vertically at 16:9. Keeping it a fraction and doing
+    /// the pixel maths where the frame size is known keeps it round.
     pub feather: f32,
     pub opacity: f32,
     pub effect_size: f32,
     pub darkness: f32,
     pub mode: MaskRenderMode,
+    pub shape: MaskShape,
+    /// Rounded-rect only: 0..1 of the region's shorter pixel axis.
+    pub corner_radius: f32,
     pub output_size: XY<u32>,
 }
 
@@ -2345,9 +2361,36 @@ fn fit_crop_to_target(
     [x0, y0, x0 + w, y0 + h]
 }
 
+/// Which half of the composition a render pass draws.
+///
+/// The screenshot editor's preview needs the canvas and the capture as
+/// separate images so the browser's compositor can place the capture — a drag
+/// then costs a CSS transform rather than a GPU render plus a frame over a
+/// socket. Export is unaffected: it renders [`CompositionScope::All`], which is
+/// the same single pass it always was, and remains the only thing that reaches
+/// a file.
+///
+/// The two split scopes are deliberately exclusive rather than additive:
+/// drawing the background in both would double the work and, with the card's
+/// shadow blended twice, not even produce the same image when recomposed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CompositionScope {
+    /// Everything, in one pass. What every caller but the split preview wants.
+    #[default]
+    All,
+    /// The canvas alone: background source, blur and noise, with nothing on it.
+    BackgroundOnly,
+    /// The capture's card alone — chrome, rounding, border and shadow included
+    /// — on transparency.
+    CardOnly,
+}
+
 #[derive(Clone, Debug)]
 pub struct ProjectUniforms {
     pub output_size: (u32, u32),
+    /// Set by the caller after construction; [`CompositionScope::All`] unless
+    /// something deliberately asks for half the image.
+    pub composition_scope: CompositionScope,
     pub cursor_size: f32,
     pub cursor_x_axis_tilt_radians: f32,
     pub frame_rate: u32,
@@ -2373,6 +2416,63 @@ pub struct ProjectUniforms {
     pub motion_blur_amount: f32,
     pub masks: Vec<PreparedMask>,
     pub texts: Vec<PreparedText>,
+}
+
+impl ProjectUniforms {
+    /// Grows the render target on every side and slides the composition into
+    /// the middle of it.
+    ///
+    /// Only the split preview's card pass uses this. That pass renders the
+    /// capture on its own, and a texture sized to the canvas cuts the card's
+    /// shadow off at the canvas edge — which is invisible while the card sits
+    /// where layout put it, and becomes a hard line around the screenshot the
+    /// moment it is moved inward. Growing the texture by the shadow's reach
+    /// keeps the whole object intact, so the canvas is the only thing that
+    /// ever clips it.
+    ///
+    /// Everything the card pass draws is repositioned here: the card's bounds,
+    /// the chrome around it, and the perspective inverse, which is built about
+    /// the card's centre and would otherwise project about the old one.
+    pub fn with_card_bleed(mut self, bleed: u32) -> Self {
+        if bleed == 0 {
+            return self;
+        }
+
+        let shift = bleed as f32;
+        self.output_size = (
+            self.output_size.0 + bleed * 2,
+            self.output_size.1 + bleed * 2,
+        );
+
+        let slide = |bounds: &mut [f32; 4]| {
+            bounds[0] += shift;
+            bounds[1] += shift;
+            bounds[2] += shift;
+            bounds[3] += shift;
+        };
+
+        slide(&mut self.display.target_bounds);
+        slide(&mut self.display_outer_bounds);
+        self.display.output_size = [self.output_size.0 as f32, self.output_size.1 as f32];
+
+        if let Some(chrome) = self.frame_chrome.as_mut() {
+            slide(&mut chrome.composite.target_bounds);
+            chrome.composite.output_size = self.display.output_size;
+        }
+
+        if self.display.inv_perspective != perspective::IDENTITY {
+            let layer_rotation = quiro_project::frame_layout::display_transform(&self.project)
+                .map(|transform| transform.rotation as f32)
+                .unwrap_or(0.0);
+            self.display.inv_perspective = perspective::inv_perspective_for_display(
+                self.project.background.perspective.as_ref(),
+                layer_rotation,
+                self.display.target_bounds,
+            );
+        }
+
+        self
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -2655,8 +2755,6 @@ const FLOATING_CAMERA_FRAC_STACKED: f32 = 0.40;
 /// cards always share one corner language out of the box.
 const FLOATING_ROUNDING_FRAC: f32 = 0.028;
 
-const SCREEN_MAX_PADDING: f64 = 0.4;
-
 const MOTION_BLUR_BASELINE_FPS: f32 = 60.0;
 /// Velocity is measured strictly against the previous frame (Screen Studio
 /// samples frame f vs f-1); averaging over more frames lags peaks and lets
@@ -2777,42 +2875,11 @@ impl ProjectUniforms {
     }
 
     fn auto_padding_factor(project: &ProjectConfiguration) -> f64 {
-        project.background.padding / 100.0 * SCREEN_MAX_PADDING
-    }
-
-    fn round_base_dimension(value: f64) -> u32 {
-        (((value.ceil() as u32) + 1) & !1).max(2)
-    }
-
-    fn fixed_aspect_base_size(crop: &Crop, target_aspect: f64, padding_factor: f64) -> (u32, u32) {
-        let crop_aspect = crop.aspect_ratio() as f64;
-        let padding = f64::from(u32::max(crop.size.x, crop.size.y)) * padding_factor * 2.0;
-
-        if crop_aspect > target_aspect {
-            let width = crop.size.x as f64 + padding;
-            let height = width / target_aspect;
-            (
-                Self::round_base_dimension(width),
-                Self::round_base_dimension(height),
-            )
-        } else {
-            let height = crop.size.y as f64 + padding;
-            let width = height * target_aspect;
-            (
-                Self::round_base_dimension(width),
-                Self::round_base_dimension(height),
-            )
-        }
+        frame_layout::auto_padding_factor(project)
     }
 
     pub fn get_crop(options: &RenderOptions, project: &ProjectConfiguration) -> Crop {
-        project.background.crop.as_ref().cloned().unwrap_or(Crop {
-            position: XY { x: 0, y: 0 },
-            size: XY {
-                x: options.screen_size.x,
-                y: options.screen_size.y,
-            },
-        })
+        frame_layout::crop(project, options.screen_size)
     }
 
     #[allow(unused)]
@@ -2826,30 +2893,7 @@ impl ProjectUniforms {
     }
 
     pub fn get_base_size(options: &RenderOptions, project: &ProjectConfiguration) -> (u32, u32) {
-        let crop = Self::get_crop(options, project);
-        let padding_factor = Self::auto_padding_factor(project);
-
-        match &project.aspect_ratio {
-            None => {
-                let scale = 1.0 + padding_factor * 2.0;
-                let width = ((crop.size.x as f64 * scale) as u32 + 1) & !1;
-                let height = ((crop.size.y as f64 * scale) as u32 + 1) & !1;
-                (width, height)
-            }
-            Some(AspectRatio::Square) => Self::fixed_aspect_base_size(&crop, 1.0, padding_factor),
-            Some(AspectRatio::Wide) => {
-                Self::fixed_aspect_base_size(&crop, 16.0 / 9.0, padding_factor)
-            }
-            Some(AspectRatio::Vertical) => {
-                Self::fixed_aspect_base_size(&crop, 9.0 / 16.0, padding_factor)
-            }
-            Some(AspectRatio::Classic) => {
-                Self::fixed_aspect_base_size(&crop, 4.0 / 3.0, padding_factor)
-            }
-            Some(AspectRatio::Tall) => {
-                Self::fixed_aspect_base_size(&crop, 3.0 / 4.0, padding_factor)
-            }
-        }
+        frame_layout::base_size(project, options.screen_size)
     }
 
     pub fn get_output_size(
@@ -2857,15 +2901,7 @@ impl ProjectUniforms {
         project: &ProjectConfiguration,
         resolution_base: XY<u32>,
     ) -> (u32, u32) {
-        let (base_width, base_height) = Self::get_base_size(options, project);
-
-        let width_scale = resolution_base.x as f32 / base_width as f32;
-        let height_scale = resolution_base.y as f32 / base_height as f32;
-        let scale = width_scale.min(height_scale);
-
-        let scaled_width = ((base_width as f32 * scale) as u32 + 3) & !3;
-        let scaled_height = ((base_height as f32 * scale) as u32 + 1) & !1;
-        (scaled_width, scaled_height)
+        frame_layout::output_size(project, options.screen_size, resolution_base)
     }
 
     pub fn display_offset(
@@ -2934,10 +2970,35 @@ impl ProjectUniforms {
             })
             .unwrap_or(XY::new(0.0, 0.0));
 
+        let outer_offset = outer_offset + delta;
+        let content_offset = content_offset + delta;
+
+        // The canvas is a viewport, so a transformed card is free to hang off
+        // it and be clipped by the render target. Chrome and content scale
+        // about the *outer* card's centre rather than their own, or a framed
+        // capture would drift out of its own window chrome as it shrank.
+        let Some(transform) = frame_layout::display_transform(project) else {
+            return DisplayLayout {
+                outer_offset,
+                outer_size,
+                content_offset,
+                content_size,
+            };
+        };
+
+        let (transformed_outer_offset, transformed_outer_size) =
+            frame_layout::transform_rect(outer_offset, outer_size, &transform, output_size);
+        let outer_centre = outer_offset + outer_size / 2.0;
+        let shift = (transformed_outer_offset + transformed_outer_size / 2.0) - outer_centre;
+
+        let content_centre =
+            outer_centre + (content_offset + content_size / 2.0 - outer_centre) * transform.scale;
+        let content_size = content_size * transform.scale;
+
         DisplayLayout {
-            outer_offset: outer_offset + delta,
-            outer_size,
-            content_offset: content_offset + delta,
+            outer_offset: transformed_outer_offset,
+            outer_size: transformed_outer_size,
+            content_offset: content_centre + shift - content_size / 2.0,
             content_size,
         }
     }
@@ -2947,74 +3008,11 @@ impl ProjectUniforms {
         project: &ProjectConfiguration,
         resolution_base: XY<u32>,
     ) -> Coord<FrameSpace> {
-        let output_size = Self::get_output_size(options, project, resolution_base);
-        let output_size = XY::new(output_size.0 as f64, output_size.1 as f64);
-        let crop = Self::get_crop(options, project);
-
-        if project.aspect_ratio.is_none() {
-            let (base_w, base_h) = Self::get_base_size(options, project);
-            let output_scale = f64::min(
-                output_size.x / f64::max(base_w as f64, 1.0),
-                output_size.y / f64::max(base_h as f64, 1.0),
-            );
-            let padding_factor = Self::auto_padding_factor(project);
-
-            return Coord::new(XY::new(
-                crop.size.x as f64 * padding_factor * output_scale,
-                crop.size.y as f64 * padding_factor * output_scale,
-            ));
-        }
-
-        let output_aspect = output_size.x / output_size.y;
-
-        let crop_start =
-            Coord::<RawDisplaySpace>::new(XY::new(crop.position.x as f64, crop.position.y as f64));
-        let crop_end = Coord::<RawDisplaySpace>::new(XY::new(
-            (crop.position.x + crop.size.x) as f64,
-            (crop.position.y + crop.size.y) as f64,
-        ));
-
-        let cropped_size = crop_end.coord - crop_start.coord;
-
-        let cropped_aspect = cropped_size.x / cropped_size.y;
-
-        let padding = {
-            let padding_factor = project.background.padding / 100.0 * SCREEN_MAX_PADDING;
-            let crop_basis = f64::max(cropped_size.x, cropped_size.y);
-            let base_padding = crop_basis * padding_factor;
-
-            let (base_w, base_h) = Self::get_base_size(options, project);
-            let output_scale = f64::min(
-                output_size.x / f64::max(base_w as f64, 1.0),
-                output_size.y / f64::max(base_h as f64, 1.0),
-            );
-            let max_padding = f64::max(
-                f64::min((output_size.x - 1.0) / 2.0, (output_size.y - 1.0) / 2.0),
-                0.0,
-            );
-            (base_padding * output_scale).min(max_padding)
-        };
-
-        let is_height_constrained = cropped_aspect <= output_aspect;
-
-        let available_size = XY::new(
-            (output_size.x - 2.0 * padding).max(1.0),
-            (output_size.y - 2.0 * padding).max(1.0),
-        );
-
-        let target_size = if is_height_constrained {
-            XY::new(available_size.y * cropped_aspect, available_size.y)
-        } else {
-            XY::new(available_size.x, available_size.x / cropped_aspect)
-        };
-
-        let target_offset = (output_size - target_size) / 2.0;
-
-        Coord::new(if is_height_constrained {
-            XY::new(target_offset.x, padding)
-        } else {
-            XY::new(padding, target_offset.y)
-        })
+        Coord::new(frame_layout::base_offset(
+            project,
+            options.screen_size,
+            resolution_base,
+        ))
     }
 
     pub fn display_size(
@@ -3595,10 +3593,32 @@ impl ProjectUniforms {
             // card would actually spill past the frame, it is 1.0 here too, so
             // the common case (no tilt, or a gentle one) is untouched and the
             // aspect-ratio picker stays the sole authority on output size.
+            // A layer transform is the user placing the capture by hand, so the
+            // canvas becomes a clipping viewport and the fit-to-frame shrink
+            // below has to stand down: silently rescaling a card the user just
+            // dragged half off the edge is the opposite of what they asked for.
+            let layer_transform = frame_layout::display_transform(project);
+            // The border is the one card decoration configured as an absolute
+            // width rather than derived from the card's size, so it is the one
+            // that would not follow a scaled capture. Rounding and shadow are
+            // already fractions of the card's own extent and scale on their
+            // own. Scaling it here also keeps the split preview honest: there
+            // the browser scales an already-rendered card, so a border left at
+            // a fixed width would be the single thing preview and export
+            // disagreed about.
+            let layer_scale = layer_transform.map_or(1.0, |t| t.scale) as f32;
+            let border_width =
+                project.background.border.as_ref().map_or(5.0, |b| b.width) * layer_scale;
             let perspective_fit_scale = project
                 .background
                 .perspective
                 .as_ref()
+                // Keyed on the raw option rather than the resolved transform:
+                // "the user has placed this card by hand" is the condition, and
+                // the split preview's card pass carries a neutralised transform
+                // that must still take this branch or it would shrink where the
+                // export does not.
+                .filter(|_| project.background.display_transform.is_none())
                 .map(|config| {
                     let center = [
                         (final_target_bounds[0] + final_target_bounds[2]) * 0.5,
@@ -3748,7 +3768,7 @@ impl ProjectUniforms {
                             .map_or(50.0, |s| s.blur),
                         opacity: scene.screen_opacity as f32 * split_fade,
                         border_enabled: if decorated && border_on { 1.0 } else { 0.0 },
-                        border_width: project.background.border.as_ref().map_or(5.0, |b| b.width),
+                        border_width,
                         preserve_source_alpha: 1.0,
                         _padding1: [0.0; 3],
                         border_color,
@@ -3777,6 +3797,7 @@ impl ProjectUniforms {
             // place the tilt actually applies.
             let inv_perspective = perspective::inv_perspective_for_display(
                 project.background.perspective.as_ref(),
+                layer_transform.map_or(0.0, |t| t.rotation as f32),
                 final_target_bounds,
             );
 
@@ -3818,7 +3839,7 @@ impl ProjectUniforms {
                         .map_or(50.0, |s| s.blur),
                     opacity: scene.screen_opacity as f32,
                     border_enabled: if border_on && !frame_active { 1.0 } else { 0.0 },
-                    border_width: project.background.border.as_ref().map_or(5.0, |b| b.width),
+                    border_width,
                     preserve_source_alpha: if options.preserve_screen_alpha {
                         1.0
                     } else {
@@ -4163,6 +4184,7 @@ impl ProjectUniforms {
 
         Self {
             output_size,
+            composition_scope: CompositionScope::default(),
             cursor_size: project.cursor.size as f32,
             cursor_x_axis_tilt_radians,
             resolution_base,
@@ -4191,6 +4213,7 @@ impl ProjectUniforms {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use quiro_project::{AspectRatio, LayerTransform};
 
     fn render_options(screen_width: u32, screen_height: u32) -> RenderOptions {
         RenderOptions {
@@ -4319,6 +4342,143 @@ mod tests {
         assert_eq!(offset.coord, XY::new(-960.0, 972.0));
         // Position never changes the display size.
         assert_eq!(size.coord, XY::new(1920.0, 1080.0));
+    }
+
+    #[test]
+    fn layer_transform_none_is_byte_identical_to_no_transform() {
+        // Every project that predates the gizmo carries `None` here, so this
+        // is the path almost all rendering takes and it must not move a pixel.
+        let options = render_options(1920, 1080);
+        let mut project = ProjectConfiguration::default();
+        project.background.padding = 30.0;
+        let resolution_base = XY::new(2688, 1512);
+
+        let untouched = ProjectUniforms::display_layout(&options, &project, resolution_base);
+
+        project.background.display_transform = Some(LayerTransform::default());
+        let identity = ProjectUniforms::display_layout(&options, &project, resolution_base);
+
+        assert_eq!(untouched.content_offset, identity.content_offset);
+        assert_eq!(untouched.content_size, identity.content_size);
+    }
+
+    #[test]
+    fn layer_transform_scales_about_the_card_centre() {
+        // Growing the capture must keep its centre pinned; a scale that walked
+        // the card toward the frame origin would make the handles fight the
+        // pointer on every drag.
+        let options = render_options(1920, 1080);
+        let mut project = ProjectConfiguration::default();
+        project.background.padding = 50.0;
+        let resolution_base = XY::new(2688, 1512);
+
+        let before = ProjectUniforms::display_layout(&options, &project, resolution_base);
+        project.background.display_transform = Some(LayerTransform {
+            scale: 2.0,
+            ..Default::default()
+        });
+        let after = ProjectUniforms::display_layout(&options, &project, resolution_base);
+
+        let centre = |l: &DisplayLayout| l.content_offset + l.content_size / 2.0;
+        assert_eq!(centre(&before), centre(&after));
+        assert_eq!(after.content_size, before.content_size * 2.0);
+    }
+
+    #[test]
+    fn layer_transform_offset_is_a_fraction_of_the_canvas() {
+        // The offset has to be resolution-independent, so a quarter-width
+        // nudge is a quarter of the *output*, not of the capture.
+        let options = render_options(1920, 1080);
+        let mut project = ProjectConfiguration::default();
+        project.background.padding = 50.0;
+        let resolution_base = XY::new(2688, 1512);
+
+        let before = ProjectUniforms::display_offset(&options, &project, resolution_base);
+        project.background.display_transform = Some(LayerTransform {
+            offset: XY::new(0.25, -0.5),
+            ..Default::default()
+        });
+        let after = ProjectUniforms::display_offset(&options, &project, resolution_base);
+
+        let (out_w, out_h) = ProjectUniforms::get_output_size(&options, &project, resolution_base);
+        assert_eq!(after.x - before.x, out_w as f64 * 0.25);
+        assert_eq!(after.y - before.y, out_h as f64 * -0.5);
+    }
+
+    #[test]
+    fn layer_transform_can_push_the_capture_clean_off_the_canvas() {
+        // The whole point of a clipping viewport: unlike `display_position`,
+        // which clamps its centre into the frame, this may leave entirely and
+        // the render target is what removes it.
+        let options = render_options(1920, 1080);
+        let mut project = ProjectConfiguration::default();
+        project.background.display_transform = Some(LayerTransform {
+            offset: XY::new(2.0, 0.0),
+            ..Default::default()
+        });
+        let resolution_base = XY::new(2688, 1512);
+
+        let offset = ProjectUniforms::display_offset(&options, &project, resolution_base);
+        let size = ProjectUniforms::display_size(&options, &project, resolution_base);
+        let (out_w, _) = ProjectUniforms::get_output_size(&options, &project, resolution_base);
+
+        assert!(
+            offset.x > out_w as f64,
+            "expected the card entirely past the right edge, got {offset:?} {size:?}"
+        );
+    }
+
+    #[test]
+    fn layer_transform_is_clamped_before_it_reaches_the_renderer() {
+        // Sidecars are hand-editable and a degenerate gesture can produce NaN;
+        // neither may reach the layout maths as a size of zero or a NaN rect.
+        let options = render_options(1920, 1080);
+        let mut project = ProjectConfiguration::default();
+        project.background.display_transform = Some(LayerTransform {
+            offset: XY::new(f64::NAN, 500.0),
+            scale: 0.0,
+            rotation: f64::INFINITY,
+        });
+
+        let resolution_base = XY::new(2688, 1512);
+        let offset = ProjectUniforms::display_offset(&options, &project, resolution_base);
+        let size = ProjectUniforms::display_size(&options, &project, resolution_base);
+
+        assert!(offset.x.is_finite() && offset.y.is_finite(), "{offset:?}");
+        assert!(size.x > 0.0 && size.y > 0.0, "{size:?}");
+    }
+
+    #[test]
+    fn layer_transform_keeps_frame_chrome_glued_to_its_content() {
+        // With a decorative frame the outer card and the video inside it are
+        // two rects; scaling them independently would slide the video out of
+        // its own window chrome.
+        let options = render_options(1920, 1080);
+        let mut project = ProjectConfiguration::default();
+        project.background.padding = 20.0;
+        project.background.frame = Some(FrameConfiguration {
+            style: FrameStyle::MacOS,
+            ..Default::default()
+        });
+        let resolution_base = XY::new(2688, 1512);
+
+        let before = ProjectUniforms::display_layout(&options, &project, resolution_base);
+        project.background.display_transform = Some(LayerTransform {
+            offset: XY::new(0.1, 0.05),
+            scale: 0.5,
+            ..Default::default()
+        });
+        let after = ProjectUniforms::display_layout(&options, &project, resolution_base);
+
+        // The content's inset within the chrome is a fixed fraction of the
+        // outer card, so halving the card must halve the inset with it.
+        let inset_before = before.content_offset - before.outer_offset;
+        let inset_after = after.content_offset - after.outer_offset;
+        assert!(
+            (inset_after.x - inset_before.x * 0.5).abs() < 1e-6
+                && (inset_after.y - inset_before.y * 0.5).abs() < 1e-6,
+            "chrome inset {inset_after:?} should be half of {inset_before:?}"
+        );
     }
 
     #[test]
@@ -5806,6 +5966,52 @@ impl RendererLayers {
         if render_display {
             self.display.copy_to_texture(encoder);
         }
+
+        // The split scopes bail out before the overlays. Cursor, camera, masks,
+        // text, keyboard and captions belong to neither half — the screenshot
+        // editor has none of them, and a video caller never asks for a split —
+        // so rather than guess which side should own them, neither does.
+        if uniforms.composition_scope == CompositionScope::BackgroundOnly {
+            {
+                let mut pass = render_pass!(
+                    session.current_texture_view(),
+                    wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT)
+                );
+                self.background.render(&mut pass);
+            }
+
+            if self.background_blur.blur_amount > 0.0 {
+                let mut pass = render_pass!(session.other_texture_view(), wgpu::LoadOp::Load);
+                self.background_blur
+                    .render(&mut pass, device, session.current_texture_view());
+                session.swap_textures();
+            }
+            return;
+        }
+
+        if uniforms.composition_scope == CompositionScope::CardOnly {
+            // Cleared to transparent and never painted over, so everything the
+            // card does not cover — including the space its own shadow falls
+            // across — comes back with the alpha the browser needs to composite
+            // it onto the background layer.
+            {
+                let _clear = render_pass!(
+                    session.current_texture_view(),
+                    wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT)
+                );
+            }
+
+            if render_display && self.display.has_valid_frame() {
+                if self.frame.has_content() {
+                    let mut pass = render_pass!(session.current_texture_view(), wgpu::LoadOp::Load);
+                    self.frame.render(&mut pass);
+                }
+                let mut pass = render_pass!(session.current_texture_view(), wgpu::LoadOp::Load);
+                self.display.render(&mut pass);
+            }
+            return;
+        }
+
         self.camera.copy_to_texture(encoder);
         self.camera_only.copy_to_texture(encoder);
 

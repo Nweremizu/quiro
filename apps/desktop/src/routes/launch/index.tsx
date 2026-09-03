@@ -811,9 +811,9 @@ export function LaunchRoutePage() {
 						<div className="flex flex-row gap-2 items-stretch w-full">
 							<div
 								className={cn(
-									"flex flex-1 overflow-hidden rounded-lg border border-gray-6 bg-gray-2 ring-1 ring-transparent ring-offset-1 ring-offset-gray-1 transition-[background-color,border-color] focus-within:ring-accent-500 focus-within:ring-offset-1 focus-within:ring-offset-gray-1",
+									"flex flex-1 overflow-hidden rounded-lg border border-gray-6 bg-gray-2 ring-1 ring-transparent ring-offset-1 ring-offset-gray-1 transition-[background-color,border-color] focus-within:ring-accent-focus-ring focus-within:ring-offset-1 focus-within:ring-offset-gray-1",
 									rawOptions.targetMode === "display" || displayMenuOpen
-										? "border-accent-400 bg-accent-300 ring-accent-400 hover:border-accent-500 hover:bg-accent-400 dark:bg-accent-300/30 dark:hover:bg-accent-400/40"
+										? "border-accent-border bg-accent-surface ring-accent-border-selected hover:border-accent-border-selected hover:bg-accent-surface-hover"
 										: "hover:border-gray-8 hover:bg-gray-3",
 								)}
 							>
@@ -853,9 +853,9 @@ export function LaunchRoutePage() {
 							{/* Window Selection */}
 							<div
 								className={cn(
-									"flex flex-1 overflow-hidden rounded-lg border border-gray-6 bg-gray-2 ring-1 ring-transparent ring-offset-1 ring-offset-gray-1 transition-[background-color,border-color] focus-within:ring-accent-300 focus-within:ring-offset-1 focus-within:ring-offset-gray-1",
+									"flex flex-1 overflow-hidden rounded-lg border border-gray-6 bg-gray-2 ring-1 ring-transparent ring-offset-1 ring-offset-gray-1 transition-[background-color,border-color] focus-within:ring-accent-focus-ring focus-within:ring-offset-1 focus-within:ring-offset-gray-1",
 									rawOptions.targetMode === "window" || windowMenuOpen
-										? "border-accent-400 bg-accent-300 ring-accent-400 hover:border-accent-500 hover:bg-accent-400 dark:bg-accent-300/30 dark:hover:bg-accent-400/40"
+										? "border-accent-border bg-accent-surface ring-accent-border-selected hover:border-accent-border-selected hover:bg-accent-surface-hover"
 										: "hover:border-gray-8 hover:bg-gray-3",
 								)}
 							>
@@ -1137,7 +1137,7 @@ export function LaunchRoutePage() {
 								href="#"
 							>
 								<div className="flex items-center gap-2">
-									<div className="flex items-center justify-center gap-1 rounded-lg bg-accent-400 dark:bg-accent-500 w-fit! p-1.5 transition-colors hover:bg-accent-400">
+									<div className="flex items-center justify-center gap-1 rounded-lg bg-accent-solid w-fit! p-1.5 transition-colors hover:bg-accent-solid-hover">
 										<IconQuiroLogo className="size-8.5 text-white" />
 									</div>
 									<span className="text-4xl font-sans font-medium">Quiro</span>

@@ -6,6 +6,7 @@ use std::{
     sync::LazyLock,
 };
 
+use crate::frame_layout;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use specta::Type;
@@ -323,6 +324,16 @@ pub struct BackgroundConfiguration {
     /// Grain size for `noise_intensity`. Defaults to `3.0` when noise is on.
     #[serde(default)]
     pub noise_scale: Option<f32>,
+    /// Free placement of the capture inside the canvas: drag, uniform scale,
+    /// in-plane rotation. `None` renders exactly the layout-derived placement
+    /// this field did not exist to change.
+    ///
+    /// Its offset composes with [`Self::display_position`] rather than
+    /// replacing it: that one is an absolute centre clamped into the frame,
+    /// this one is a free delta on top, so a layer may leave the canvas
+    /// entirely and be clipped.
+    #[serde(default)]
+    pub display_transform: Option<LayerTransform>,
 }
 
 impl Default for BorderConfiguration {
@@ -354,6 +365,81 @@ impl Default for BackgroundConfiguration {
             perspective: None, // Flat by default
             noise_intensity: None,
             noise_scale: None,
+            display_transform: None,
+        }
+    }
+}
+
+/// A composited layer's placement relative to the canvas it lives in.
+///
+/// The canvas is a fixed viewport, not a bounding box: it owns the output size
+/// and the background, and whatever a layer puts outside it is clipped by the
+/// render target rather than growing the frame. This is how far a layer has
+/// been moved, scaled and spun inside that viewport, measured from wherever
+/// the layout put it.
+///
+/// `offset` is a fraction of the canvas rather than pixels, so a composition
+/// authored against the editor's preview survives an export at any other
+/// resolution. Rotation is deliberately separate from the rect: the renderer
+/// carries it in the card homography, which leaves `offset` and `scale`
+/// describing an axis-aligned rect that layout, hit-testing and the annotation
+/// anchor can all still reason about.
+#[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LayerTransform {
+    /// Displacement from the laid-out position, as a fraction of canvas
+    /// width and height. Zero leaves the layer where layout put it.
+    pub offset: XY<f64>,
+    /// Uniform scale about the layer's own centre.
+    pub scale: f64,
+    /// In-plane rotation about the layer's own centre, in degrees.
+    pub rotation: f64,
+}
+
+/// Below this the layer is a speck no gesture could recover, and the rounding
+/// and shadow maths it feeds start dividing by near-zero extents.
+pub const MIN_LAYER_SCALE: f64 = 0.05;
+/// Above this a drag has effectively lost the layer: every handle is off
+/// screen, so there is no way back except undo.
+pub const MAX_LAYER_SCALE: f64 = 8.0;
+/// A layer may be dragged clean off the canvas — that is the point of a
+/// clipping viewport — but not so far that finding it again is a puzzle.
+pub const MAX_LAYER_OFFSET: f64 = 2.0;
+
+impl Default for LayerTransform {
+    fn default() -> Self {
+        Self {
+            offset: XY::new(0.0, 0.0),
+            scale: 1.0,
+            rotation: 0.0,
+        }
+    }
+}
+
+impl LayerTransform {
+    /// Whether this leaves the layer exactly where layout put it, so callers
+    /// can take the untransformed path and stay bit-identical to a project
+    /// that has never touched the gizmo.
+    pub fn is_identity(&self) -> bool {
+        self.offset.x == 0.0
+            && self.offset.y == 0.0
+            && (self.scale - 1.0).abs() < f64::EPSILON
+            && self.rotation == 0.0
+    }
+
+    /// The same transform with every field pulled into a range the renderer
+    /// can draw. Sidecars are hand-editable and gestures can produce NaN from
+    /// a degenerate pointer delta, so this is applied on the way into the
+    /// renderer rather than trusted at the edge.
+    pub fn clamped(&self) -> Self {
+        let finite = |value: f64, fallback: f64| if value.is_finite() { value } else { fallback };
+        Self {
+            offset: XY::new(
+                finite(self.offset.x, 0.0).clamp(-MAX_LAYER_OFFSET, MAX_LAYER_OFFSET),
+                finite(self.offset.y, 0.0).clamp(-MAX_LAYER_OFFSET, MAX_LAYER_OFFSET),
+            ),
+            scale: finite(self.scale, 1.0).clamp(MIN_LAYER_SCALE, MAX_LAYER_SCALE),
+            rotation: finite(self.rotation, 0.0) % 360.0,
         }
     }
 }
@@ -809,17 +895,58 @@ pub enum ZoomMode {
     Manual { x: f32, y: f32 },
 }
 
-#[derive(Type, Serialize, Deserialize, Clone, Copy, Debug)]
+/// What a mask does to the region it covers.
+///
+/// Replaces the old split between a `MaskKind` of `sensitive`/`highlight` —
+/// which was a *category*, not a mode — and a discriminant smuggled into the
+/// effect amount by adding 1000 to it. One enum, readable in the JSON,
+/// checkable by the compiler.
+#[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
-pub enum MaskKind {
-    Sensitive,
-    Highlight,
+pub enum MaskMode {
+    /// Separable gaussian. Obscures; does **not** guarantee irreversibility —
+    /// a gaussian is deconvolvable in principle.
+    #[default]
+    Blur,
+    /// Nearest-neighbour block averaging. Also not irreversible: each block
+    /// leaks the average of the pixels under it.
+    Pixelate,
+    /// Opaque fill. The only mode safe for credentials — no source pixel
+    /// survives inside the region.
+    Redact,
+    /// Darkens everything *outside* the region rather than obscuring inside
+    /// it. This is what the old `highlight` kind always did; the name now says
+    /// so, since "highlight" reads as drawing *on* the region.
+    Spotlight,
+}
+
+impl MaskMode {
+    /// Whether the original pixels can, even in principle, be recovered.
+    /// Drives the warning copy in the inspectors — a redaction tool that is
+    /// vague about this is worse than one that has no redaction at all.
+    pub fn is_reversible(self) -> bool {
+        match self {
+            MaskMode::Blur | MaskMode::Pixelate => true,
+            MaskMode::Redact | MaskMode::Spotlight => false,
+        }
+    }
+}
+
+/// The region's outline. Rendering for the non-rect variants lands with the
+/// shader rewrite in plan 004; the field exists now so that change is not
+/// another migration.
+#[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum MaskShape {
+    #[default]
+    Rect,
+    Ellipse,
+    RoundedRect,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MaskEffectContract {
-    pub blur_encoding_offset: f64,
     pub default_amount: f64,
     pub min_amount: f64,
     pub max_amount: f64,
@@ -869,15 +996,24 @@ pub struct MaskSegment {
     pub track: u32,
     #[serde(default = "MaskSegment::default_enabled")]
     pub enabled: bool,
-    pub mask_type: MaskKind,
+    /// What the mask does. Legacy configs carry `maskType` + `pixelation`
+    /// instead and are converted by
+    /// [`ProjectConfiguration::migrate_mask_model`].
+    #[serde(default)]
+    pub mode: MaskMode,
+    /// Effect strength in the contract's units (see `mask-effects.json`),
+    /// 1080p-relative and scaled by output height at render time. Meaningless
+    /// for [`MaskMode::Spotlight`], which uses `darkness` instead.
+    #[serde(default = "MaskSegment::default_amount")]
+    pub amount: f64,
+    #[serde(default)]
+    pub shape: MaskShape,
     pub center: XY<f64>,
     pub size: XY<f64>,
     #[serde(default)]
     pub feather: f64,
     #[serde(default = "MaskSegment::default_opacity")]
     pub opacity: f64,
-    #[serde(default = "MaskSegment::default_pixelation")]
-    pub pixelation: f64,
     #[serde(default)]
     pub darkness: f64,
     #[serde(default = "MaskSegment::default_fade_duration")]
@@ -895,7 +1031,7 @@ impl MaskSegment {
         1.0
     }
 
-    fn default_pixelation() -> f64 {
+    fn default_amount() -> f64 {
         mask_effect_contract().default_amount
     }
 
@@ -1570,13 +1706,6 @@ pub enum AnnotationType {
     Focus,
 }
 
-#[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub enum MaskType {
-    Blur,
-    Pixelate,
-}
-
 /// Arrow-only shape/style. All optional on `Annotation`: absent reproduces the
 /// original straight arrow with a single solid head. Geometry lives in the
 /// frontend's `arrow.ts`; the renderer never draws annotations.
@@ -1676,15 +1805,15 @@ impl Default for FocusConfig {
 
 #[derive(Debug, PartialEq)]
 pub enum AnnotationValidationError {
-    MaskTypeMissing {
+    MaskModeMissing {
         id: String,
     },
-    MaskLevelMissing {
+    MaskAmountMissing {
         id: String,
     },
-    MaskLevelInvalid {
+    MaskAmountInvalid {
         id: String,
-        level: f64,
+        amount: f64,
     },
     MaskDataNotAllowed {
         id: String,
@@ -1702,14 +1831,14 @@ pub enum AnnotationValidationError {
 impl fmt::Display for AnnotationValidationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MaskTypeMissing { id } => {
-                write!(f, "annotation {id} of type mask is missing maskType")
+            Self::MaskModeMissing { id } => {
+                write!(f, "annotation {id} of type mask is missing maskMode")
             }
-            Self::MaskLevelMissing { id } => {
-                write!(f, "annotation {id} of type mask is missing maskLevel")
+            Self::MaskAmountMissing { id } => {
+                write!(f, "annotation {id} of type mask is missing maskAmount")
             }
-            Self::MaskLevelInvalid { id, level } => {
-                write!(f, "annotation {id} has invalid maskLevel {level}")
+            Self::MaskAmountInvalid { id, amount } => {
+                write!(f, "annotation {id} has invalid maskAmount {amount}")
             }
             Self::MaskDataNotAllowed {
                 id,
@@ -1750,10 +1879,30 @@ pub struct Annotation {
     pub opacity: f64,
     pub rotation: f64,
     pub text: Option<String>,
+    /// What this mask does. `None` on every non-mask annotation; required on a
+    /// mask. Shares [`MaskMode`] with the timeline's `MaskSegment` — one
+    /// taxonomy for one concept.
+    #[serde(default, alias = "maskType")]
+    pub mask_mode: Option<MaskMode>,
+    /// Effect strength in the mask contract's units, 1080p-relative, exactly
+    /// as `MaskSegment::amount`. Legacy configs stored this as
+    /// `maskLevel` in frame pixels, which meant something different at every
+    /// frame size; converted by
+    /// [`ProjectConfiguration::migrate_annotation_space`].
+    #[serde(default, alias = "maskLevel")]
+    pub mask_amount: Option<f64>,
     #[serde(default)]
-    pub mask_type: Option<MaskType>,
+    pub mask_shape: Option<MaskShape>,
+    /// 0..1 of the region's shorter axis. Ignored for
+    /// [`MaskMode::Redact`], which must stay hard-edged.
     #[serde(default)]
-    pub mask_level: Option<f64>,
+    pub mask_feather: Option<f64>,
+    /// Spotlight only: how far the area *outside* the region is darkened.
+    #[serde(default)]
+    pub mask_darkness: Option<f64>,
+    /// 0..1 of the region's shorter axis, for [`MaskShape::RoundedRect`].
+    #[serde(default)]
+    pub mask_corner_radius: Option<f64>,
     #[serde(default)]
     pub focus: Option<FocusConfig>,
     #[serde(default)]
@@ -1777,7 +1926,12 @@ impl Annotation {
         // Type-specific payloads are mutually exclusive: each type must carry
         // its own and nothing else's.
         if self.annotation_type != AnnotationType::Mask
-            && (self.mask_type.is_some() || self.mask_level.is_some())
+            && (self.mask_mode.is_some()
+                || self.mask_amount.is_some()
+                || self.mask_shape.is_some()
+                || self.mask_feather.is_some()
+                || self.mask_darkness.is_some()
+                || self.mask_corner_radius.is_some())
         {
             return Err(AnnotationValidationError::MaskDataNotAllowed {
                 id: self.id.clone(),
@@ -1794,22 +1948,28 @@ impl Annotation {
 
         match self.annotation_type {
             AnnotationType::Mask => {
-                if self.mask_type.is_none() {
-                    return Err(AnnotationValidationError::MaskTypeMissing {
+                let Some(mode) = self.mask_mode else {
+                    return Err(AnnotationValidationError::MaskModeMissing {
                         id: self.id.clone(),
                     });
+                };
+
+                // Redact and Spotlight have no strength: one is opaque or it
+                // is not a redaction, and the other is driven by `darkness`.
+                if matches!(mode, MaskMode::Redact | MaskMode::Spotlight) {
+                    return Ok(());
                 }
 
-                let level =
-                    self.mask_level
-                        .ok_or_else(|| AnnotationValidationError::MaskLevelMissing {
-                            id: self.id.clone(),
-                        })?;
-
-                if !level.is_finite() || level <= 0.0 {
-                    return Err(AnnotationValidationError::MaskLevelInvalid {
+                let amount = self.mask_amount.ok_or_else(|| {
+                    AnnotationValidationError::MaskAmountMissing {
                         id: self.id.clone(),
-                        level,
+                    }
+                })?;
+
+                if !amount.is_finite() || amount <= 0.0 {
+                    return Err(AnnotationValidationError::MaskAmountInvalid {
+                        id: self.id.clone(),
+                        amount,
                     });
                 }
 
@@ -1857,9 +2017,48 @@ pub struct ProjectConfiguration {
     /// `Default::default()` produces the current version.
     #[serde(default)]
     pub text_size_version: u32,
+    /// How annotation geometry is interpreted. 0 (legacy): `x`/`y`/`width`/
+    /// `height` are pixels in the rendered output frame — a frame whose size
+    /// and content offset are recomputed whenever padding, crop or aspect
+    /// ratio changes, so the stored numbers stop meaning what they meant.
+    /// 1: normalized 0..1 against the annotation's [`AnnotationAnchor`].
+    ///
+    /// The field-level default keeps old files at 0 while `Default::default()`
+    /// produces the current version — the same arrangement as
+    /// [`Self::text_size_version`]. Migration is *not* performed here: it needs
+    /// the capture dimensions and the frame-layout maths, neither of which this
+    /// crate has. See `annotation_space::migrate`.
+    #[serde(default)]
+    pub annotation_space_version: u32,
+    /// How mask segments are encoded. 0 (legacy): a `maskType` of
+    /// `sensitive`/`highlight` plus a `pixelation` float that smuggled
+    /// blur-vs-pixelate into its own value by adding 1000 to it. 1: an explicit
+    /// [`MaskMode`] and a plain `amount`. Migrated on load — see
+    /// [`Self::migrate_mask_model`].
+    #[serde(default)]
+    pub mask_model_version: u32,
 }
 
 pub const TEXT_SIZE_VERSION: u32 = 1;
+
+/// Version 1 stores annotation geometry normalized to its anchor. See
+/// [`ProjectConfiguration::annotation_space_version`].
+/// 1 normalized geometry to the anchor. 2 additionally converted mask
+/// strength from frame pixels to the contract's 1080p-relative units, so a
+/// screenshot mask means the same thing as a timeline one.
+pub const ANNOTATION_SPACE_VERSION: u32 = 2;
+
+/// The height mask amounts are expressed relative to, matching
+/// `MASK_EFFECT_BASE_HEIGHT` in the renderer.
+const MASK_AMOUNT_BASE_HEIGHT: f64 = 1080.0;
+
+/// Version 1 stores an explicit [`MaskMode`] rather than a category plus a
+/// magic offset. See [`ProjectConfiguration::mask_model_version`].
+pub const MASK_MODEL_VERSION: u32 = 1;
+
+/// The offset legacy configs added to `pixelation` to mean "this is a blur".
+/// Only the migration knows this number; nothing else may.
+const LEGACY_BLUR_ENCODING_OFFSET: f64 = 1000.0;
 
 fn camera_config_needs_migration(value: &Value) -> bool {
     value
@@ -1890,6 +2089,8 @@ impl Default for ProjectConfiguration {
             screen_motion_blur: Self::default_screen_motion_blur(),
             screen_movement_spring: Default::default(),
             text_size_version: TEXT_SIZE_VERSION,
+            annotation_space_version: ANNOTATION_SPACE_VERSION,
+            mask_model_version: MASK_MODEL_VERSION,
         }
     }
 }
@@ -1908,6 +2109,185 @@ impl ProjectConfiguration {
         }
 
         Ok(())
+    }
+
+    /// Convert legacy pixel annotation geometry to normalized 0..1.
+    ///
+    /// Not part of [`Self::load`], which has no way to know the capture
+    /// dimensions — and the maths needs them. Call this from the one place
+    /// that has both, right after loading.
+    ///
+    /// Legacy geometry is in **rendered output frame** pixels, which include
+    /// the padding inset — not capture pixels. The conversion therefore
+    /// subtracts the content offset before dividing, and the frame it is
+    /// measured against is reconstructed from the config exactly as the
+    /// preview renderer does it: `output_size` at a `resolution_base` of
+    /// `base_size`, which is what the screenshot editor renders at.
+    ///
+    /// Returns `true` if the config changed and should be written back.
+    /// Returns `false` — leaving the version at 0 so a later run can retry —
+    /// when the frame cannot be resolved. Guessing a divisor here would move
+    /// every annotation in the project silently, which is strictly worse than
+    /// deferring.
+    pub fn migrate_annotation_space(&mut self, capture_size: XY<u32>) -> bool {
+        if self.annotation_space_version >= ANNOTATION_SPACE_VERSION {
+            return false;
+        }
+
+        if capture_size.x == 0 || capture_size.y == 0 {
+            return false;
+        }
+
+        // Nothing to convert: stamp the version so this never runs again.
+        if self.annotations.is_empty() {
+            self.annotation_space_version = ANNOTATION_SPACE_VERSION;
+            return true;
+        }
+
+        let (base_w, base_h) = frame_layout::base_size(self, capture_size);
+        let resolution_base = XY::new(base_w, base_h);
+        // `None` means a decorative frame is active and the content rect
+        // depends on chrome insets this crate does not carry.
+        let Some((offset, size)) = frame_layout::content_rect(self, capture_size, resolution_base)
+        else {
+            return false;
+        };
+
+        if !(size.x > 0.0) || !(size.y > 0.0) {
+            return false;
+        }
+
+        let from_version = self.annotation_space_version;
+
+        // The frame the legacy pixels were authored against — mask strength is
+        // relative to its full height, not to the capture inside it.
+        let (_, frame_height) = frame_layout::output_size(self, capture_size, resolution_base);
+        let frame_height = f64::from(frame_height.max(1));
+
+        for annotation in &mut self.annotations {
+            if from_version < 1 {
+                annotation.x = (annotation.x - offset.x) / size.x;
+                annotation.y = (annotation.y - offset.y) / size.y;
+                // Extents are differences, so they scale without the origin
+                // shift — and keep their sign, which a backwards-drawn shape
+                // relies on.
+                annotation.width /= size.x;
+                annotation.height /= size.y;
+                // A stroke normalized against both axes would change thickness
+                // whenever the aspect ratio changed. One axis only; height, to
+                // match the 1080p-relative convention `TextSegment::font_size`
+                // already uses.
+                annotation.stroke_width /= size.y;
+                // `arrow_head_size` is measured in the same pixels as the
+                // stroke and must travel with it, or curved arrows re-shape on
+                // load.
+                if let Some(head) = annotation.arrow_head_size.as_mut() {
+                    *head /= size.y;
+                }
+            }
+
+            if from_version < 2
+                && annotation.annotation_type == AnnotationType::Mask
+                && let Some(amount) = annotation.mask_amount.as_mut()
+            {
+                // Frame pixels → 1080p-relative, the inverse of the renderer's
+                // `scaled_effect_size`. At a 1080-tall frame this is identity,
+                // which is why the two units were never noticed to differ.
+                *amount = *amount * MASK_AMOUNT_BASE_HEIGHT / frame_height;
+            }
+        }
+
+        self.annotation_space_version = ANNOTATION_SPACE_VERSION;
+        true
+    }
+
+    /// Convert legacy `maskType` + `pixelation` segments to an explicit
+    /// [`MaskMode`] and `amount`.
+    ///
+    /// The legacy values cannot be recovered from the parsed struct — the
+    /// fields no longer exist on it — so this reads them out of the raw JSON,
+    /// the same way the camera migration does. Segments are matched by index,
+    /// which is safe because serde preserved their order.
+    ///
+    /// Conversion goes through the *old reader's* semantics rather than the
+    /// raw stored number, so a migrated project renders exactly as it did
+    /// before. That matters more than it sounds: the video editor's pixelation
+    /// slider wrote 0..1 into a field the renderer clamped to 4..80, so most
+    /// real configs hold a value that rendered as the minimum. Migrating the
+    /// stored number literally would change how they look.
+    ///
+    /// Returns `true` if anything changed and the file should be rewritten.
+    fn migrate_mask_model(&mut self, raw: Option<&Value>) -> bool {
+        if self.mask_model_version >= MASK_MODEL_VERSION {
+            return false;
+        }
+
+        let contract = mask_effect_contract();
+        // The old `normalize_effect_amount`, reproduced exactly.
+        let normalize = |amount: f64| -> f64 {
+            if amount <= 0.0 {
+                contract.default_amount
+            } else {
+                amount.clamp(contract.min_amount, contract.max_amount)
+            }
+        };
+
+        let legacy = raw
+            .and_then(|value| value.get("timeline"))
+            .and_then(|timeline| timeline.get("maskSegments"))
+            .and_then(|segments| segments.as_array());
+
+        if let Some(timeline) = self.timeline.as_mut() {
+            for (index, segment) in timeline.mask_segments.iter_mut().enumerate() {
+                let entry = legacy.and_then(|items| items.get(index));
+
+                let legacy_kind = entry
+                    .and_then(|item| item.get("maskType"))
+                    .and_then(|kind| kind.as_str());
+                let legacy_amount = entry
+                    .and_then(|item| item.get("pixelation"))
+                    .and_then(|amount| amount.as_f64());
+
+                match legacy_kind {
+                    Some("highlight") => {
+                        segment.mode = MaskMode::Spotlight;
+                        // Spotlight ignores `amount`; leave the default rather
+                        // than carrying a meaningless number forward.
+                    }
+                    // `sensitive`, or absent (the field's own default).
+                    _ => {
+                        let stored = legacy_amount
+                            .filter(|amount| amount.is_finite())
+                            .unwrap_or(contract.default_amount);
+                        if stored >= LEGACY_BLUR_ENCODING_OFFSET {
+                            segment.mode = MaskMode::Blur;
+                            segment.amount = normalize(stored - LEGACY_BLUR_ENCODING_OFFSET);
+                        } else {
+                            segment.mode = MaskMode::Pixelate;
+                            segment.amount = normalize(stored);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Annotations carried their own two-variant `maskType`, whose values
+        // are already valid `MaskMode` variants — a serde alias on
+        // `mask_mode` reads them directly, so there is nothing to convert
+        // here. Only a mask that never had the field needs filling in, and it
+        // gets the same default the frontend's `?? \"blur\"` already applied.
+        // (The *amount* is a different story: its legacy units were frame
+        // pixels, so it needs the frame size and is converted in
+        // `migrate_annotation_space`.)
+        for annotation in &mut self.annotations {
+            if annotation.annotation_type == AnnotationType::Mask && annotation.mask_mode.is_none()
+            {
+                annotation.mask_mode = Some(MaskMode::Blur);
+            }
+        }
+
+        self.mask_model_version = MASK_MODEL_VERSION;
+        true
     }
 
     pub fn load(project_path: impl AsRef<Path>) -> Result<Self, std::io::Error> {
@@ -1958,11 +2338,14 @@ impl ProjectConfiguration {
             config.text_size_version = TEXT_SIZE_VERSION;
         }
 
+        let needs_mask_model_migration = config.migrate_mask_model(parsed_value.as_ref());
+
         config
             .validate()
             .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
 
         if needs_camera_migration
+            || needs_mask_model_migration
             || needs_motion_blur_clamp
             || needs_screen_motion_blur_migration
             || needs_text_size_migration
@@ -2222,17 +2605,16 @@ mod tests {
     }
 
     #[test]
-    fn mask_without_pixelation_uses_a_visible_safe_default() {
+    fn mask_without_an_amount_uses_a_visible_safe_default() {
         let segment: MaskSegment = serde_json::from_value(serde_json::json!({
             "start": 0.0,
             "end": 1.0,
-            "maskType": "sensitive",
             "center": { "x": 0.5, "y": 0.5 },
             "size": { "x": 0.25, "y": 0.25 }
         }))
         .unwrap();
 
-        assert_eq!(segment.pixelation, 16.0);
+        assert_eq!(segment.amount, 16.0);
     }
 
     #[test]
@@ -2491,5 +2873,485 @@ mod tests {
         assert_eq!(spring.stiffness, default_spring.stiffness);
         assert_eq!(spring.damping, default_spring.damping);
         assert_eq!(spring.mass, default_spring.mass);
+    }
+}
+
+#[cfg(test)]
+mod annotation_space_tests {
+    use super::*;
+
+    fn annotation(x: f64, y: f64, width: f64, height: f64) -> Annotation {
+        Annotation {
+            id: "a".to_string(),
+            annotation_type: AnnotationType::Rectangle,
+            x,
+            y,
+            width,
+            height,
+            stroke_color: "#000".to_string(),
+            stroke_width: 4.0,
+            fill_color: "transparent".to_string(),
+            opacity: 1.0,
+            rotation: 0.0,
+            text: None,
+            mask_mode: None,
+            mask_amount: None,
+            mask_shape: None,
+            mask_feather: None,
+            mask_darkness: None,
+            mask_corner_radius: None,
+            focus: None,
+            arrow_curve: None,
+            arrow_bend: None,
+            arrow_start_head: None,
+            arrow_end_head: None,
+            arrow_head_size: None,
+            line_style: None,
+            arrow_taper: None,
+        }
+    }
+
+    fn config_with(padding: f64, annotations: Vec<Annotation>) -> ProjectConfiguration {
+        let mut config = ProjectConfiguration {
+            annotation_space_version: 0,
+            annotations,
+            ..Default::default()
+        };
+        config.background.padding = padding;
+        config
+    }
+
+    /// The content rect is what the renderer would place the capture at, so a
+    /// migrated annotation must resolve back to the pixels it started as.
+    #[test]
+    fn migration_round_trips_through_the_content_rect() {
+        let capture = XY::new(1920u32, 1080u32);
+        let mut config = config_with(30.0, vec![annotation(400.0, 300.0, 200.0, 150.0)]);
+
+        let (base_w, base_h) = frame_layout::base_size(&config, capture);
+        let (offset, size) =
+            frame_layout::content_rect(&config, capture, XY::new(base_w, base_h)).unwrap();
+
+        assert!(config.migrate_annotation_space(capture));
+        assert_eq!(config.annotation_space_version, ANNOTATION_SPACE_VERSION);
+
+        let a = &config.annotations[0];
+        assert!((a.x * size.x + offset.x - 400.0).abs() < 1e-9);
+        assert!((a.y * size.y + offset.y - 300.0).abs() < 1e-9);
+        assert!((a.width * size.x - 200.0).abs() < 1e-9);
+        assert!((a.height * size.y - 150.0).abs() < 1e-9);
+    }
+
+    /// The bug this whole plan exists to fix: the same normalized annotation
+    /// must land on the same part of the capture after the padding changes,
+    /// where a pixel-stored one would have stayed put and drifted off it.
+    #[test]
+    fn normalized_geometry_tracks_the_capture_across_a_padding_change() {
+        let capture = XY::new(1920u32, 1080u32);
+        let mut config = config_with(0.0, vec![annotation(960.0, 540.0, 100.0, 100.0)]);
+        assert!(config.migrate_annotation_space(capture));
+        let normalized = config.annotations[0].x;
+
+        // Same document, more padding: the capture shrinks inside a bigger frame.
+        config.background.padding = 60.0;
+        let (base_w, base_h) = frame_layout::base_size(&config, capture);
+        let (offset, size) =
+            frame_layout::content_rect(&config, capture, XY::new(base_w, base_h)).unwrap();
+
+        let resolved = normalized * size.x + offset.x;
+        // It moved, because the capture moved — which is the point.
+        assert!(
+            (resolved - 960.0).abs() > 1.0,
+            "expected the resolved position to follow the capture, got {resolved}"
+        );
+        // And it is still at the same fraction across the capture.
+        assert!(((resolved - offset.x) / size.x - normalized).abs() < 1e-9);
+    }
+
+    /// Stroke width is normalized against one axis, so a change of aspect
+    /// ratio cannot make a stroke thicker in one direction than the other.
+    #[test]
+    fn stroke_width_normalizes_against_height_only() {
+        let capture = XY::new(1920u32, 1080u32);
+        let mut config = config_with(0.0, vec![annotation(0.0, 0.0, 10.0, 10.0)]);
+        let (base_w, base_h) = frame_layout::base_size(&config, capture);
+        let (_, size) =
+            frame_layout::content_rect(&config, capture, XY::new(base_w, base_h)).unwrap();
+
+        assert!(config.migrate_annotation_space(capture));
+        assert!((config.annotations[0].stroke_width - 4.0 / size.y).abs() < 1e-12);
+    }
+
+    #[test]
+    fn migration_is_idempotent() {
+        let capture = XY::new(1920u32, 1080u32);
+        let mut config = config_with(20.0, vec![annotation(100.0, 100.0, 50.0, 50.0)]);
+        assert!(config.migrate_annotation_space(capture));
+        let after_first = config.annotations[0].x;
+        // A second run must be a no-op, not a second divide.
+        assert!(!config.migrate_annotation_space(capture));
+        assert_eq!(config.annotations[0].x, after_first);
+    }
+
+    #[test]
+    fn empty_annotations_still_stamp_the_version() {
+        let capture = XY::new(1920u32, 1080u32);
+        let mut config = config_with(0.0, vec![]);
+        assert!(config.migrate_annotation_space(capture));
+        assert_eq!(config.annotation_space_version, ANNOTATION_SPACE_VERSION);
+    }
+
+    /// An unresolvable capture size must defer rather than guess a divisor.
+    #[test]
+    fn unresolvable_capture_size_defers() {
+        let mut config = config_with(0.0, vec![annotation(10.0, 10.0, 5.0, 5.0)]);
+        assert!(!config.migrate_annotation_space(XY::new(0u32, 0u32)));
+        assert_eq!(config.annotation_space_version, 0);
+        assert_eq!(config.annotations[0].x, 10.0);
+    }
+
+    /// A decorative frame insets the content by chrome this crate cannot
+    /// measure, so the migration must defer instead of using the bare rect.
+    #[test]
+    fn decorative_frame_defers() {
+        let capture = XY::new(1920u32, 1080u32);
+        let mut config = config_with(0.0, vec![annotation(10.0, 10.0, 5.0, 5.0)]);
+        config.background.frame = Some(FrameConfiguration {
+            style: FrameStyle::MacOS,
+            ..Default::default()
+        });
+        assert!(!config.migrate_annotation_space(capture));
+        assert_eq!(config.annotation_space_version, 0);
+        assert_eq!(config.annotations[0].x, 10.0);
+    }
+
+    /// Backwards-drawn shapes carry negative extents until they commit; the
+    /// migration must not silently flip them.
+    #[test]
+    fn negative_extents_keep_their_sign() {
+        let capture = XY::new(1920u32, 1080u32);
+        let mut config = config_with(0.0, vec![annotation(500.0, 500.0, -200.0, -100.0)]);
+        assert!(config.migrate_annotation_space(capture));
+        assert!(config.annotations[0].width < 0.0);
+        assert!(config.annotations[0].height < 0.0);
+    }
+}
+
+#[cfg(test)]
+mod mask_model_tests {
+    use super::*;
+
+    fn write_legacy_config(dir: &Path, segments: serde_json::Value) {
+        let config = serde_json::json!({
+            "aspectRatio": null,
+            "background": {},
+            "camera": {},
+            "audio": {},
+            "cursor": {},
+            "hotkeys": {},
+            "timeline": { "segments": [], "zoomSegments": [], "maskSegments": segments },
+            "clips": [],
+            "annotations": []
+        });
+        std::fs::write(
+            dir.join("project-config.json"),
+            serde_json::to_string_pretty(&config).unwrap(),
+        )
+        .unwrap();
+    }
+
+    fn legacy_segment(mask_type: &str, pixelation: serde_json::Value) -> serde_json::Value {
+        serde_json::json!({
+            "start": 0.0,
+            "end": 1.0,
+            "maskType": mask_type,
+            "pixelation": pixelation,
+            "center": { "x": 0.5, "y": 0.5 },
+            "size": { "x": 0.25, "y": 0.25 }
+        })
+    }
+
+    /// The plan's headline case: the `+1000` discriminant becomes an explicit
+    /// blur at the amount that was hidden inside it.
+    #[test]
+    fn blur_encoding_becomes_an_explicit_blur() {
+        let dir = tempfile::tempdir().unwrap();
+        write_legacy_config(
+            dir.path(),
+            serde_json::json!([legacy_segment("sensitive", serde_json::json!(1016.0))]),
+        );
+
+        let config = ProjectConfiguration::load(dir.path()).unwrap();
+        let segment = &config.timeline.as_ref().unwrap().mask_segments[0];
+
+        assert_eq!(segment.mode, MaskMode::Blur);
+        assert_eq!(segment.amount, 16.0);
+        assert_eq!(config.mask_model_version, MASK_MODEL_VERSION);
+    }
+
+    #[test]
+    fn a_plain_amount_becomes_a_pixelate() {
+        let dir = tempfile::tempdir().unwrap();
+        write_legacy_config(
+            dir.path(),
+            serde_json::json!([legacy_segment("sensitive", serde_json::json!(24.0))]),
+        );
+
+        let config = ProjectConfiguration::load(dir.path()).unwrap();
+        let segment = &config.timeline.as_ref().unwrap().mask_segments[0];
+
+        assert_eq!(segment.mode, MaskMode::Pixelate);
+        assert_eq!(segment.amount, 24.0);
+    }
+
+    #[test]
+    fn highlight_becomes_spotlight() {
+        let dir = tempfile::tempdir().unwrap();
+        write_legacy_config(
+            dir.path(),
+            serde_json::json!([legacy_segment("highlight", serde_json::json!(0.0))]),
+        );
+
+        let config = ProjectConfiguration::load(dir.path()).unwrap();
+        assert_eq!(
+            config.timeline.as_ref().unwrap().mask_segments[0].mode,
+            MaskMode::Spotlight
+        );
+    }
+
+    /// The video editor's slider wrote 0..1 into a field the renderer clamped
+    /// to 4..80, so almost every real config holds a value that rendered as
+    /// the minimum. Migrating the stored number literally would change how
+    /// those projects look; going through the old reader's semantics keeps
+    /// them identical.
+    #[test]
+    fn slider_range_values_migrate_to_what_they_actually_rendered_as() {
+        let dir = tempfile::tempdir().unwrap();
+        write_legacy_config(
+            dir.path(),
+            serde_json::json!([legacy_segment("sensitive", serde_json::json!(0.35))]),
+        );
+
+        let config = ProjectConfiguration::load(dir.path()).unwrap();
+        let segment = &config.timeline.as_ref().unwrap().mask_segments[0];
+
+        assert_eq!(segment.mode, MaskMode::Pixelate);
+        assert_eq!(segment.amount, 4.0, "0.35 clamped to the contract minimum");
+    }
+
+    #[test]
+    fn migration_persists_and_does_not_run_twice() {
+        let dir = tempfile::tempdir().unwrap();
+        write_legacy_config(
+            dir.path(),
+            serde_json::json!([legacy_segment("sensitive", serde_json::json!(1024.0))]),
+        );
+
+        let first = ProjectConfiguration::load(dir.path()).unwrap();
+        assert_eq!(
+            first.timeline.as_ref().unwrap().mask_segments[0].amount,
+            24.0
+        );
+
+        // The rewritten file must survive a second load unchanged — a rerun
+        // would otherwise re-read a `pixelation` that is no longer there and
+        // reset the mode.
+        let second = ProjectConfiguration::load(dir.path()).unwrap();
+        let segment = &second.timeline.as_ref().unwrap().mask_segments[0];
+        assert_eq!(segment.mode, MaskMode::Blur);
+        assert_eq!(segment.amount, 24.0);
+    }
+
+    /// Only `Redact` and `Spotlight` destroy or avoid the source pixels. The
+    /// inspectors key their warning copy off this, so it is worth pinning.
+    #[test]
+    fn reversibility_is_stated_correctly() {
+        assert!(MaskMode::Blur.is_reversible());
+        assert!(MaskMode::Pixelate.is_reversible());
+        assert!(!MaskMode::Redact.is_reversible());
+        assert!(!MaskMode::Spotlight.is_reversible());
+    }
+}
+
+#[cfg(test)]
+mod annotation_mask_tests {
+    use super::*;
+
+    fn legacy_mask_annotation(mask_type: &str, mask_level: f64) -> serde_json::Value {
+        serde_json::json!({
+            "id": "m1",
+            "type": "mask",
+            "x": 100.0, "y": 100.0, "width": 200.0, "height": 100.0,
+            "strokeColor": "#000", "strokeWidth": 2.0,
+            "fillColor": "transparent", "opacity": 1.0, "rotation": 0.0,
+            "text": null,
+            "maskType": mask_type,
+            "maskLevel": mask_level
+        })
+    }
+
+    /// The legacy keys are read straight into the new fields: `maskType`'s
+    /// values were already valid `MaskMode` variants, so an alias does the
+    /// whole job and no index-matched raw-JSON walk is needed.
+    #[test]
+    fn legacy_keys_deserialize_through_the_aliases() {
+        let annotation: Annotation =
+            serde_json::from_value(legacy_mask_annotation("pixelate", 20.0)).unwrap();
+
+        assert_eq!(annotation.mask_mode, Some(MaskMode::Pixelate));
+        assert_eq!(annotation.mask_amount, Some(20.0));
+    }
+
+    /// Writing must use the new key, or the migration would never settle.
+    #[test]
+    fn serialization_uses_the_new_key() {
+        let annotation: Annotation =
+            serde_json::from_value(legacy_mask_annotation("blur", 16.0)).unwrap();
+        let written = serde_json::to_value(&annotation).unwrap();
+
+        assert!(written.get("maskAmount").is_some());
+        assert!(written.get("maskMode").is_some());
+        assert!(written.get("maskLevel").is_none());
+        assert!(written.get("maskType").is_none());
+    }
+
+    /// Legacy mask strength was in frame pixels; the unified units are
+    /// 1080p-relative. At a 1080-tall frame the two coincide, which is exactly
+    /// why the mismatch went unnoticed.
+    #[test]
+    fn mask_amount_converts_from_frame_pixels_to_1080p_relative() {
+        let capture = XY::new(1920u32, 1080u32);
+        let mut config = ProjectConfiguration {
+            annotation_space_version: 0,
+            mask_model_version: MASK_MODEL_VERSION,
+            annotations: vec![
+                serde_json::from_value(legacy_mask_annotation("blur", 16.0)).unwrap(),
+            ],
+            ..Default::default()
+        };
+
+        let (_, frame_height) = frame_layout::output_size(&config, capture, {
+            let (w, h) = frame_layout::base_size(&config, capture);
+            XY::new(w, h)
+        });
+
+        assert!(config.migrate_annotation_space(capture));
+
+        let expected = 16.0 * 1080.0 / f64::from(frame_height);
+        let actual = config.annotations[0].mask_amount.unwrap();
+        assert!(
+            (actual - expected).abs() < 1e-9,
+            "expected {expected}, got {actual}"
+        );
+    }
+
+    /// A project already migrated by version 1 must still pick up the units
+    /// conversion, and must not have its geometry normalized a second time.
+    #[test]
+    fn version_one_projects_get_the_units_conversion_only() {
+        let capture = XY::new(1920u32, 1080u32);
+        let mut annotation: Annotation =
+            serde_json::from_value(legacy_mask_annotation("blur", 16.0)).unwrap();
+        // Already-normalized geometry, as version 1 left it.
+        annotation.x = 0.25;
+        annotation.y = 0.25;
+        annotation.width = 0.5;
+        annotation.height = 0.25;
+
+        let mut config = ProjectConfiguration {
+            annotation_space_version: 1,
+            mask_model_version: MASK_MODEL_VERSION,
+            annotations: vec![annotation],
+            ..Default::default()
+        };
+        // Padding makes the frame taller than the capture, so the units
+        // conversion is observable. With no padding the frame is exactly
+        // 1080 tall and the two units coincide — which is the whole reason
+        // this mismatch went unnoticed.
+        config.background.padding = 40.0;
+
+        assert!(config.migrate_annotation_space(capture));
+
+        let migrated = &config.annotations[0];
+        assert_eq!(migrated.x, 0.25, "geometry must not be re-normalized");
+        assert_eq!(migrated.width, 0.5);
+        // The units conversion did run: at a frame taller than 1080 the
+        // 1080p-relative amount is smaller than the pixel value it came from.
+        let amount = migrated.mask_amount.unwrap();
+        assert!(
+            amount > 0.0 && amount < 16.0,
+            "expected a converted amount below the original 16px, got {amount}"
+        );
+        assert_eq!(config.annotation_space_version, ANNOTATION_SPACE_VERSION);
+    }
+
+    /// A mask that never carried a mode gets the same default the frontend's
+    /// `?? "blur"` already applied, rather than failing validation.
+    #[test]
+    fn a_mask_without_a_mode_defaults_to_blur() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = serde_json::json!({
+            "aspectRatio": null, "background": {}, "camera": {}, "audio": {},
+            "cursor": {}, "hotkeys": {}, "timeline": null, "clips": [],
+            "annotations": [{
+                "id": "m1", "type": "mask",
+                "x": 0.1, "y": 0.1, "width": 0.2, "height": 0.2,
+                "strokeColor": "#000", "strokeWidth": 2.0,
+                "fillColor": "transparent", "opacity": 1.0, "rotation": 0.0,
+                "text": null, "maskLevel": 16.0
+            }]
+        });
+        std::fs::write(
+            dir.path().join("project-config.json"),
+            serde_json::to_string_pretty(&config).unwrap(),
+        )
+        .unwrap();
+
+        let loaded = ProjectConfiguration::load(dir.path()).unwrap();
+        assert_eq!(loaded.annotations[0].mask_mode, Some(MaskMode::Blur));
+    }
+
+    /// Redact and Spotlight have no strength, so requiring an amount from them
+    /// would make the two modes unusable on the screenshot path.
+    #[test]
+    fn modes_without_a_strength_validate_without_an_amount() {
+        for mode in [MaskMode::Redact, MaskMode::Spotlight] {
+            let mut annotation: Annotation =
+                serde_json::from_value(legacy_mask_annotation("blur", 16.0)).unwrap();
+            annotation.mask_mode = Some(mode);
+            annotation.mask_amount = None;
+
+            assert!(
+                annotation.validate().is_ok(),
+                "{mode:?} should validate without an amount"
+            );
+        }
+    }
+
+    #[test]
+    fn obscuring_modes_still_require_a_usable_amount() {
+        let mut annotation: Annotation =
+            serde_json::from_value(legacy_mask_annotation("blur", 16.0)).unwrap();
+        annotation.mask_amount = Some(0.0);
+
+        assert!(annotation.validate().is_err());
+    }
+
+    /// Mask-only fields must not appear on other annotation types.
+    #[test]
+    fn mask_payload_is_rejected_on_non_mask_annotations() {
+        let mut annotation: Annotation =
+            serde_json::from_value(legacy_mask_annotation("blur", 16.0)).unwrap();
+        annotation.annotation_type = AnnotationType::Rectangle;
+
+        assert!(annotation.validate().is_err());
+
+        annotation.mask_mode = None;
+        annotation.mask_amount = None;
+        annotation.mask_feather = Some(0.2);
+        assert!(
+            annotation.validate().is_err(),
+            "the new mask fields must be covered by the exclusivity check too"
+        );
     }
 }

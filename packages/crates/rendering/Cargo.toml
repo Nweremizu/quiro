@@ -63,6 +63,11 @@ windows_0_58 = { package = "windows", version = "0.58", features = [
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
+# Already in the tree via wgpu. Pulled in directly so the shaders can be parsed
+# and type-checked without a GPU — see `shader_validation_tests`.
+naga = { version = "25.0.1", features = ["wgsl-in"] }
+# Blocks on the async wgpu device/readback calls in the headless pixel tests.
+pollster = "0.4.0"
 
 [build-dependencies]
 build-time = "0.1"

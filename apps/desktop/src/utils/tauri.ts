@@ -87,6 +87,40 @@ async setRecordingMicMuted(muted: boolean) : Promise<Result<boolean, string>> {
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * One binding for pause and resume — a global shortcut has no way to show two
+ * different keys for two halves of the same toggle, and the user pressing
+ * "pause" again plainly means resume.
+ */
+async togglePauseRecording() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("toggle_pause_recording") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Binds `hotkey` to `action`, or clears the binding when `hotkey` is `None`.
+ * Registration happens immediately so the shortcut is live without a restart,
+ * and the store is written so it survives one.
+ */
+async setHotkey(action: HotkeyAction, hotkey: Hotkey | null) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_hotkey", { action, hotkey }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getHotkeys() : Promise<Result<HotkeysStore, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_hotkeys") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async createEditorInstance() : Promise<Result<SerializedEditorInstance, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("create_editor_instance") };
@@ -382,11 +416,55 @@ async getMicrophoneInfo(name: string) : Promise<MicrophoneInfo | null> {
 async getDevicesSnapshot() : Promise<DevicesUpdated> {
     return await TAURI_INVOKE("get_devices_snapshot");
 },
+/**
+ * Copies `source` into a new studio project so the editor can open it.
+ * Returns the project directory.
+ */
+async importVideo(source: string) : Promise<Result<string, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("import_video", { source }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Copies `source` into the screenshots library and writes its sidecar.
+ * Returns the path of the imported copy.
+ */
+async importScreenshot(source: string) : Promise<Result<string, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("import_screenshot", { source }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async listRecordings() : Promise<([string, RecordingMetaWithMetadata])[]> {
     return await TAURI_INVOKE("list_recordings");
 },
 async listScreenshots() : Promise<([string, ScreenshotMetaWithMetadata])[]> {
     return await TAURI_INVOKE("list_screenshots");
+},
+/**
+ * Off the main thread: the platform collectors query GPU adapters and probe
+ * encoders, which is slow enough to stutter the window if run inline.
+ */
+async getSystemDiagnostics() : Promise<DiagnosticGroup[]> {
+    return await TAURI_INVOKE("get_system_diagnostics");
+},
+/**
+ * Absolute path of the directory the app writes logs to, so the Feedback page
+ * can reveal it in the file manager. Cap uploads logs to its own servers;
+ * Quiro has no backend, so the user gets the folder instead.
+ */
+async getLogsDir() : Promise<Result<string, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_logs_dir") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 },
 async getDefaultExcludedWindows() : Promise<WindowExclusion[]> {
     return await TAURI_INVOKE("get_default_excluded_windows");
@@ -592,6 +670,7 @@ recordingEvent: RecordingEvent,
 renderFrameEvent: RenderFrameEvent,
 requestScreenCapturePrewarm: RequestScreenCapturePrewarm,
 requestSetTargetMode: RequestSetTargetMode,
+requestStartRecording: RequestStartRecording,
 targetUnderCursor: TargetUnderCursor
 }>({
 audioInputLevelChange: "audio-input-level-change",
@@ -606,6 +685,7 @@ recordingEvent: "recording-event",
 renderFrameEvent: "render-frame-event",
 requestScreenCapturePrewarm: "request-screen-capture-prewarm",
 requestSetTargetMode: "request-set-target-mode",
+requestStartRecording: "request-start-recording",
 targetUnderCursor: "target-under-cursor"
 })
 
@@ -615,7 +695,34 @@ targetUnderCursor: "target-under-cursor"
 
 /** user-defined types **/
 
-export type Annotation = { id: string; type: AnnotationType; x: number; y: number; width: number; height: number; strokeColor: string; strokeWidth: number; fillColor: string; opacity: number; rotation: number; text: string | null; maskType?: MaskType | null; maskLevel?: number | null; focus?: FocusConfig | null; arrowCurve?: ArrowCurve | null; arrowBend?: number | null; arrowStartHead?: ArrowHead | null; arrowEndHead?: ArrowHead | null; arrowHeadSize?: number | null; lineStyle?: LineStyle | null; arrowTaper?: boolean | null }
+export type Annotation = { id: string; type: AnnotationType; x: number; y: number; width: number; height: number; strokeColor: string; strokeWidth: number; fillColor: string; opacity: number; rotation: number; text: string | null; 
+/**
+ * What this mask does. `None` on every non-mask annotation; required on a
+ * mask. Shares [`MaskMode`] with the timeline's `MaskSegment` — one
+ * taxonomy for one concept.
+ */
+maskMode?: MaskMode | null; 
+/**
+ * Effect strength in the mask contract's units, 1080p-relative, exactly
+ * as `MaskSegment::amount`. Legacy configs stored this as
+ * `maskLevel` in frame pixels, which meant something different at every
+ * frame size; converted by
+ * [`ProjectConfiguration::migrate_annotation_space`].
+ */
+maskAmount?: number | null; maskShape?: MaskShape | null; 
+/**
+ * 0..1 of the region's shorter axis. Ignored for
+ * [`MaskMode::Redact`], which must stay hard-edged.
+ */
+maskFeather?: number | null; 
+/**
+ * Spotlight only: how far the area *outside* the region is darkened.
+ */
+maskDarkness?: number | null; 
+/**
+ * 0..1 of the region's shorter axis, for [`MaskShape::RoundedRect`].
+ */
+maskCornerRadius?: number | null; focus?: FocusConfig | null; arrowCurve?: ArrowCurve | null; arrowBend?: number | null; arrowStartHead?: ArrowHead | null; arrowEndHead?: ArrowHead | null; arrowHeadSize?: number | null; lineStyle?: LineStyle | null; arrowTaper?: boolean | null }
 export type AnnotationType = "arrow" | "circle" | "rectangle" | "text" | "mask" | "focus"
 export type AppTheme = "system" | "light" | "dark"
 /**
@@ -701,7 +808,18 @@ noiseIntensity?: number | null;
 /**
  * Grain size for `noise_intensity`. Defaults to `3.0` when noise is on.
  */
-noiseScale?: number | null }
+noiseScale?: number | null; 
+/**
+ * Free placement of the capture inside the canvas: drag, uniform scale,
+ * in-plane rotation. `None` renders exactly the layout-derived placement
+ * this field did not exist to change.
+ * 
+ * Its offset composes with [`Self::display_position`] rather than
+ * replacing it: that one is an absolute centre clamped into the frame,
+ * this one is a free delta on top, so a layer may leave the canvas
+ * entirely and be clipped.
+ */
+displayTransform?: LayerTransform | null }
 export type BackgroundSource = { type: "wallpaper"; path: string | null } | { type: "image"; path: string | null } | { type: "color"; value: [number, number, number]; alpha?: number } | { type: "gradient"; from: [number, number, number]; to: [number, number, number]; angle?: number; noise_intensity?: number | null; noise_scale?: number | null; animated?: boolean | null; animation_speed?: number | null }
 export type BorderConfiguration = { enabled: boolean; width: number; color: [number, number, number]; opacity: number }
 export type Camera = { hide: boolean; mirror: boolean; position: CameraPosition; 
@@ -760,6 +878,13 @@ export type CursorType = "auto" | "pointer" | "circle"
 export type Cursors = { [key in string]: string } | { [key in string]: CursorMeta }
 export type DeviceOrModelID = { DeviceID: string } | { ModelID: ModelIDType }
 export type DevicesUpdated = { cameras: CameraInfo[]; microphones: string[]; permissions: OSPermissionsCheck }
+export type DiagnosticEntry = { label: string; value: string; 
+/**
+ * Marks a value the user probably needs to act on — a missing permission,
+ * software rendering, no hardware encoder. The page styles these.
+ */
+warning?: boolean }
+export type DiagnosticGroup = { title: string; entries: DiagnosticEntry[] }
 export type DisplayId = string
 export type DisplayInformation = { name: string | null; physical_size: PhysicalSize | null; logical_size: LogicalSize | null; logical_bounds: LogicalBounds | null; refresh_rate: string }
 export type EditorPreviewQuality = "quarter" | "half" | "full"
@@ -868,22 +993,101 @@ fast: boolean | null }
 export type GlideDirection = "none" | "left" | "right" | "up" | "down"
 export type HapticPattern = "alignment" | "levelChange" | "generic"
 export type HapticPerformanceTime = "default" | "now" | "drawCompleted"
+export type Hotkey = { code: string; meta: boolean; ctrl: boolean; alt: boolean; shift: boolean }
+export type HotkeyAction = "startStudioRecording" | "startInstantRecording" | "stopRecording" | "restartRecording" | "togglePauseRecording" | "cycleRecordingMode" | "openRecordingPicker" | "openRecordingPickerDisplay" | "openRecordingPickerWindow" | "openRecordingPickerArea" | "screenshotDisplay" | "screenshotWindow" | "screenshotArea" | "other"
 export type HotkeysConfiguration = { show: boolean }
+export type HotkeysStore = { hotkeys: { [key in HotkeyAction]: Hotkey } }
 export type InstantRecordingMeta = { recording: boolean } | { error: string } | { fps: number; sample_rate: number | null }
 export type KeyPressDisplay = { key: string; timeOffset: number }
 export type KeyboardData = { settings: KeyboardSettings }
 export type KeyboardSettings = { enabled: boolean; font: string; size: number; color: string; backgroundColor: string; backgroundOpacity: number; position: string; fontWeight: number; fadeDuration: number; lingerDuration: number; groupingThresholdMs: number; showModifiers: boolean; showSpecialKeys: boolean; uppercase: boolean }
 export type KeyboardTrackSegment = { id: string; start: number; end: number; displayText: string; keys?: KeyPressDisplay[]; fadeDurationOverride?: number | null; positionOverride?: string | null; colorOverride?: string | null; backgroundColorOverride?: string | null; fontSizeOverride?: number | null; uppercaseOverride?: boolean | null }
+/**
+ * A composited layer's placement relative to the canvas it lives in.
+ * 
+ * The canvas is a fixed viewport, not a bounding box: it owns the output size
+ * and the background, and whatever a layer puts outside it is clipped by the
+ * render target rather than growing the frame. This is how far a layer has
+ * been moved, scaled and spun inside that viewport, measured from wherever
+ * the layout put it.
+ * 
+ * `offset` is a fraction of the canvas rather than pixels, so a composition
+ * authored against the editor's preview survives an export at any other
+ * resolution. Rotation is deliberately separate from the rect: the renderer
+ * carries it in the card homography, which leaves `offset` and `scale`
+ * describing an axis-aligned rect that layout, hit-testing and the annotation
+ * anchor can all still reason about.
+ */
+export type LayerTransform = { 
+/**
+ * Displacement from the laid-out position, as a fraction of canvas
+ * width and height. Zero leaves the layer where layout put it.
+ */
+offset: XY<number>; 
+/**
+ * Uniform scale about the layer's own centre.
+ */
+scale: number; 
+/**
+ * In-plane rotation about the layer's own centre, in degrees.
+ */
+rotation: number }
 export type LineStyle = "solid" | "dashed" | "dotted"
 export type LogicalBounds = { position: LogicalPosition; size: LogicalSize }
 export type LogicalPosition = { x: number; y: number }
 export type LogicalSize = { width: number; height: number }
 export type MainWindowRecordingStartBehaviour = "close" | "minimise"
 export type MaskKeyframes = { position?: MaskVectorKeyframe[]; size?: MaskVectorKeyframe[]; intensity?: MaskScalarKeyframe[] }
-export type MaskKind = "sensitive" | "highlight"
+/**
+ * What a mask does to the region it covers.
+ * 
+ * Replaces the old split between a `MaskKind` of `sensitive`/`highlight` —
+ * which was a *category*, not a mode — and a discriminant smuggled into the
+ * effect amount by adding 1000 to it. One enum, readable in the JSON,
+ * checkable by the compiler.
+ */
+export type MaskMode = 
+/**
+ * Separable gaussian. Obscures; does **not** guarantee irreversibility —
+ * a gaussian is deconvolvable in principle.
+ */
+"blur" | 
+/**
+ * Nearest-neighbour block averaging. Also not irreversible: each block
+ * leaks the average of the pixels under it.
+ */
+"pixelate" | 
+/**
+ * Opaque fill. The only mode safe for credentials — no source pixel
+ * survives inside the region.
+ */
+"redact" | 
+/**
+ * Darkens everything *outside* the region rather than obscuring inside
+ * it. This is what the old `highlight` kind always did; the name now says
+ * so, since "highlight" reads as drawing *on* the region.
+ */
+"spotlight"
 export type MaskScalarKeyframe = { time: number; value: number }
-export type MaskSegment = { start: number; end: number; track?: number; enabled?: boolean; maskType: MaskKind; center: XY<number>; size: XY<number>; feather?: number; opacity?: number; pixelation?: number; darkness?: number; fadeDuration?: number; keyframes?: MaskKeyframes }
-export type MaskType = "blur" | "pixelate"
+export type MaskSegment = { start: number; end: number; track?: number; enabled?: boolean; 
+/**
+ * What the mask does. Legacy configs carry `maskType` + `pixelation`
+ * instead and are converted by
+ * [`ProjectConfiguration::migrate_mask_model`].
+ */
+mode?: MaskMode; 
+/**
+ * Effect strength in the contract's units (see `mask-effects.json`),
+ * 1080p-relative and scaled by output height at render time. Meaningless
+ * for [`MaskMode::Spotlight`], which uses `darkness` instead.
+ */
+amount?: number; shape?: MaskShape; center: XY<number>; size: XY<number>; feather?: number; opacity?: number; darkness?: number; fadeDuration?: number; keyframes?: MaskKeyframes }
+/**
+ * The region's outline. Rendering for the non-rect variants lands with the
+ * shader rewrite in plan 004; the field exists now so that change is not
+ * another migration.
+ */
+export type MaskShape = "rect" | "ellipse" | "roundedRect"
 export type MaskVectorKeyframe = { time: number; x: number; y: number }
 export type MicrophoneDeviceSettings = { sampleRate: number | null; channels: number | null }
 export type MicrophoneFormatInfo = { sampleRate: number; channels: number }
@@ -948,7 +1152,29 @@ export type ProjectConfiguration = { aspectRatio: AspectRatio | null; background
  * `font_size`. The field-level default keeps old files at 0 while
  * `Default::default()` produces the current version.
  */
-textSizeVersion?: number }
+textSizeVersion?: number; 
+/**
+ * How annotation geometry is interpreted. 0 (legacy): `x`/`y`/`width`/
+ * `height` are pixels in the rendered output frame — a frame whose size
+ * and content offset are recomputed whenever padding, crop or aspect
+ * ratio changes, so the stored numbers stop meaning what they meant.
+ * 1: normalized 0..1 against the annotation's [`AnnotationAnchor`].
+ * 
+ * The field-level default keeps old files at 0 while `Default::default()`
+ * produces the current version — the same arrangement as
+ * [`Self::text_size_version`]. Migration is *not* performed here: it needs
+ * the capture dimensions and the frame-layout maths, neither of which this
+ * crate has. See `annotation_space::migrate`.
+ */
+annotationSpaceVersion?: number; 
+/**
+ * How mask segments are encoded. 0 (legacy): a `maskType` of
+ * `sensitive`/`highlight` plus a `pixelation` float that smuggled
+ * blur-vs-pixelate into its own value by adding 1000 to it. 1: an explicit
+ * [`MaskMode`] and a plain `amount`. Migrated on load — see
+ * [`Self::migrate_mask_model`].
+ */
+maskModelVersion?: number }
 export type ProjectRecordingsMeta = { segments: SegmentRecordings[] }
 export type RecordingEvent = { variant: "Countdown"; value: number } | { variant: "Started" } | { variant: "Stopped" } | { variant: "Paused" } | { variant: "Resumed" } | { variant: "Failed"; error: string } | { variant: "StartFailed"; error: string } | { variant: "InputLost"; input: RecordingInputKind } | { variant: "InputRestored"; input: RecordingInputKind }
 /**
@@ -969,6 +1195,13 @@ export type RecordingTargetMode = "display" | "window" | "area" | "camera"
 export type RenderFrameEvent = { frame_number: number; fps: number; resolution_base: XY<number> }
 export type RequestScreenCapturePrewarm = { force?: boolean }
 export type RequestSetTargetMode = { target_mode: RecordingTargetMode | null; display_id: string | null }
+/**
+ * Emitted when a hotkey asks for a recording to start. Unlike stop/pause,
+ * starting needs a capture target, and the main window is the thing that knows
+ * which one is currently selected — so this goes to the frontend rather than
+ * calling `start_recording` with a guess.
+ */
+export type RequestStartRecording = { mode: RecordingMode }
 export type S3UploadMeta = { id: string }
 export type SceneMode = "default" | "cameraOnly" | "hideCamera" | "splitScreen" | 
 /**
@@ -987,7 +1220,12 @@ export type ScreenshotOcrResult = { text: string; lines: ScreenshotOcrLine[]; en
 export type ScreenshotProjectExport = { imageBytes: number[]; config: ProjectConfiguration; imageWidth: number; imageHeight: number }
 export type SegmentRecordings = { display: Video; camera: Video | null; mic: Audio | null; system_audio: Audio | null }
 export type SerializedEditorInstance = { framesSocketUrl: string; recordingDuration: number; savedProjectConfig: ProjectConfiguration; recordings: ProjectRecordingsMeta; path: string; prettyName: string }
-export type SerializedScreenshotEditorInstance = { framesSocketUrl: string; path: string; config: ProjectConfiguration | null; prettyName: string; imageWidth: number; imageHeight: number }
+export type SerializedScreenshotEditorInstance = { framesSocketUrl: string; 
+/**
+ * The capture's own layer. The preview stacks it over `frames_socket_url`
+ * and places it with a CSS transform, so a drag never reaches the renderer.
+ */
+cardSocketUrl: string; path: string; config: ProjectConfiguration | null; prettyName: string; imageWidth: number; imageHeight: number }
 export type ShadowConfiguration = { size: number; opacity: number; blur: number }
 export type SharingMeta = { id: string; link: string; content_hash?: string | null }
 export type ShowQuiroWindow = { Main: { init_target_mode: RecordingTargetMode | null } } | { Settings: { page: string | null } } | "RecordingsOverlay" | { WindowCaptureOccluder: { screen_id: DisplayId; 

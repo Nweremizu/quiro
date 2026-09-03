@@ -15,6 +15,7 @@
 
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use quiro_project::{Platform, RecordingMeta, RecordingMetaInner, StudioRecordingMeta};
@@ -71,6 +72,11 @@ struct ActiveRecording {
     handle: studio_recording::ActorHandle,
     project_dir: PathBuf,
     pretty_name: String,
+    /// Whether the recording is currently paused. Lives here rather than in a
+    /// standalone state so it resets with each new recording automatically —
+    /// a stale "paused" flag surviving into the next recording would make the
+    /// pause/resume hotkey do the opposite of what its name says.
+    paused: AtomicBool,
     /// Held only so the toolbar can mute/unmute mid-recording. The mute is
     /// scoped to the lock, so it resets on its own for the next recording.
     mic_lock: Option<Arc<MicrophoneFeedLock>>,
@@ -260,6 +266,7 @@ pub async fn start_recording(
         project_dir,
         pretty_name,
         mic_lock: mic_feed,
+        paused: AtomicBool::new(false),
     });
 
     app_state
@@ -287,8 +294,46 @@ pub async fn pause_recording(
         return Err("No recording in progress".into());
     };
     handle.pause().await.map_err(|e| e.to_string())?;
+    set_paused_flag(&state, true)?;
     let _ = RecordingEvent::Paused.emit(&app);
     Ok(())
+}
+
+/// Records the pause state after the actor has actually accepted the change,
+/// so a failed pause/resume can't leave the flag lying about what's happening.
+fn set_paused_flag(
+    state: &tauri::State<'_, RecordingSession>,
+    paused: bool,
+) -> Result<(), String> {
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
+    if let Some(active) = guard.as_ref() {
+        active.paused.store(paused, Ordering::Release);
+    }
+    Ok(())
+}
+
+/// One binding for pause and resume — a global shortcut has no way to show two
+/// different keys for two halves of the same toggle, and the user pressing
+/// "pause" again plainly means resume.
+#[tauri::command]
+#[specta::specta]
+pub async fn toggle_pause_recording(
+    state: tauri::State<'_, RecordingSession>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let paused = {
+        let guard = state.0.lock().map_err(|e| e.to_string())?;
+        let Some(active) = guard.as_ref() else {
+            return Err("No recording in progress".into());
+        };
+        active.paused.load(Ordering::Acquire)
+    };
+
+    if paused {
+        resume_recording(state, app).await
+    } else {
+        pause_recording(state, app).await
+    }
 }
 
 #[tauri::command]
@@ -305,6 +350,7 @@ pub async fn resume_recording(
         return Err("No recording in progress".into());
     };
     handle.resume().await.map_err(|e| e.to_string())?;
+    set_paused_flag(&state, false)?;
     let _ = RecordingEvent::Resumed.emit(&app);
     Ok(())
 }

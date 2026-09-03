@@ -90,7 +90,7 @@ function SourceTabs({
 						className={cn(
 							"h-7 flex-1 rounded-md text-xs transition-colors duration-150 px-1.5",
 							selected
-								? "bg-accent-300 text-gray-1 shadow-sm"
+								? "bg-accent-solid text-accent-on-solid shadow-sm"
 								: "text-gray-11 hover:text-gray-12",
 						)}
 					>
@@ -247,7 +247,7 @@ function BackgroundSection({
 										className={cn(
 											"size-7 rounded-lg border border-gray-5 transition-[opacity,box-shadow] duration-150",
 											isActive
-												? "ring-2 ring-accent-400 ring-offset-2 ring-offset-gray-1"
+												? "ring-2 ring-accent-border-selected ring-offset-2 ring-offset-gray-1"
 												: "hover:opacity-70",
 										)}
 									/>
@@ -330,7 +330,7 @@ function BackgroundSection({
 										className={cn(
 											"size-7 rounded-lg border border-gray-5 transition-[opacity,box-shadow] duration-150",
 											isActive
-												? "ring-2 ring-accent-400 ring-offset-2 ring-offset-gray-1"
+												? "ring-2 ring-accent-border-selected ring-offset-2 ring-offset-gray-1"
 												: "hover:opacity-70",
 										)}
 									/>

@@ -18,6 +18,12 @@ import {
 	type SnapTargets,
 	snap,
 } from "./snapping";
+import { clientToFrame, type FramePx, frameRect, type Pt } from "./space";
+import { cardRotationTransform, rectCentre } from "./transform";
+
+/** Mask strength in the contract's 1080p-relative units — see
+ * `mask-effects.json`. */
+const MASK_AMOUNT_DEFAULT = 16;
 
 // React port of Cap's `AnnotationLayer.tsx`. Annotations are SVG, not canvas —
 // that is Cap's choice and it is the right one: hit-testing, hover and drag all
@@ -68,6 +74,7 @@ export function AnnotationLayer({
 	cssWidth,
 	cssHeight,
 	imageRect,
+	cardRotation,
 	isPanning,
 	onBackgroundMouseDown,
 }: {
@@ -75,6 +82,12 @@ export function AnnotationLayer({
 	cssWidth: number;
 	cssHeight: number;
 	imageRect: Rect;
+	/** The capture's in-plane rotation, degrees. Annotations are anchored to
+	 * the capture, so they are drawn inside a group carrying the same spin and
+	 * pointer input is brought back out of it before anything is measured —
+	 * which keeps every geometry, snap and hit test below in the capture's own
+	 * unrotated frame, exactly as it was before rotation existed. */
+	cardRotation: number;
 	isPanning?: boolean;
 	onBackgroundMouseDown?: (event: React.MouseEvent) => void;
 }) {
@@ -87,6 +100,11 @@ export function AnnotationLayer({
 		setSelectedAnnotationId,
 		history,
 	} = useScreenshotEditorContext();
+
+	// "select" edits existing shapes and "transform" belongs to the capture's
+	// gizmo; every other tool draws a new one. Three of the four behaviours
+	// below key off that split rather than off the tool name.
+	const isDrawingTool = activeTool !== "select";
 
 	const [isDrawing, setIsDrawing] = useState(false);
 	const [dragState, setDragState] = useState<DragState | null>(null);
@@ -148,17 +166,17 @@ export function AnnotationLayer({
 		setSelectedAnnotationId,
 	]);
 
-	/** Client coords → the SVG's viewBox space, which is frame pixels. */
+	/** Client coords → the SVG's viewBox space, which is frame pixels. The
+	 * space is now carried in the type: see `space.ts`. */
 	const toSvgPoint = useCallback(
-		(event: React.MouseEvent, svg: SVGSVGElement) => {
-			const rect = svg.getBoundingClientRect();
-			return {
-				x: bounds.x + ((event.clientX - rect.left) / rect.width) * bounds.width,
-				y:
-					bounds.y + ((event.clientY - rect.top) / rect.height) * bounds.height,
-			};
-		},
-		[bounds],
+		(event: React.MouseEvent, svg: SVGSVGElement): Pt<FramePx> =>
+			clientToFrame(
+				event,
+				svg,
+				frameRect(bounds.x, bounds.y, bounds.width, bounds.height),
+				{ degrees: cardRotation, centre: rectCentre(imageRect) },
+			),
+		[bounds, cardRotation, imageRect],
 	);
 
 	// Masks redact part of the screenshot, so they are meaningless outside it
@@ -251,8 +269,10 @@ export function AnnotationLayer({
 			opacity: 1,
 			rotation: 0,
 			text: activeTool === "text" ? "Text" : null,
-			maskType: activeTool === "mask" ? "pixelate" : null,
-			maskLevel: activeTool === "mask" ? 7 : null,
+			// Blur is the default a new mask gets: it reads as "covered" without
+			// being destructive. Redact is opt-in, from the inspector.
+			maskMode: activeTool === "mask" ? "blur" : null,
+			maskAmount: activeTool === "mask" ? MASK_AMOUNT_DEFAULT : null,
 			...(activeTool === "arrow"
 				? {
 						arrowCurve: "straight" as const,
@@ -584,17 +604,23 @@ export function AnnotationLayer({
 		<svg
 			aria-label="Annotations"
 			viewBox={`${bounds.x} ${bounds.y} ${bounds.width} ${bounds.height}`}
-			className={activeTool !== "select" ? "cursor-crosshair" : undefined}
+			className={isDrawingTool ? "cursor-crosshair" : undefined}
 			style={{
 				width: `${cssWidth}px`,
 				height: `${cssHeight}px`,
 				position: "absolute",
 				top: 0,
 				left: 0,
-				// While selecting, the layer is transparent to the pointer so the
-				// canvas underneath can be panned; individual shapes opt back in.
+				// While selecting, the layer is transparent to the pointer so what is
+				// underneath — the capture's gizmo, and the canvas below that — can
+				// be reached; individual shapes opt back in. Annotations sitting
+				// above the capture in the stack is also what makes them win a
+				// click where the two overlap.
 				pointerEvents: activeTool === "select" && !dragState ? "none" : "all",
 				zIndex: 20,
+				// The margin pans, so it keeps the grab cursor. Over the capture the
+				// gizmo sets `move` instead — it is under this layer, and this layer
+				// is transparent to the pointer there.
 				cursor:
 					activeTool === "select"
 						? isPanning
@@ -607,101 +633,103 @@ export function AnnotationLayer({
 			onMouseUp={handleMouseUp}
 		>
 			<title>Annotations</title>
-			{annotations.map((annotation) => (
-				<g
-					key={annotation.id}
-					// Upright while its text is being edited (a rotated contentEditable
-					// is unusable); re-rotates on blur.
-					transform={
-						textEditingId === annotation.id
-							? undefined
-							: rotationTransform(annotation)
-					}
-					onMouseDown={(event) => startDrag(event, annotation.id)}
-					onDoubleClick={(event) => {
-						event.stopPropagation();
-						if (annotation.type === "text") setTextEditingId(annotation.id);
-					}}
-					style={{
-						pointerEvents: "all",
-						cursor: activeTool === "select" ? "move" : "inherit",
-					}}
-				>
-					{textEditingId === annotation.id ? (
-						<TextEditor
-							annotation={annotation}
-							onInput={(text) => patch(annotation.id, { text })}
-							onCommit={(text) => {
-								if (!text.trim()) {
-									setAnnotations(
-										annotations.filter((a) => a.id !== annotation.id),
-									);
-								}
-								setTextEditingId(null);
-							}}
-						/>
-					) : (
-						<RenderAnnotation annotation={annotation} />
-					)}
-
-					{selectedAnnotationId === annotation.id &&
-						textEditingId !== annotation.id &&
-						annotation.type !== "focus" && (
-							<SelectionHandles
+			<g transform={cardRotationTransform(cardRotation, imageRect)}>
+				{annotations.map((annotation) => (
+					<g
+						key={annotation.id}
+						// Upright while its text is being edited (a rotated contentEditable
+						// is unusable); re-rotates on blur.
+						transform={
+							textEditingId === annotation.id
+								? undefined
+								: rotationTransform(annotation)
+						}
+						onMouseDown={(event) => startDrag(event, annotation.id)}
+						onDoubleClick={(event) => {
+							event.stopPropagation();
+							if (annotation.type === "text") setTextEditingId(annotation.id);
+						}}
+						style={{
+							pointerEvents: "all",
+							cursor: activeTool === "select" ? "move" : "inherit",
+						}}
+					>
+						{textEditingId === annotation.id ? (
+							<TextEditor
 								annotation={annotation}
-								handleSize={handleSize}
-								onResizeStart={startDrag}
+								onInput={(text) => patch(annotation.id, { text })}
+								onCommit={(text) => {
+									if (!text.trim()) {
+										setAnnotations(
+											annotations.filter((a) => a.id !== annotation.id),
+										);
+									}
+									setTextEditingId(null);
+								}}
 							/>
+						) : (
+							<RenderAnnotation annotation={annotation} />
 						)}
-				</g>
-			))}
 
-			{/* The plane of focus. Guides only while selected — the rest of the
+						{selectedAnnotationId === annotation.id &&
+							textEditingId !== annotation.id &&
+							annotation.type !== "focus" && (
+								<SelectionHandles
+									annotation={annotation}
+									handleSize={handleSize}
+									onResizeStart={startDrag}
+								/>
+							)}
+					</g>
+				))}
+
+				{/* The plane of focus. Guides only while selected — the rest of the
 			    time the defocus is the only thing that should be on screen. */}
-			{annotations.map((annotation) =>
-				annotation.type === "focus" &&
-				annotation.focus &&
-				selectedAnnotationId === annotation.id ? (
-					<FocusOverlay
-						key={`focus-${annotation.id}`}
-						focus={annotation.focus}
-						imageRect={imageRect}
-						bounds={bounds}
-						handleSize={handleSize}
-						onChange={(next) => patch(annotation.id, { focus: next })}
-						onGestureStart={beginGesture}
-						onGestureEnd={endGesture}
+				{annotations.map((annotation) =>
+					annotation.type === "focus" &&
+					annotation.focus &&
+					selectedAnnotationId === annotation.id ? (
+						<FocusOverlay
+							key={`focus-${annotation.id}`}
+							focus={annotation.focus}
+							imageRect={imageRect}
+							bounds={bounds}
+							handleSize={handleSize}
+							onChange={(next) => patch(annotation.id, { focus: next })}
+							onGestureStart={beginGesture}
+							onGestureEnd={endGesture}
+						/>
+					) : null,
+				)}
+
+				{tempAnnotation && tempAnnotation.type !== "mask" && (
+					<RenderAnnotation annotation={tempAnnotation} />
+				)}
+
+				{/* Alignment guides — a full-span line at each locked-on coordinate. */}
+				{dragState && snapGuides.x != null && (
+					<line
+						x1={snapGuides.x}
+						y1={bounds.y}
+						x2={snapGuides.x}
+						y2={bounds.y + bounds.height}
+						stroke="#F03808"
+						strokeWidth={guideStroke}
+						style={{ pointerEvents: "none" }}
 					/>
-				) : null,
-			)}
-
-			{tempAnnotation && tempAnnotation.type !== "mask" && (
-				<RenderAnnotation annotation={tempAnnotation} />
-			)}
-
-			{/* Alignment guides — a full-span line at each locked-on coordinate. */}
-			{dragState && snapGuides.x != null && (
-				<line
-					x1={snapGuides.x}
-					y1={bounds.y}
-					x2={snapGuides.x}
-					y2={bounds.y + bounds.height}
-					stroke="#F03808"
-					strokeWidth={guideStroke}
-					style={{ pointerEvents: "none" }}
-				/>
-			)}
-			{dragState && snapGuides.y != null && (
-				<line
-					x1={bounds.x}
-					y1={snapGuides.y}
-					x2={bounds.x + bounds.width}
-					y2={snapGuides.y}
-					stroke="#F03808"
-					strokeWidth={guideStroke}
-					style={{ pointerEvents: "none" }}
-				/>
-			)}
+				)}
+				{dragState && snapGuides.y != null && (
+					<line
+						x1={bounds.x}
+						y1={snapGuides.y}
+						x2={bounds.x + bounds.width}
+						y2={snapGuides.y}
+						stroke="#F03808"
+						strokeWidth={guideStroke}
+						style={{ pointerEvents: "none" }}
+					/>
+				)}
+			</g>
 		</svg>
 	);
 }

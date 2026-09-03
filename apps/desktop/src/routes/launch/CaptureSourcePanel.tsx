@@ -297,7 +297,7 @@ export default function CaptureSourcePanel(
 				<button
 					type="button"
 					onClick={props.onBack}
-					className="flex h-9 gap-1 items-center shrink-0 rounded-md px-2 text-xs text-gray-11 transition-colors hover:text-gray-12 hover:bg-gray-4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-300 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-1"
+					className="flex h-9 gap-1 items-center shrink-0 rounded-md px-2 text-xs text-gray-11 transition-colors hover:text-gray-12 hover:bg-gray-4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-gray-1"
 					aria-label="Back"
 				>
 					<IconLucideArrowLeft className="size-3 text-gray-11" />

@@ -1,4 +1,8 @@
-import type { Annotation, ProjectConfiguration } from "@/utils/tauri";
+import type {
+	Annotation,
+	MaskShape,
+	ProjectConfiguration,
+} from "@/utils/tauri";
 import {
 	arrowBounds,
 	arrowSpec,
@@ -8,6 +12,7 @@ import {
 } from "./arrow";
 import { type DofQuality, sharedDofRenderer } from "./dof";
 import { shapePoints } from "./geometry";
+import { resolveTransform } from "./transform";
 
 // React port of Cap's `screenshotExport.ts`. The Rust renderer draws the frame
 // (background, padding, rounding, shadow, crop) but knows nothing about
@@ -85,6 +90,129 @@ export const blurRegion = (
  * screen to disagree with the redaction that ships. Quiro keeps one copy and
  * both callers use it.
  */
+/** Mask amounts are expressed relative to this height, matching
+ * `MASK_EFFECT_BASE_HEIGHT` in the renderer. */
+const MASK_AMOUNT_BASE_HEIGHT = 1080;
+
+/** Fraction of the region's shorter axis used as the corner radius, matching
+ * the renderer's `corner_radius` for `roundedRect`. */
+const MASK_CORNER_RADIUS_FRACTION = 0.25;
+
+/**
+ * Trace a mask region's outline. Mirrors `region_sdf_px` in `mask.wgsl` — the
+ * two must agree, or the same mask would have a different outline in the
+ * screenshot editor than in a video export.
+ */
+const maskRegionPath = (
+	ctx: CanvasRenderingContext2D,
+	shape: MaskShape,
+	x: number,
+	y: number,
+	width: number,
+	height: number,
+) => {
+	ctx.beginPath();
+	if (shape === "ellipse") {
+		ctx.ellipse(
+			x + width / 2,
+			y + height / 2,
+			width / 2,
+			height / 2,
+			0,
+			0,
+			Math.PI * 2,
+		);
+		return;
+	}
+	if (shape === "roundedRect") {
+		const radius = Math.min(width, height) * MASK_CORNER_RADIUS_FRACTION;
+		roundRectPath(ctx, x, y, width, height, radius);
+		return;
+	}
+	ctx.rect(x, y, width, height);
+};
+
+/** Scratch pair for [`withCardRotation`], kept across calls: a rotated capture
+ * re-runs this on every frame of a drag, and allocating two full-frame canvases
+ * per frame is the kind of churn that shows up as a stutter rather than as a
+ * slow function. */
+let rotationScratch: {
+	source: HTMLCanvasElement;
+	target: HTMLCanvasElement;
+} | null = null;
+
+const scratchPair = (width: number, height: number) => {
+	if (!rotationScratch) {
+		rotationScratch = {
+			source: document.createElement("canvas"),
+			target: document.createElement("canvas"),
+		};
+	}
+	for (const canvas of [rotationScratch.source, rotationScratch.target]) {
+		if (canvas.width !== width) canvas.width = width;
+		if (canvas.height !== height) canvas.height = height;
+	}
+	return rotationScratch;
+};
+
+/**
+ * Runs a canvas pass in the capture's own unrotated frame.
+ *
+ * `paintMasks` and `applyFocus` both assume an axis-aligned capture, and both
+ * *read* the rendered frame at the same coordinates they write to. Neither
+ * survives the capture being spun in place: rotating the destination alone
+ * would leave them sampling the wrong pixels. So the frame is counter-rotated
+ * into a scratch copy where the capture is upright again, the pass runs against
+ * that unchanged, and its output is rotated back onto the real destination.
+ *
+ * A flat capture — every project until someone drags the rotation handle —
+ * takes the direct path and pays nothing at all.
+ */
+export const withCardRotation = (
+	ctx: CanvasRenderingContext2D,
+	source: HTMLCanvasElement,
+	rotationDegrees: number,
+	centre: { x: number; y: number },
+	draw: (target: CanvasRenderingContext2D, frame: HTMLCanvasElement) => void,
+) => {
+	if (rotationDegrees === 0) {
+		draw(ctx, source);
+		return;
+	}
+
+	const { width, height } = ctx.canvas;
+	if (width <= 0 || height <= 0) return;
+
+	const scratch = scratchPair(width, height);
+	const sourceCtx = scratch.source.getContext("2d");
+	const targetCtx = scratch.target.getContext("2d");
+	if (!sourceCtx || !targetCtx) {
+		draw(ctx, source);
+		return;
+	}
+
+	const radians = (rotationDegrees * Math.PI) / 180;
+
+	sourceCtx.setTransform(1, 0, 0, 1, 0, 0);
+	sourceCtx.clearRect(0, 0, width, height);
+	sourceCtx.translate(centre.x, centre.y);
+	sourceCtx.rotate(-radians);
+	sourceCtx.translate(-centre.x, -centre.y);
+	sourceCtx.drawImage(source, 0, 0);
+	sourceCtx.setTransform(1, 0, 0, 1, 0, 0);
+
+	targetCtx.setTransform(1, 0, 0, 1, 0, 0);
+	targetCtx.clearRect(0, 0, width, height);
+	draw(targetCtx, scratch.source);
+
+	ctx.save();
+	ctx.translate(centre.x, centre.y);
+	ctx.rotate(radians);
+	ctx.translate(-centre.x, -centre.y);
+	ctx.drawImage(scratch.target, 0, 0);
+	ctx.restore();
+};
+
 export const paintMasks = (
 	ctx: CanvasRenderingContext2D,
 	source: CanvasImageSource,
@@ -108,9 +236,50 @@ export const paintMasks = (
 		const regionHeight = endY - startY;
 		if (regionWidth <= 0 || regionHeight <= 0) continue;
 
-		const level = Math.max(1, ann.maskLevel ?? 16);
+		// The stored amount is 1080p-relative, matching `MaskSegment::amount`
+		// and the renderer's `scaled_effect_size`. Resolve it against the frame
+		// actually being painted so a 1x and a 2x export obscure identically.
+		const resolutionScale = ctx.canvas.height / MASK_AMOUNT_BASE_HEIGHT;
+		const level = Math.max(1, (ann.maskAmount ?? 16) * resolutionScale);
+		const mode = ann.maskMode ?? "blur";
+		const shape: MaskShape = ann.maskShape ?? "rect";
 
-		if ((ann.maskType ?? "blur") === "pixelate") {
+		if (mode === "spotlight") {
+			// Spotlight darkens everything *outside* the region rather than
+			// obscuring what is inside it, so the fill covers the screenshot
+			// with the region punched out. even-odd on two nested rects is
+			// exactly that hole, with no second canvas.
+			const darkness = Math.max(0, Math.min(1, ann.maskDarkness ?? 0.5));
+			if (darkness <= 0) continue;
+			ctx.save();
+			ctx.filter = "none";
+			ctx.globalAlpha = 1;
+			ctx.fillStyle = `rgba(0, 0, 0, ${darkness})`;
+			ctx.beginPath();
+			ctx.rect(imageRect.x, imageRect.y, imageRect.width, imageRect.height);
+			// `maskRegionPath` starts its own subpath, which even-odd then
+			// treats as the hole.
+			maskRegionPath(ctx, shape, startX, startY, regionWidth, regionHeight);
+			ctx.fill("evenodd");
+			ctx.restore();
+			continue;
+		}
+
+		if (mode === "redact") {
+			// Opaque fill, hard-edged. No source pixel may survive inside the
+			// region — that is the whole point of this mode, and a blend or a
+			// soft edge would leak the original.
+			ctx.save();
+			ctx.filter = "none";
+			ctx.globalAlpha = 1;
+			ctx.fillStyle = "#000";
+			maskRegionPath(ctx, shape, startX, startY, regionWidth, regionHeight);
+			ctx.fill();
+			ctx.restore();
+			continue;
+		}
+
+		if (mode === "pixelate") {
 			const blockSize = Math.max(2, Math.round(level));
 			const temp = document.createElement("canvas");
 			temp.width = Math.max(1, Math.floor(regionWidth / blockSize));
@@ -133,6 +302,9 @@ export const paintMasks = (
 			);
 			const previousSmoothing = ctx.imageSmoothingEnabled;
 			ctx.imageSmoothingEnabled = false;
+			ctx.save();
+			maskRegionPath(ctx, shape, startX, startY, regionWidth, regionHeight);
+			ctx.clip();
 			ctx.drawImage(
 				temp,
 				0,
@@ -144,11 +316,16 @@ export const paintMasks = (
 				regionWidth,
 				regionHeight,
 			);
+			ctx.restore();
 			ctx.imageSmoothingEnabled = previousSmoothing;
 			continue;
 		}
 
+		ctx.save();
+		maskRegionPath(ctx, shape, startX, startY, regionWidth, regionHeight);
+		ctx.clip();
 		blurRegion(ctx, source, startX, startY, regionWidth, regionHeight, level);
+		ctx.restore();
 	}
 
 	ctx.filter = "none";
@@ -361,10 +538,10 @@ const scaleAnnotations = (
 		width: ann.width * scaleX,
 		height: ann.height * scaleY,
 		strokeWidth: ann.strokeWidth * scalar,
-		maskLevel: ann.maskLevel == null ? ann.maskLevel : ann.maskLevel * scalar,
-		// `focus` is deliberately untouched: it is normalized to the screenshot
-		// and its dials resolve against the render resolution, which is what
-		// makes a 1x and a 2x export look the same.
+		// `maskAmount` is deliberately untouched, as is `focus`: both are
+		// resolution-independent — the amount is 1080p-relative and resolved
+		// against the frame height at paint time — which is what makes a 1x and
+		// a 2x export look the same.
 	}));
 };
 
@@ -373,18 +550,12 @@ export function renderScreenshotExportCanvas({
 	project,
 	annotations,
 	frame,
-	previewCanvas,
-	previewMaskCanvas,
-	canReusePreviewCanvases,
 	imageRect,
 }: {
 	renderedBitmap: ImageBitmap;
 	project: ProjectConfiguration;
 	annotations: Annotation[];
 	frame?: { width: number; height: number } | null;
-	previewCanvas?: HTMLCanvasElement | null;
-	previewMaskCanvas?: HTMLCanvasElement | null;
-	canReusePreviewCanvases?: boolean;
 	/** Where the screenshot sits inside the *preview* frame. Scaled to the
 	 * export resolution below, and only needed when the focus pass has to run
 	 * here rather than being inherited from the preview overlay. */
@@ -400,19 +571,14 @@ export function renderScreenshotExportCanvas({
 	const scaleY = frame ? canvas.height / frame.height : 1;
 	const scaledAnnotations = scaleAnnotations(annotations, scaleX, scaleY);
 
-	// The preview's defocus was rendered at interactive quality — fewer bokeh
-	// samples — so a composition using focus always re-renders here instead of
-	// shipping the cheap version.
-	const reusePreview =
-		canReusePreviewCanvases && !findFocusAnnotation(scaledAnnotations);
-
-	if (reusePreview && previewCanvas && previewMaskCanvas) {
-		// The preview is already the right size and its overlay already has the
-		// masks burned in, so both can be copied straight across instead of
-		// re-blurring.
-		ctx.drawImage(previewCanvas, 0, 0);
-		ctx.drawImage(previewMaskCanvas, 0, 0);
-	} else {
+	// The preview used to be copied straight across here when it was already at
+	// full resolution. It cannot be any more: the preview is a layer stack the
+	// browser composites, and its mask overlay is painted in the capture's own
+	// space rather than the frame's, so neither canvas is the finished image.
+	// Export therefore always composes from a freshly rendered frame — which
+	// also means the defocus is always at final quality rather than the
+	// preview's cheaper interactive one.
+	{
 		ctx.drawImage(renderedBitmap, 0, 0);
 
 		// Masks read from an unmasked copy, so overlapping masks each blur the
@@ -431,29 +597,49 @@ export function renderScreenshotExportCanvas({
 			height: canvas.height,
 		};
 
-		// Focus first: it re-renders the whole screenshot, so a redaction painted
-		// before it would be defocused back out again.
-		if (imageRect) {
-			// Re-rendered at the export's own resolution rather than upscaling the
-			// preview — §18: the GPU gets the real output dimensions.
-			applyFocus(
-				ctx,
-				{ canvas: sourceCanvas, revision: sourceCanvas },
-				scaledAnnotations,
-				{
+		const exportRect = imageRect
+			? {
 					x: imageRect.x * scaleX,
 					y: imageRect.y * scaleY,
 					width: imageRect.width * scaleX,
 					height: imageRect.height * scaleY,
-				},
-				project,
-				"final",
-			);
-		}
+				}
+			: null;
 
-		// Masks re-read the pristine copy, so a mask inside the focus region
-		// stays a hard redaction rather than picking up the defocus.
-		paintMasks(ctx, sourceCanvas, scaledAnnotations, fullFrame);
+		// Same de-rotation the preview applies, against the export's own rect.
+		// Without it a rotated capture would look right on screen and export with
+		// its masks and defocus landing beside the content they belong to.
+		withCardRotation(
+			ctx,
+			sourceCanvas,
+			resolveTransform(project.background.displayTransform)?.rotation ?? 0,
+			exportRect
+				? {
+						x: exportRect.x + exportRect.width / 2,
+						y: exportRect.y + exportRect.height / 2,
+					}
+				: { x: canvas.width / 2, y: canvas.height / 2 },
+			(target, frame) => {
+				// Focus first: it re-renders the whole screenshot, so a redaction
+				// painted before it would be defocused back out again.
+				if (exportRect) {
+					// Re-rendered at the export's own resolution rather than upscaling
+					// the preview — §18: the GPU gets the real output dimensions.
+					applyFocus(
+						target,
+						{ canvas: frame, revision: frame },
+						scaledAnnotations,
+						exportRect,
+						project,
+						"final",
+					);
+				}
+
+				// Masks re-read the pristine copy, so a mask inside the focus region
+				// stays a hard redaction rather than picking up the defocus.
+				paintMasks(target, frame, scaledAnnotations, fullFrame);
+			},
+		);
 	}
 
 	drawAnnotations(ctx, scaledAnnotations);

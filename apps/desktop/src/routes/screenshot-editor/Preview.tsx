@@ -5,14 +5,35 @@ import { useScreenshotEditorContext } from "./context";
 import { getImageRect } from "./layout";
 import { OcrSelectionOverlay } from "./OcrSelectionOverlay";
 import { applyFocus, paintMasks } from "./screenshotExport";
+import { frameRect, normalizeAnnotation, resolveAnnotation } from "./space";
+import { TransformGizmo } from "./TransformGizmo";
+import {
+	cardIsTilted,
+	cardLayerPlacement,
+	IDENTITY_TRANSFORM,
+	resolveTransform,
+} from "./transform";
 
-// Cap's Preview does not composite anything: the Rust side renders the framed
-// screenshot on the GPU (quiro-rendering, the same crate that renders video)
-// and streams finished frames over a websocket; this blits the newest one onto
-// a 2D canvas and puts the SVG annotation layer over it. Everything visual —
-// background, padding, rounding, shadow, border, aspect ratio, masks — is
-// decided by the renderer, so there is one implementation of the framing math
-// and the preview cannot drift from the exported PNG.
+// The preview is a layer stack, not a single image.
+//
+// The Rust side (quiro-rendering, the same crate that renders video) draws the
+// composition on the GPU and streams it over a websocket — but in two pieces:
+// the canvas, and the capture's card alone on transparency. The canvas is a
+// fixed viewport that clips; the card is stacked over it and placed by a CSS
+// transform.
+//
+// That split is what makes placing the capture feel immediate. A drag, a scale
+// or a spin is a compositor transform over two images the browser already has,
+// so it costs nothing and runs at display refresh rate — where routing it
+// through the renderer would mean a GPU pass plus a full RGBA frame over a
+// socket for every pointer move.
+//
+// Everything visual is still decided by the renderer: background, padding,
+// rounding, shadow, border, aspect ratio, tilt. The transform the browser
+// applies here is the exact one `display_layout` would have applied, and the
+// card image is rendered where layout alone would put it, so the two agree by
+// construction — see `card_pass_config`. Export never takes this path at all:
+// it renders the whole composition in one pass, on demand.
 
 export const MIN_ZOOM = 0.1;
 export const MAX_ZOOM = 3;
@@ -39,18 +60,24 @@ export function Preview({
 }) {
 	const {
 		latestFrame,
+		latestCardFrame,
 		project,
 		originalImageSize,
 		activeTool,
 		annotations,
-		setPreviewCanvas,
+		setAnchorRect,
 		setPreviewMaskCanvas,
+		setCardCanvas,
+		setCaptureSelected,
+		setSelectedAnnotationId,
 	} = useScreenshotEditorContext();
 
 	const canvasRef = useRef<HTMLCanvasElement>(null);
+	const cardCanvasRef = useRef<HTMLCanvasElement>(null);
 	const maskCanvasRef = useRef<HTMLCanvasElement>(null);
 	const [frameSize, setFrameSize] = useState({ width: 0, height: 0 });
 	const hasFrame = frameSize.width > 0;
+	const hasCard = !!latestCardFrame;
 
 	useEffect(() => {
 		const canvas = canvasRef.current;
@@ -71,12 +98,36 @@ export function Preview({
 		ctx.drawImage(latestFrame.bitmap, 0, 0);
 	}, [latestFrame]);
 
-	// Export reads both canvases straight out of the context rather than being
-	// handed one down through props.
+	// The card layer arrives on its own socket at the same size as the canvas,
+	// so it needs no placement of its own here — the wrapper it sits in carries
+	// the transform.
 	useEffect(() => {
-		setPreviewCanvas(hasFrame ? canvasRef.current : null);
+		const canvas = cardCanvasRef.current;
+		if (!canvas || !latestCardFrame) return;
+
+		if (
+			canvas.width !== latestCardFrame.width ||
+			canvas.height !== latestCardFrame.height
+		) {
+			canvas.width = latestCardFrame.width;
+			canvas.height = latestCardFrame.height;
+		}
+
+		const ctx = canvas.getContext("2d");
+		if (!ctx) return;
+		ctx.clearRect(0, 0, canvas.width, canvas.height);
+		ctx.drawImage(latestCardFrame.bitmap, 0, 0);
+	}, [latestCardFrame]);
+
+	useEffect(() => {
 		setPreviewMaskCanvas(hasFrame ? maskCanvasRef.current : null);
-	}, [hasFrame, setPreviewCanvas, setPreviewMaskCanvas]);
+	}, [hasFrame, setPreviewMaskCanvas]);
+
+	// Published because the capture's hit test is a question about its alpha,
+	// and this is the only component that holds the canvas carrying it.
+	useEffect(() => {
+		setCardCanvas(hasCard ? cardCanvasRef.current : null);
+	}, [hasCard, setCardCanvas]);
 
 	const viewportRef = useRef<HTMLDivElement>(null);
 	const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
@@ -110,9 +161,36 @@ export function Preview({
 	const left = (viewportSize.width - scaledWidth) / 2 + viewport.pan.x;
 	const top = (viewportSize.height - scaledHeight) / 2 + viewport.pan.y;
 
+	// The capture's free placement inside the canvas — drag, uniform scale,
+	// in-plane rotation. Resolved once here so `null` (the state of every
+	// project that has never touched the gizmo) short-circuits every consumer
+	// below onto the path it took before the transform existed.
+	const layerTransform = useMemo(
+		() => resolveTransform(project?.background.displayTransform),
+		[project?.background.displayTransform],
+	);
+	const cardRotation = layerTransform?.rotation ?? 0;
+
 	// Where the screenshot itself sits inside the rendered frame, so masks can
 	// be clamped to it. Mirrors the renderer's own layout math (layout.ts).
 	const imageRect = useMemo(
+		() =>
+			getImageRect(
+				frameSize,
+				originalImageSize,
+				project?.background.padding ?? 0,
+				project?.background.crop ?? null,
+				project?.aspectRatio ?? null,
+				project?.background.displayTransform ?? null,
+			),
+		[frameSize, originalImageSize, project],
+	);
+
+	// The same rect with no transform applied: where layout alone would put the
+	// capture. The gizmo measures its offsets against this, and because layout
+	// cannot change mid-gesture it is the fixed reference that keeps a drag
+	// from feeding back into itself.
+	const laidOutRect = useMemo(
 		() =>
 			getImageRect(
 				frameSize,
@@ -124,6 +202,47 @@ export function Preview({
 		[frameSize, originalImageSize, project],
 	);
 
+	// Read off the two layers rather than recomputed from config: the renderer
+	// decides how much bleed the card needs, and the difference in width *is*
+	// that decision. Nothing to keep in sync, nothing to drift.
+	const cardBleed =
+		latestCardFrame && frameSize.width > 0
+			? Math.max(0, (latestCardFrame.width - frameSize.width) / 2)
+			: 0;
+
+	// How the capture's layer is placed over the canvas layer. Recomputed on
+	// every commit and nowhere else — during a gesture this string is the only
+	// thing that changes, and the browser's compositor does the rest.
+	const cardPlacement = useMemo(
+		() =>
+			cardLayerPlacement(
+				layerTransform,
+				laidOutRect,
+				frameSize,
+				{ width: scaledWidth, height: scaledHeight },
+				// Mirrors `card_pass_config`: a flat card is spun here, a tilted one
+				// was already spun by the renderer.
+				!cardIsTilted(project?.background.perspective),
+				cardBleed,
+			),
+		[
+			layerTransform,
+			laidOutRect,
+			frameSize,
+			scaledWidth,
+			scaledHeight,
+			project?.background.perspective,
+			cardBleed,
+		],
+	);
+
+	// The anchor every stored annotation is normalized against. Only this
+	// component knows the rendered frame size, so it is the one place that can
+	// compute it — see `context.tsx`'s storage boundary.
+	useEffect(() => {
+		setAnchorRect(imageRect);
+	}, [imageRect, setAnchorRect]);
+
 	// Masks are painted onto a second canvas stacked over the first, reading
 	// pixels back out of it. They cannot be SVG like the other annotations —
 	// blurring and pixelating need the rendered pixels underneath — and they
@@ -134,27 +253,48 @@ export function Preview({
 	// the frame is already on the source canvas before this samples it.
 	useEffect(() => {
 		const maskCanvas = maskCanvasRef.current;
-		const source = canvasRef.current;
+		const source = cardCanvasRef.current;
 		if (!maskCanvas) return;
 
 		const ctx = maskCanvas.getContext("2d");
 		if (!ctx) return;
 
-		if (!latestFrame || !source) {
+		if (!latestCardFrame || !source) {
 			maskCanvas.width = 0;
 			maskCanvas.height = 0;
 			return;
 		}
 
 		if (
-			maskCanvas.width !== latestFrame.width ||
-			maskCanvas.height !== latestFrame.height
+			maskCanvas.width !== latestCardFrame.width ||
+			maskCanvas.height !== latestCardFrame.height
 		) {
-			maskCanvas.width = latestFrame.width;
-			maskCanvas.height = latestFrame.height;
+			maskCanvas.width = latestCardFrame.width;
+			maskCanvas.height = latestCardFrame.height;
 		}
 
 		ctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+
+		// Both passes run in the *card's* own space, over the card layer, and the
+		// wrapper's transform carries the result along with the capture. That is
+		// simpler than it was when the preview was one composited image: there
+		// the capture could be spun under an axis-aligned overlay and both passes
+		// had to be de-rotated to match. Here the card layer is axis-aligned by
+		// construction, because its rotation has not been applied yet.
+		//
+		// The anchor is therefore the laid-out rect, not the placed one, so the
+		// stored (capture-normalized) geometry has to be re-resolved against it —
+		// shifted by the bleed, since the card texture is the canvas grown on
+		// every side and the capture sits that much further in.
+		const cardRect = frameRect(
+			laidOutRect.x + cardBleed,
+			laidOutRect.y + cardBleed,
+			laidOutRect.width,
+			laidOutRect.height,
+		);
+		const cardAnnotations = annotations.map((annotation) =>
+			resolveAnnotation(normalizeAnnotation(annotation, imageRect), cardRect),
+		);
 
 		// The depth-of-field pass runs at interactive quality here — the same
 		// shader the export uses, just with fewer bokeh samples — and only ever
@@ -164,18 +304,25 @@ export function Preview({
 		if (project)
 			applyFocus(
 				ctx,
-				{ canvas: source, revision: latestFrame },
-				annotations,
-				imageRect,
+				{ canvas: source, revision: latestCardFrame },
+				cardAnnotations,
+				cardRect,
 				project,
 				"preview",
 			);
 
 		// After focus: masks re-read the pristine frame, so a redaction inside
 		// the focus region stays hard rather than picking up the defocus.
-		if (annotations.some((a) => a.type === "mask"))
-			paintMasks(ctx, source, annotations, imageRect);
-	}, [latestFrame, annotations, imageRect, project]);
+		if (cardAnnotations.some((a) => a.type === "mask"))
+			paintMasks(ctx, source, cardAnnotations, cardRect);
+	}, [
+		latestCardFrame,
+		annotations,
+		imageRect,
+		laidOutRect,
+		cardBleed,
+		project,
+	]);
 
 	const zoomAtPoint = useCallback(
 		(clientX: number, clientY: number, nextZoom: number) => {
@@ -305,6 +452,44 @@ export function Preview({
 		};
 	}, [viewport, onViewportChange]);
 
+	// Space arms a pan over anything, including the capture — the capture is
+	// grabbable now, so the margin alone is not always enough room to pan from.
+	// The margin still pans on a plain drag; this only adds a way to do it
+	// without one.
+	const [spaceHeld, setSpaceHeld] = useState(false);
+	useEffect(() => {
+		const editing = (target: EventTarget | null) => {
+			const element = target as HTMLElement | null;
+			return (
+				element?.tagName === "INPUT" ||
+				element?.tagName === "TEXTAREA" ||
+				element?.isContentEditable === true
+			);
+		};
+		const down = (event: KeyboardEvent) => {
+			// Space types a space in a text annotation, and scrolls the page
+			// everywhere else — neither should become a pan.
+			if (event.code !== "Space" || event.repeat || editing(event.target))
+				return;
+			event.preventDefault();
+			setSpaceHeld(true);
+		};
+		const up = (event: KeyboardEvent) => {
+			if (event.code === "Space") setSpaceHeld(false);
+		};
+		// A blur mid-hold would otherwise leave the pan armed with nothing to
+		// release it.
+		const clear = () => setSpaceHeld(false);
+		window.addEventListener("keydown", down);
+		window.addEventListener("keyup", up);
+		window.addEventListener("blur", clear);
+		return () => {
+			window.removeEventListener("keydown", down);
+			window.removeEventListener("keyup", up);
+			window.removeEventListener("blur", clear);
+		};
+	}, []);
+
 	const beginPan = (clientX: number, clientY: number) => {
 		panRef.current = { x: clientX, y: clientY, pan: viewport.pan };
 		setIsPanning(true);
@@ -314,9 +499,11 @@ export function Preview({
 		<div
 			ref={viewportRef}
 			onPointerDown={(event) => {
-				// Middle-drag pans from anywhere; a left-drag on empty canvas is
-				// handled by the annotation layer, which forwards it here.
-				if (event.button !== 1) return;
+				// Middle-drag pans from anywhere, and so does space+drag — which is
+				// the only way to pan from over the capture, since a plain press
+				// there moves it. A left-drag on the empty margin reaches the
+				// gizmo's miss path instead.
+				if (event.button !== 1 && !(spaceHeld && event.button === 0)) return;
 				event.preventDefault();
 				beginPan(event.clientX, event.clientY);
 			}}
@@ -328,26 +515,56 @@ export function Preview({
 			// the toolbar disarms the active tool (see AnnotationTools).
 			data-editor-canvas
 			className="relative isolate h-full w-full overflow-hidden bg-gray-2 "
+			style={
+				spaceHeld ? { cursor: isPanning ? "grabbing" : "grab" } : undefined
+			}
 		>
 			<div
 				className="absolute origin-top-left rounded-lg"
 				style={{ left, top, width: scaledWidth, height: scaledHeight }}
 			>
-				<canvas
-					ref={canvasRef}
+				{/* The canvas layer, and the clip. `overflow-hidden` here is the
+				    whole of "the canvas is a viewport": whatever the capture's
+				    transform puts outside this box is simply not drawn, which is
+				    the same thing the renderer's output texture does on export. */}
+				<div
 					className={cn(
-						"h-full w-full shadow-lg rounded-lg",
+						"relative h-full w-full overflow-hidden rounded-lg shadow-lg",
 						!hasFrame && "invisible",
 					)}
-				/>
-				<canvas
-					ref={maskCanvasRef}
-					aria-hidden
-					className={cn(
-						"pointer-events-none absolute inset-0 h-full w-full",
-						!hasFrame && "invisible",
-					)}
-				/>
+				>
+					<canvas ref={canvasRef} className="h-full w-full" />
+
+					{/* The capture layer. Everything inside moves, scales and spins
+					    together — the card, its shadow, and the mask and
+					    depth-of-field passes painted in its own space — because they
+					    are all measured against the same untransformed rect. */}
+					<div
+						className="absolute"
+						style={{
+							...cardPlacement.inset,
+							transform: cardPlacement.transform,
+							transformOrigin: cardPlacement.transformOrigin,
+							willChange: cardPlacement.transform ? "transform" : undefined,
+						}}
+					>
+						<canvas
+							ref={cardCanvasRef}
+							className={cn(
+								"absolute inset-0 h-full w-full",
+								!hasCard && "invisible",
+							)}
+						/>
+						<canvas
+							ref={maskCanvasRef}
+							aria-hidden
+							className={cn(
+								"pointer-events-none absolute inset-0 h-full w-full",
+								!hasCard && "invisible",
+							)}
+						/>
+					</div>
+				</div>
 				{hasFrame && (
 					<OcrSelectionOverlay
 						bounds={{
@@ -374,9 +591,37 @@ export function Preview({
 						cssWidth={scaledWidth}
 						cssHeight={scaledHeight}
 						imageRect={imageRect}
+						cardRotation={cardRotation}
 						isPanning={isPanning}
 						onBackgroundMouseDown={(event) => {
 							if (activeTool !== "select" || event.button !== 0) return;
+							beginPan(event.clientX, event.clientY);
+						}}
+					/>
+				)}
+
+				{/* Mounted for the whole of select mode, not armed by a tool: the
+				    capture is moved by pressing it, so something has to be there to
+				    notice the press. It decides for itself whether one was meant
+				    for it and hands back the ones that were not. */}
+				{hasFrame && activeTool === "select" && (
+					<TransformGizmo
+						bounds={frameRect(0, 0, frameSize.width, frameSize.height)}
+						cssWidth={scaledWidth}
+						cssHeight={scaledHeight}
+						laidOutRect={laidOutRect}
+						imageRect={imageRect}
+						transform={layerTransform ?? IDENTITY_TRANSFORM}
+						cssRotation={
+							cardIsTilted(project?.background.perspective)
+								? 0
+								: (layerTransform?.rotation ?? 0)
+						}
+						disabled={spaceHeld}
+						onMiss={(event) => {
+							if (event.button !== 0) return;
+							setCaptureSelected(false);
+							setSelectedAnnotationId(null);
 							beginPan(event.clientX, event.clientY);
 						}}
 					/>

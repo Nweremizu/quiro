@@ -158,16 +158,16 @@ export default function GeneralSettings() {
 										aria-pressed={isSelected}
 										onClick={() => void handleThemeChange(theme.id)}
 										className={cn(
-											"flex flex-col items-center gap-2 rounded-lg border-2 py-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-300 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-1",
+											"flex flex-col items-center gap-2 rounded-lg border-2 py-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-gray-1",
 											isSelected
-												? "border-accent-300 bg-accent-100/40"
+												? "border-accent-border-selected bg-accent-surface"
 												: "border-gray-4 hover:border-gray-6",
 										)}
 									>
 										<theme.icon
 											className={cn(
 												"size-5",
-												isSelected ? "text-accent-400" : "text-gray-10",
+												isSelected ? "text-accent-text" : "text-gray-10",
 											)}
 										/>
 										<span

@@ -11,10 +11,12 @@ import { remove } from "@tauri-apps/plugin-fs";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { type as osType } from "@tauri-apps/plugin-os";
 import { useState } from "react";
+import { commands } from "@/utils/tauri";
 import IconLucideCopy from "~icons/lucide/copy";
 import IconLucideFolder from "~icons/lucide/folder";
 import IconLucideMoreHorizontal from "~icons/lucide/more-horizontal";
 import IconLucideSave from "~icons/lucide/save";
+import IconLucideSettings from "~icons/lucide/settings";
 import IconLucideTrash2 from "~icons/lucide/trash-2";
 import { FileNameEditor } from "./file-name-editor";
 import { useScreenshotExport } from "./useScreenshotExport";
@@ -132,10 +134,28 @@ export function Header({
 							<IconLucideFolder className="size-4 text-gray-11" />
 							Open Folder
 						</button>
+						{/* App-level rather than about this screenshot, but the editor
+						    is its own window — without this the only way through is
+						    the tray. It sits above the separator so it isn't grouped
+						    with the destructive action below. */}
+						<button
+							type="button"
+							onClick={() => {
+								setMoreOpen(false);
+								void commands.showWindow({ Settings: { page: null } });
+							}}
+							className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-gray-12 hover:bg-gray-3"
+						>
+							<IconLucideSettings className="size-4 text-gray-11" />
+							Settings
+							<span className="ml-auto text-xs text-gray-10">
+								{isMacOS ? "⌘," : "Ctrl+,"}
+							</span>
+						</button>
 						<button
 							type="button"
 							onClick={() => void deleteScreenshot()}
-							className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-red-9 hover:bg-red-3"
+							className="mt-1 flex w-full items-center gap-2 rounded-lg border-t border-gray-3 px-2.5 py-2 text-left text-sm text-red-9 hover:bg-red-3"
 						>
 							<IconLucideTrash2 className="size-4" />
 							Delete

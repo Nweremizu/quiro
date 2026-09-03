@@ -25,6 +25,7 @@ export function connectFrameSocket(
 	url: string,
 	onFrame: (frame: SocketFrame) => void,
 	onClose?: () => void,
+	options?: { unpremultiply?: boolean },
 ): () => void {
 	let socket: WebSocket | null = new WebSocket(url);
 	socket.binaryType = "arraybuffer";
@@ -36,7 +37,14 @@ export function connectFrameSocket(
 
 	socket.onmessage = (event) => {
 		if (closed || !(event.data instanceof ArrayBuffer)) return;
-		decoding = decoding.then(() => decodeFrame(event, onFrame, () => closed));
+		decoding = decoding.then(() =>
+			decodeFrame(
+				event,
+				onFrame,
+				() => closed,
+				options?.unpremultiply === true,
+			),
+		);
 	};
 
 	socket.onclose = () => {
@@ -53,10 +61,35 @@ export function connectFrameSocket(
 	};
 }
 
+/**
+ * Undoes the premultiplication wgpu's alpha blending leaves behind.
+ *
+ * A layer rendered onto a cleared, transparent target comes back as
+ * `rgb * a` — that is what `BlendState::ALPHA_BLENDING` computes when there is
+ * nothing underneath. `ImageData` is defined as straight alpha, so handing it
+ * premultiplied pixels darkens every partly transparent one: the capture's
+ * shadow and its antialiased edge, exactly where it is most visible.
+ *
+ * Only the composited layers need this, and only their soft edges do the work —
+ * fully opaque and fully transparent pixels, which is nearly the whole buffer,
+ * are skipped outright.
+ */
+function unpremultiplyInPlace(pixels: Uint8ClampedArray) {
+	for (let i = 3; i < pixels.length; i += 4) {
+		const alpha = pixels[i];
+		if (alpha === 0 || alpha === 255) continue;
+		const scale = 255 / alpha;
+		pixels[i - 3] *= scale;
+		pixels[i - 2] *= scale;
+		pixels[i - 1] *= scale;
+	}
+}
+
 async function decodeFrame(
 	event: MessageEvent,
 	onFrame: (frame: SocketFrame) => void,
 	isClosed: () => boolean,
+	unpremultiply: boolean,
 ) {
 	const buffer = event.data as ArrayBuffer;
 	if (buffer.byteLength <= RGBA_TRAILER_BYTES) return;
@@ -85,6 +118,8 @@ async function decodeFrame(
 			pixels.set(source.subarray(from, from + rowBytes), row * rowBytes);
 		}
 	}
+
+	if (unpremultiply) unpremultiplyInPlace(pixels);
 
 	try {
 		const bitmap = await createImageBitmap(

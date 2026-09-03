@@ -301,16 +301,26 @@ fn to_wgsl_columns(m: &Mat3) -> PerspectiveMatrix {
 /// `ProjectUniforms::new` otherwise requires.
 pub fn inv_perspective_for_display(
     config: Option<&quiro_project::PerspectiveConfiguration>,
+    layer_rotation_deg: f32,
     target_bounds: [f32; 4],
 ) -> PerspectiveMatrix {
-    let Some(config) = config else {
+    let mut perspective = config.map(Perspective::from).unwrap_or_default();
+    // The layer gizmo's spin and the Perspective popover's spin are the same
+    // degree of freedom seen from two controls, so they add. Because `forward`
+    // builds `Rx * Ry * Rz`, the sum lands in `Rz` — the capture turns within
+    // its own plane first and that plane is then tilted, which is what dragging
+    // a rotation handle on a tilted card should do.
+    perspective.rotate_deg += layer_rotation_deg;
+
+    if perspective.is_identity() {
         return IDENTITY;
-    };
+    }
+
     let center = [
         (target_bounds[0] + target_bounds[2]) * 0.5,
         (target_bounds[1] + target_bounds[3]) * 0.5,
     ];
-    inverse_matrix(&Perspective::from(config), center)
+    inverse_matrix(&perspective, center)
 }
 
 #[cfg(test)]
@@ -524,7 +534,7 @@ mod tests {
     #[test]
     fn display_entry_point_none_is_identity() {
         // The state every video frame and an untouched screenshot are in.
-        let m = inv_perspective_for_display(None, [0.0, 0.0, 1920.0, 1080.0]);
+        let m = inv_perspective_for_display(None, 0.0, [0.0, 0.0, 1920.0, 1080.0]);
         assert_eq!(m, IDENTITY);
     }
 
@@ -540,13 +550,73 @@ mod tests {
         let bounds = [200.0, 100.0, 1400.0, 900.0];
         let expected_center = [800.0, 500.0];
 
-        let m = inv_perspective_for_display(Some(&config), bounds);
+        let m = inv_perspective_for_display(Some(&config), 0.0, bounds);
         assert_ne!(m, IDENTITY, "a non-zero tilt must actually project");
         assert_close(
             apply(&m, expected_center),
             expected_center,
             "card centre fixed",
         );
+    }
+
+    #[test]
+    fn layer_rotation_spins_without_a_perspective_config() {
+        // The gizmo has to work on a capture that never opened the Perspective
+        // popover, so a rotation with `None` config must still produce a real
+        // matrix rather than falling through the `None` early-out to identity.
+        let center = [500.0, 500.0];
+        let m = inv_perspective_for_display(None, 180.0, [400.0, 400.0, 600.0, 600.0]);
+        assert_ne!(m, IDENTITY);
+        assert_close(apply(&m, [600.0, 500.0]), [400.0, 500.0], "spin x");
+        assert_close(apply(&m, center), center, "centre fixed");
+    }
+
+    #[test]
+    fn layer_rotation_adds_to_the_popover_spin() {
+        // Two controls over one degree of freedom: 30 on the gizmo plus 20 in
+        // the popover has to be the same card as 50 from either alone.
+        let bounds = [0.0, 0.0, 800.0, 600.0];
+        let combined = inv_perspective_for_display(
+            Some(&quiro_project::PerspectiveConfiguration {
+                rotate: 20.0,
+                ..Default::default()
+            }),
+            30.0,
+            bounds,
+        );
+        let single = inv_perspective_for_display(
+            Some(&quiro_project::PerspectiveConfiguration {
+                rotate: 50.0,
+                ..Default::default()
+            }),
+            0.0,
+            bounds,
+        );
+        assert_eq!(combined, single);
+    }
+
+    #[test]
+    fn layer_rotation_composes_with_tilt() {
+        // Spin must stay in-plane under a tilt: the card centre is still fixed
+        // and nothing degenerates when both controls are driven at once.
+        let bounds = [100.0, 50.0, 900.0, 650.0];
+        let center = [500.0, 350.0];
+        let m = inv_perspective_for_display(
+            Some(&quiro_project::PerspectiveConfiguration {
+                tilt_x: 25.0,
+                tilt_y: -15.0,
+                ..Default::default()
+            }),
+            45.0,
+            bounds,
+        );
+        assert_ne!(m, IDENTITY);
+        assert_close(apply(&m, center), center, "centre fixed under tilt + spin");
+        for col in m {
+            for value in col {
+                assert!(value.is_finite(), "tilt + spin must stay finite: {m:?}");
+            }
+        }
     }
 
     /// Re-derives the tilted footprint's bounding box the way `fit_scale`

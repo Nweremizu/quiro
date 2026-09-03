@@ -1,17 +1,17 @@
-use crate::gpu_context::PendingScreenshots;
 use crate::frame_ws::{WSFrame, create_watch_frame_ws};
 use crate::gpu_context;
+use crate::gpu_context::PendingScreenshots;
 use crate::windows::WindowId;
+use image::{
+    GenericImageView, ImageEncoder, RgbImage, buffer::ConvertBuffer, codecs::png::PngEncoder,
+};
 use quiro_project::{
     ProjectConfiguration, RecordingMeta, RecordingMetaInner, SingleSegment, StudioRecordingMeta,
     VideoMeta,
 };
 use quiro_rendering::{
-    DecodedFrame, DecodedSegmentFrames, FrameRenderer, ProjectUniforms, RenderVideoConstants,
-    RendererLayers, ZoomTransformTimeline,
-};
-use image::{
-    GenericImageView, ImageEncoder, RgbImage, buffer::ConvertBuffer, codecs::png::PngEncoder,
+    CompositionScope, DecodedFrame, DecodedSegmentFrames, FrameRenderer, ProjectUniforms,
+    RenderVideoConstants, RendererLayers, ZoomTransformTimeline,
 };
 use relative_path::RelativePathBuf;
 use serde::{Deserialize, Serialize};
@@ -26,7 +26,6 @@ use tauri::{
 };
 use tokio::sync::{RwLock, watch};
 use tokio_util::sync::CancellationToken;
-
 
 /// The display name `library.rs` wrote at capture time, read from the same
 /// `<image>.json` sidecar the library list uses. Cap hardcodes "Screenshot"
@@ -62,8 +61,14 @@ pub struct ScreenshotConfigUpdate {
 }
 
 pub struct ScreenshotEditorInstance {
+    /// The canvas: background source, blur and noise, with nothing on it.
     pub ws_port: u16,
+    /// The capture's card alone, on transparency, rendered at its laid-out
+    /// size with the layer's offset and scale removed — the browser applies
+    /// those as a transform, which is what makes dragging it cost nothing.
+    pub card_ws_port: u16,
     pub ws_shutdown_token: CancellationToken,
+    pub card_ws_shutdown_token: CancellationToken,
     pub config_tx: watch::Sender<ScreenshotConfigUpdate>,
     pub path: PathBuf,
     pub pretty_name: String,
@@ -72,15 +77,118 @@ pub struct ScreenshotEditorInstance {
     source_rgba: Arc<Vec<u8>>,
 }
 
+/// Re-sends an already-rendered layer under a new configuration revision.
+///
+/// The frontend treats `frame_number` as "which edit produced this", and
+/// export blocks until the preview reports the newest one. A placement-only
+/// change produces pixel-identical layers, so the honest answer is the frames
+/// already in hand stamped with the new revision — the alternative, staying
+/// silent, would hang the export waiting for a frame that is never coming.
+fn reissue(frame: &Arc<WSFrame>, revision: u32) -> Arc<WSFrame> {
+    Arc::new(WSFrame {
+        data: frame.data.clone(),
+        width: frame.width,
+        height: frame.height,
+        stride: frame.stride,
+        frame_number: revision,
+        target_time_ns: frame.target_time_ns,
+        format: frame.format,
+        created_at: Instant::now(),
+    })
+}
+
+/// Renders one layer of the screenshot composition.
+///
+/// The still is re-uploaded per pass rather than kept as a GPU texture because
+/// `DecodedSegmentFrames` owns its buffer; at screenshot sizes that is a memcpy
+/// against two GPU passes, and it only happens when the configuration actually
+/// changes — never during a gesture, which is the whole point of the split.
+async fn render_layer(
+    constants: &RenderVideoConstants,
+    source: &DecodedFrame,
+    config: &ProjectConfiguration,
+    scope: CompositionScope,
+    renderer: &mut FrameRenderer<'_>,
+    layers: &mut RendererLayers,
+) -> Result<quiro_rendering::RenderedFrame, quiro_rendering::RenderingError> {
+    let segment_frames = DecodedSegmentFrames {
+        screen_frame: Some(DecodedFrame::new(
+            source.data().to_vec(),
+            source.width(),
+            source.height(),
+        )),
+        camera_frame: None,
+        segment_time: 0.0,
+        recording_time: 0.0,
+        segment_has_camera: false,
+    };
+
+    let (base_w, base_h) = ProjectUniforms::get_base_size(&constants.options, config);
+
+    let cursor_events = quiro_project::CursorEvents::default();
+    let mut zoom_timeline = ZoomTransformTimeline::from_project(
+        config,
+        &cursor_events,
+        0.0,
+        constants.options.screen_size,
+    );
+    zoom_timeline.ensure_precomputed_until(1.0 / 30.0);
+
+    let mut uniforms = ProjectUniforms::new(
+        constants,
+        config,
+        0,
+        30,
+        quiro_project::XY::new(base_w, base_h),
+        &cursor_events,
+        &segment_frames,
+        0.0,
+        &zoom_timeline,
+    );
+    uniforms.composition_scope = scope;
+
+    // The card pass renders into a texture grown by the shadow's reach, so the
+    // whole object — card, shadow, border — is intact no matter where the
+    // capture is moved. Without it the shadow is cut off at the texture edge,
+    // and that cut becomes a hard line around the screenshot as soon as the
+    // capture leaves its laid-out position. The background pass never needs
+    // this: it has nothing that spills.
+    if scope == CompositionScope::CardOnly {
+        let card = quiro_project::frame_layout::content_rect(
+            config,
+            quiro_project::XY::new(source.width(), source.height()),
+            quiro_project::XY::new(base_w, base_h),
+        );
+        let bleed = card
+            .map(|(_, size)| {
+                quiro_project::frame_layout::shadow_reach_px(config, size.x.min(size.y))
+            })
+            .unwrap_or(0.0);
+        uniforms = uniforms.with_card_bleed(bleed.ceil().max(0.0) as u32);
+    }
+
+    renderer
+        .render_immediate(
+            segment_frames,
+            uniforms,
+            &quiro_project::CursorEvents::default(),
+            true,
+            layers,
+        )
+        .await
+}
+
 impl ScreenshotEditorInstance {
     pub async fn dispose(&self) {
         self.ws_shutdown_token.cancel();
+        self.card_ws_shutdown_token.cancel();
     }
 }
 
 impl Drop for ScreenshotEditorInstance {
     fn drop(&mut self) {
         self.ws_shutdown_token.cancel();
+        self.card_ws_shutdown_token.cancel();
     }
 }
 
@@ -135,6 +243,17 @@ impl ScreenshotEditorInstances {
             create_watch_frame_ws(frame_rx, Default::default()).await;
         if ws_port == 0 {
             return Err("Failed to start screenshot editor frame websocket".to_string());
+        }
+
+        // A second socket rather than a layer tag on the wire: `pack_ws_frame`
+        // is shared with the video path, and one channel per layer costs a port
+        // instead of a format change every other client would have to learn.
+        let (card_frame_tx, card_frame_rx) = watch::channel(None);
+        let (card_ws_port, card_ws_shutdown_token) =
+            create_watch_frame_ws(card_frame_rx, Default::default()).await;
+        if card_ws_port == 0 {
+            ws_shutdown_token.cancel();
+            return Err("Failed to start screenshot editor card websocket".to_string());
         }
 
         let (data, width, height) = {
@@ -237,7 +356,7 @@ impl ScreenshotEditorInstances {
             None
         };
 
-        let (recording_meta, loaded_config) = if let Some(cap_dir) = &cap_dir {
+        let (recording_meta, mut loaded_config) = if let Some(cap_dir) = &cap_dir {
             let meta = RecordingMeta::load_for_project(cap_dir).ok();
             let config = ProjectConfiguration::load(cap_dir).ok();
             (meta, config)
@@ -246,6 +365,34 @@ impl ScreenshotEditorInstances {
             // sidecar rather than a project directory — see save_config_sidecar.
             (None, load_config_sidecar(&path))
         };
+
+        // Legacy annotations are in rendered-frame pixels, which stop meaning
+        // the same thing the moment padding, crop or aspect ratio changes.
+        // Convert them to normalized geometry now, while the capture size is
+        // in hand — `ProjectConfiguration::load` cannot, because it never
+        // learns the dimensions. The migration defers rather than guessing if
+        // the frame is unresolvable, so a failure here is safe to ignore and
+        // retry on the next open.
+        if let Some(config) = loaded_config.as_mut()
+            && config.migrate_annotation_space(quiro_project::XY::new(width, height))
+        {
+            let written = match &cap_dir {
+                Some(cap_dir) => config.write(cap_dir).map_err(|e| e.to_string()),
+                None => save_config_sidecar(&path, config),
+            };
+            match written {
+                Ok(()) => tracing::info!(
+                    annotations = config.annotations.len(),
+                    "screenshot_editor: migrated annotations to normalized space"
+                ),
+                // The in-memory config is already migrated, so the editor is
+                // correct for this session either way; only persistence failed.
+                Err(error) => tracing::warn!(
+                    %error,
+                    "screenshot_editor: annotation migration could not be saved"
+                ),
+            }
+        }
 
         let recording_meta = if let Some(meta) = recording_meta {
             meta
@@ -373,6 +520,8 @@ impl ScreenshotEditorInstances {
 
         let instance = Arc::new(ScreenshotEditorInstance {
             ws_port,
+            card_ws_port,
+            card_ws_shutdown_token,
             ws_shutdown_token,
             config_tx,
             path: path.clone(),
@@ -402,85 +551,138 @@ impl ScreenshotEditorInstances {
             let mut current_config = current_update.config.clone();
             let mut current_revision = current_update.revision;
             let mut first_frame_logged = false;
+            let mut last_frames: Option<(Arc<WSFrame>, Arc<WSFrame>)> = None;
+            let mut last_fingerprint: Option<String> = None;
 
             loop {
                 if shutdown_token.is_cancelled() {
                     break;
                 }
-                let segment_frames = DecodedSegmentFrames {
-                    screen_frame: Some(DecodedFrame::new(
-                        decoded_frame.data().to_vec(),
-                        decoded_frame.width(),
-                        decoded_frame.height(),
-                    )),
-                    camera_frame: None,
-                    segment_time: 0.0,
-                    recording_time: 0.0,
-                    segment_has_camera: false,
-                };
 
-                let (base_w, base_h) =
-                    ProjectUniforms::get_base_size(&constants.options, &current_config);
+                // Dragging the capture around the canvas changes no pixel in
+                // either layer: the card is rendered where layout alone puts it
+                // and the browser applies the placement. So a change that
+                // survives `card_pass_config` unchanged is a change neither
+                // pass would draw differently, and re-rendering it would burn
+                // two GPU passes and two full frames over a socket per pointer
+                // move — the exact cost the split exists to avoid.
+                //
+                // Compared as serialized JSON because `ProjectConfiguration`
+                // has no `PartialEq`, and deriving one across every nested
+                // config type is a far larger change than one small
+                // serialization per edit.
+                // ponytail: JSON compare, derive PartialEq if this ever shows up in a profile
+                let card_config = quiro_project::frame_layout::card_pass_config(&current_config);
+                let fingerprint = serde_json::to_string(&card_config).ok();
+                let reuse = fingerprint.is_some()
+                    && fingerprint == last_fingerprint
+                    && last_frames.is_some();
 
-                let cursor_events = quiro_project::CursorEvents::default();
-                let mut zoom_timeline = ZoomTransformTimeline::from_project(
-                    &current_config,
-                    &cursor_events,
-                    0.0,
-                    constants.options.screen_size,
-                );
-                zoom_timeline.ensure_precomputed_until(1.0 / 30.0);
+                if reuse {
+                    let (background, card) = last_frames.as_ref().expect("checked above");
+                    let _ = frame_tx.send(Some(reissue(background, current_revision)));
+                    let _ = card_frame_tx.send(Some(reissue(card, current_revision)));
 
-                let uniforms = ProjectUniforms::new(
-                    &constants,
-                    &current_config,
-                    0,
-                    30,
-                    quiro_project::XY::new(base_w, base_h),
-                    &cursor_events,
-                    &segment_frames,
-                    0.0,
-                    &zoom_timeline,
-                );
+                    tokio::select! {
+                        res = config_rx.changed() => {
+                            if res.is_err() {
+                                break;
+                            }
+                            current_update = config_rx.borrow().clone();
+                            current_revision = current_update.revision;
+                            current_config = current_update.config.clone();
+                        }
+                        _ = shutdown_token.cancelled() => {
+                            break;
+                        }
+                    }
+                    continue;
+                }
 
                 let render_started = Instant::now();
-                let rendered_frame = frame_renderer
-                    .render_immediate(
-                        segment_frames,
-                        uniforms,
-                        &quiro_project::CursorEvents::default(),
-                        true,
-                        &mut layers,
-                    )
-                    .await;
 
-                match rendered_frame {
-                    Ok(frame) => {
-                        if !first_frame_logged {
-                            first_frame_logged = true;
-                            tracing::info!(
-                                render_ms = render_started.elapsed().as_millis() as u64,
-                                total_ms = create_started.elapsed().as_millis() as u64,
-                                frame_width = frame.width,
-                                frame_height = frame.height,
-                                frame_bytes = frame.data.len(),
-                                "screenshot_editor timing: first frame rendered + sent"
-                            );
+                // The preview is composited by the browser, not here. The
+                // canvas and the capture are rendered separately so that
+                // moving, scaling or spinning the capture costs a CSS
+                // transform over two cached images rather than a GPU render
+                // and a full frame over a socket per pointer move. Export is
+                // untouched: it still renders the whole composition in one
+                // pass, and is still the only thing that reaches a file.
+                //
+                // Both passes derive their output size from a config with the
+                // same `base_size`, so the two images line up pixel for pixel
+                // and the browser can stack them without measuring either.
+                let background = render_layer(
+                    &constants,
+                    &decoded_frame,
+                    &current_config,
+                    CompositionScope::BackgroundOnly,
+                    &mut frame_renderer,
+                    &mut layers,
+                )
+                .await;
+
+                // The card is rendered where layout alone would put it: its
+                // offset and scale are stripped for the browser to apply, and
+                // its rotation too whenever the card is flat enough for a CSS
+                // rotation to land on the same pixels the renderer would have
+                // drawn. `card_pass_config` owns that rule.
+                let card = render_layer(
+                    &constants,
+                    &decoded_frame,
+                    &card_config,
+                    CompositionScope::CardOnly,
+                    &mut frame_renderer,
+                    &mut layers,
+                )
+                .await;
+
+                let mut sent: Vec<Arc<WSFrame>> = Vec::with_capacity(2);
+                for (rendered, tx, what) in [
+                    (background, &frame_tx, "background"),
+                    (card, &card_frame_tx, "card"),
+                ] {
+                    match rendered {
+                        Ok(frame) => {
+                            if !first_frame_logged {
+                                tracing::info!(
+                                    render_ms = render_started.elapsed().as_millis() as u64,
+                                    total_ms = create_started.elapsed().as_millis() as u64,
+                                    layer = what,
+                                    frame_width = frame.width,
+                                    frame_height = frame.height,
+                                    frame_bytes = frame.data.len(),
+                                    "screenshot_editor timing: first frame rendered + sent"
+                                );
+                            }
+                            let ws_frame = Arc::new(WSFrame {
+                                data: frame.data,
+                                width: frame.width,
+                                height: frame.height,
+                                stride: frame.padded_bytes_per_row,
+                                frame_number: current_revision,
+                                target_time_ns: frame.target_time_ns,
+                                format: crate::frame_ws::WSFrameFormat::Rgba,
+                                created_at: Instant::now(),
+                            });
+                            sent.push(ws_frame.clone());
+                            let _ = tx.send(Some(ws_frame));
                         }
-                        let _ = frame_tx.send(Some(std::sync::Arc::new(WSFrame {
-                            data: frame.data,
-                            width: frame.width,
-                            height: frame.height,
-                            stride: frame.padded_bytes_per_row,
-                            frame_number: current_revision,
-                            target_time_ns: frame.target_time_ns,
-                            format: crate::frame_ws::WSFrameFormat::Rgba,
-                            created_at: Instant::now(),
-                        })));
+                        Err(e) => {
+                            tracing::error!("Failed to render screenshot {what} layer: {e}");
+                        }
                     }
-                    Err(e) => {
-                        tracing::error!("Failed to render screenshot frame: {e}");
-                    }
+                }
+                first_frame_logged = true;
+
+                // Only cache a complete pair: half a composition would be
+                // reissued against a stale partner on the next drag.
+                if let [background, card] = sent.as_slice() {
+                    last_frames = Some((background.clone(), card.clone()));
+                    last_fingerprint = fingerprint;
+                } else {
+                    last_frames = None;
+                    last_fingerprint = None;
                 }
 
                 tokio::select! {
@@ -498,6 +700,7 @@ impl ScreenshotEditorInstances {
                 }
             }
             let _ = frame_tx.send(None);
+            let _ = card_frame_tx.send(None);
         });
 
         Ok(instance)
@@ -716,6 +919,9 @@ impl PendingScreenshotEditorInstances {
 #[serde(rename_all = "camelCase")]
 pub struct SerializedScreenshotEditorInstance {
     pub frames_socket_url: String,
+    /// The capture's own layer. The preview stacks it over `frames_socket_url`
+    /// and places it with a CSS transform, so a drag never reaches the renderer.
+    pub card_socket_url: String,
     pub path: PathBuf,
     pub config: Option<ProjectConfiguration>,
     pub pretty_name: String,
@@ -806,6 +1012,7 @@ pub async fn create_screenshot_editor_instance(
 
     Ok(SerializedScreenshotEditorInstance {
         frames_socket_url: format!("ws://localhost:{}", instance.ws_port),
+        card_socket_url: format!("ws://localhost:{}", instance.card_ws_port),
         path: instance.path.clone(),
         config: Some(config),
         pretty_name: instance.pretty_name.clone(),

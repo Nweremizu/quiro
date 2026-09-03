@@ -77,7 +77,7 @@ export function ZoomTrack() {
 						/>
 
 						<SegmentContent width={width} className="justify-center">
-							<span className="pointer-events-none truncate text-[0.625rem] font-medium tabular-nums text-white/90">
+							<span className="pointer-events-none truncate text-[0.625rem] font-semibold tabular-nums text-[var(--track-label)]">
 								{segment.amount.toFixed(1)}x
 							</span>
 						</SegmentContent>

@@ -157,6 +157,13 @@ pub(crate) async fn show_settings(
 
     ensure_settings_window_bounds(&window);
 
+    let app_handle = app.clone();
+    window.on_window_event(move |event| {
+        if matches!(event, tauri::WindowEvent::Destroyed) {
+            restore_main_window_after_settings(&app_handle);
+        }
+    });
+
     Ok(window)
 }
 

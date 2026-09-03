@@ -12,7 +12,12 @@ import Editor from "./routes/editor";
 import MainWindow from "./routes/launch";
 import ScreenshotEditor from "./routes/screenshot-editor";
 import Settings from "./routes/settings";
+import ChangelogSettings from "./routes/settings/changelog";
+import FeedbackSettings from "./routes/settings/feedback";
 import GeneralSettings from "./routes/settings/general";
+import RecordingsSettings from "./routes/settings/recordings";
+import ScreenshotsSettings from "./routes/settings/screenshots";
+import ShortcutsSettings from "./routes/settings/shortcuts";
 import { ToolbarWindow } from "./routes/ToolbarWindow";
 import TargetSelectOverlay from "./routes/target-select-overlay";
 import WindowCaptureOccluder from "./routes/window-capture-occluder";
@@ -79,6 +84,11 @@ function Inner() {
 				<Route path="/settings" element={<Settings />}>
 					<Route index element={<GeneralSettings />} />
 					<Route path="general" element={<GeneralSettings />} />
+					<Route path="shortcuts" element={<ShortcutsSettings />} />
+					<Route path="recordings" element={<RecordingsSettings />} />
+					<Route path="screenshots" element={<ScreenshotsSettings />} />
+					<Route path="feedback" element={<FeedbackSettings />} />
+					<Route path="changelog" element={<ChangelogSettings />} />
 				</Route>
 			</Route>
 		</Routes>

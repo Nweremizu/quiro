@@ -203,7 +203,7 @@ export function Slider({
 				aria-disabled={disabled}
 				className={cn(
 					"relative overflow-hidden bg-gray-3 outline-none transition-shadow",
-					"focus-visible:ring-2 focus-visible:ring-accent-400/50",
+					"focus-visible:ring-2 focus-visible:ring-accent-focus-ring/50",
 					disabled ? "pointer-events-none opacity-45" : "cursor-pointer",
 				)}
 				style={{

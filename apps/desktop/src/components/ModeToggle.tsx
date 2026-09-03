@@ -24,7 +24,7 @@ export function ModeToggle({
 				className={cn(
 					"flex-1 px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50",
 					mode === "studio"
-						? "bg-accent-400 text-white"
+						? "bg-accent-solid text-accent-on-solid"
 						: "text-gray-11 hover:bg-gray-3",
 				)}
 			>
@@ -38,7 +38,7 @@ export function ModeToggle({
 				className={cn(
 					"flex-1 border-l border-gray-5 px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50",
 					mode === "instant"
-						? "bg-accent-300 text-white"
+						? "bg-accent-solid text-accent-on-solid"
 						: "text-gray-11 hover:bg-gray-3",
 				)}
 			>

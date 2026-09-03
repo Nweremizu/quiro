@@ -153,7 +153,7 @@ export default function TargetCard(props: TargetCardProps) {
 				<span
 					// biome-ignore lint/suspicious/noArrayIndexKey: static split of one string per render, order never changes
 					key={i}
-					className="rounded-sm bg-accent-400/20 px-px text-gray-12"
+					className="rounded-sm bg-accent-solid/20 px-px text-gray-12"
 				>
 					{part}
 				</span>
@@ -229,7 +229,7 @@ export default function TargetCard(props: TargetCardProps) {
 			disabled={disabled}
 			data-variant={variant}
 			className={cn(
-				"group flex flex-col overflow-hidden rounded-lg border border-transparent bg-gray-3 text-left outline-none transition-colors duration-100 hover:bg-gray-4 focus-visible:ring-2 focus-visible:ring-accent-300 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-1",
+				"group flex flex-col overflow-hidden rounded-lg border border-transparent bg-gray-3 text-left outline-none transition-colors duration-100 hover:bg-gray-4 focus-visible:ring-2 focus-visible:ring-accent-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-gray-1",
 				disabled && "pointer-events-none opacity-60",
 				className,
 			)}
