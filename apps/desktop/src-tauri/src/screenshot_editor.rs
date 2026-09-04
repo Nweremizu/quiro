@@ -7,12 +7,13 @@ use image::{
 };
 use quiro_project::{
     ProjectConfiguration, RecordingMeta, RecordingMetaInner, SingleSegment, StudioRecordingMeta,
-    VideoMeta,
+    TextContent, VideoMeta,
 };
 use quiro_rendering::{
     CompositionScope, DecodedFrame, DecodedSegmentFrames, FrameRenderer, ProjectUniforms,
     RenderVideoConstants, RendererLayers, ZoomTransformTimeline,
 };
+use quiro_text::{Constraint, FaceId, Fragment};
 use relative_path::RelativePathBuf;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -967,6 +968,127 @@ struct ScreenshotOcrImage {
     bgra: Vec<u8>,
     width: u32,
     height: u32,
+}
+
+/// `quiro_text::TextLayout` minus its `buffers` — those are cosmic-text's own
+/// shaped glyph runs and never leave the process (`plans/text-engine/003`);
+/// `fragments` is everything a frontend painter needs to draw the same
+/// glyphs itself, in SVG on screen and Canvas2D at export.
+#[derive(Serialize, Type, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct TextLayoutResult {
+    pub fragments: Vec<Fragment>,
+    pub width: f32,
+    pub height: f32,
+    /// Every distinct face `fragments` references, in first-seen order — so
+    /// a caller can register each one exactly once (via `font_face_bytes`)
+    /// without first walking `fragments` itself to dedupe them.
+    pub faces: Vec<FaceId>,
+}
+
+/// Rust is the only thing that ever measures a `TextContent` — an annotation
+/// editor calls this on commit (not per keystroke; that policy is
+/// `plans/text-engine/004`'s) and paints the returned `fragments` verbatim,
+/// never re-measuring the text itself. `constraint.anchor_height` is the
+/// capture's own content-rect height for an annotation, matching the
+/// px@1080 convention `RunStyle::font_size` already uses.
+#[tauri::command]
+#[specta::specta]
+pub async fn measure_text(
+    content: TextContent,
+    constraint: Constraint,
+) -> Result<TextLayoutResult, String> {
+    let layout = quiro_text::layout_text(&content, constraint);
+
+    let mut faces = Vec::new();
+    for fragment in &layout.fragments {
+        if !faces.contains(&fragment.font_face) {
+            faces.push(fragment.font_face);
+        }
+    }
+
+    Ok(TextLayoutResult {
+        fragments: layout.fragments,
+        width: layout.width,
+        height: layout.height,
+        faces,
+    })
+}
+
+/// The exact bytes of the face named by `id` (one of `measure_text`'s
+/// returned `faces`), for the webview to register as a `FontFace` and paint
+/// with directly — rather than resolving `font_family` itself, which is only
+/// pinned correctly for the three CSS generics (`layers/mod.rs`'s
+/// `new_font_system`), not for an arbitrary installed family name.
+#[tauri::command]
+#[specta::specta]
+pub async fn font_face_bytes(id: FaceId) -> Result<Vec<u8>, String> {
+    quiro_text::face_bytes(id).ok_or_else(|| "Unknown font face".to_string())
+}
+
+#[cfg(test)]
+mod text_ipc_tests {
+    use super::*;
+
+    fn probe_content(text: &str) -> TextContent {
+        quiro_project::TextContent {
+            root: quiro_project::TextRoot {
+                children: vec![quiro_project::ParagraphSet {
+                    children: vec![quiro_project::Paragraph {
+                        align: quiro_project::TextAlign::Left,
+                        line_height: 1.2,
+                        children: vec![quiro_project::TextRun {
+                            text: text.to_string(),
+                            style: quiro_project::RunStyle::default(),
+                        }],
+                    }],
+                }],
+            },
+            grow_type: quiro_project::GrowType::AutoWidth,
+            vertical_align: quiro_project::VerticalAlign::Top,
+            halo: None,
+        }
+    }
+
+    fn probe_constraint() -> Constraint {
+        Constraint {
+            anchor_height: 1080.0,
+            width: 1000.0,
+            height: 1000.0,
+        }
+    }
+
+    #[tokio::test]
+    async fn measure_text_returns_one_fragment_and_lists_its_face() {
+        let result = measure_text(probe_content("Hello"), probe_constraint())
+            .await
+            .expect("measure_text failed");
+
+        assert_eq!(result.fragments.len(), 1);
+        assert_eq!(result.faces, vec![result.fragments[0].font_face]);
+    }
+
+    #[tokio::test]
+    async fn font_face_bytes_resolves_a_face_measure_text_returned() {
+        let result = measure_text(probe_content("Hello"), probe_constraint())
+            .await
+            .unwrap();
+
+        let bytes = font_face_bytes(result.faces[0])
+            .await
+            .expect("font_face_bytes failed");
+        assert!(!bytes.is_empty());
+    }
+
+    /// `FaceId`'s wire representation is a bare integer (see
+    /// `quiro_text::FaceId`'s doc comment), constructed here the way a
+    /// tampered or stale IPC payload would — never through the crate's own
+    /// (unreachable from here) `pub(crate)` constructor.
+    #[tokio::test]
+    async fn font_face_bytes_rejects_an_id_this_process_never_minted() {
+        let bogus: FaceId = serde_json::from_str("18446744073709551615").unwrap();
+        assert!(font_face_bytes(bogus).await.is_err());
+    }
 }
 
 /// Which screenshot each editor window is showing. Cap keys the same registry

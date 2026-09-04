@@ -1,6 +1,6 @@
 # 000 — One `TextContent` model for annotations and text segments
 
-**Severity:** HIGH · **Status:** TODO · **Blocks:** 001, 002, 003, 004
+**Severity:** HIGH · **Status:** DONE (see Outcome) · **Blocks:** 001, 002, 003, 004
 
 ## Problem
 
@@ -229,3 +229,91 @@ build carrying it can be downgraded. They are deleted in a cleanup after 004.
   `height` (the font size as a fraction) until something measures it, at which
   point the box becomes the real text height, roughly 1.2× larger. Invisible,
   because the hit region is glyph-accurate and the box is never drawn.
+
+## Outcome
+
+Done, with one real correction to the migration design and a few smaller
+deviations. All in `packages/crates/project/src/configuration.rs`; no other
+file touched. `cargo check`, `cargo test -p quiro-project` (76/76, 8 new),
+`cargo fmt` and `cargo clippy -p quiro-project --all-targets -- -D warnings`
+are all clean.
+
+### The annotation migration is not pure after all
+
+The plan's sketch assumed a single `text_model_version`, migrated inside
+`load()` for both hosts, with `font_size = old_normalized_height * 1080.0`.
+That assumed `annotation.height` already meant "fraction of the capture's
+content height" at that point. It does not: `annotation_space_version`
+normalizes `height` from raw frame pixels, and that migration is deliberately
+**not** part of `load()` — it needs `capture_size`, which `load()` never has
+(`migrate_annotation_space`'s own doc comment: *"Not part of `Self::load`,
+which has no way to know the capture dimensions"*). A version-0 file's
+`height` is still raw pixels at the exact point a load()-time text migration
+would have read it, so `font_size = height * 1080.0` would have produced
+garbage for any file not yet through the screenshot editor at least once
+since annotation-space migration shipped.
+
+Fixed by **not** giving annotations their own `text_model_version`. Instead:
+
+- `TextSegment` keeps the plan's shape exactly: a new `text_content_version`
+  field (not `text_model_version` — named to stay clear of the unrelated,
+  already-existing `text_size_version`), migrated purely inside `load()`,
+  since `TextSegment::font_size` has no such dependency.
+- `Annotation` gets its conversion as a **third step inside
+  `migrate_annotation_space`**, gated by bumping `ANNOTATION_SPACE_VERSION`
+  from 2 to 3 — the same pattern that function already uses for the mask-unit
+  conversion (`from_version < 2`, added when *that* turned out to need the
+  frame height too). The new `from_version < 3` step runs after the
+  `from_version < 1` geometry step in the same loop iteration, so
+  `annotation.height` is already normalized by the time it reads it,
+  regardless of which version the file started at.
+
+This is the second time this exact function has grown a step for a
+"the units aren't what they look like until geometry migration has run"
+reason. Worth remembering if a third one shows up: `migrate_annotation_space`
+may be the right home more often than not.
+
+### `validate()` had to be more tolerant than the plan sketch
+
+The plan said `text_content` must be `Some` for a `Text` annotation. A hard
+version of that check breaks `load()` for every file that has not yet been
+through `migrate_annotation_space` — since `load()` calls `validate()`
+*before* the caller gets a chance to run that migration, every existing
+project with a text annotation would fail to load entirely. Relaxed to: a
+`Text` annotation is valid with `text_content.is_some() || text.is_some()` —
+the same tolerance `migrate_mask_model` already extends to a mask amount
+that's still in pre-migration units. `text_content` present on a non-`Text`
+annotation is still a hard error; that check has no such ordering problem.
+
+### Smaller deviations from the sketch
+
+- **`RunStyle::font_weight` is `f32`, not `u16`.** `TextSegment::font_weight`
+  is already `f32`; keeping the model's type identical makes the segment
+  migration a lossless move instead of a lossy round-and-clamp. The clamp to
+  cosmic-text's `Weight(u16)` belongs to `quiro-text` (001), which is the
+  thing that actually needs that type.
+- **A second 1080.0 constant, not a shared one.** Added `TEXT_REFERENCE_HEIGHT`
+  next to the existing `MASK_AMOUNT_BASE_HEIGHT` rather than reusing it — same
+  value, same convention, but reusing a mask-named constant for a font-size
+  conversion would have needed a comment to justify the name every time it was
+  read.
+- **Two pre-existing `clippy::neg_cmp_op_on_partial_ord` findings**, in the
+  `migrate_annotation_space` size guard, surfaced by running clippy on this
+  file for the first time in this session. Fixed in place with an exact,
+  NaN-preserving rewrite (`!(x > 0.0)` → `x.is_nan() || x <= 0.0`) rather than
+  left for later, since CI runs `cargo clippy --workspace --all-targets -- -D
+  warnings` and the fix was two lines in a function already being edited.
+
+### Not done
+
+- **`apps/desktop/src/utils/tauri.ts` is not regenerated.** Specta bindings
+  regenerate on a debug desktop run, which this session could not start
+  (`pnpm dev:desktop` is off-limits here). `Annotation` and `TextSegment`'s TS
+  types are stale by one field each until the next `pnpm dev:desktop`; nothing
+  currently reads either field, so no runtime behavior depends on this.
+- **The `AnnotationAnchor` reference in `annotation_space_version`'s existing
+  doc comment is dangling** — no such type exists in this crate; it appears to
+  describe `plans/screenshot-editor/002` (per-annotation anchor selection),
+  which is still TODO. Not touched: pre-existing, unrelated to this plan, and
+  today every annotation has exactly one implicit anchor (the capture's
+  content rect), which is what the new font-size conversion assumes.

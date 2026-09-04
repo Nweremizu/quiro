@@ -1,14 +1,53 @@
 import { Select, Switch } from "@quiro/ui";
+import { FontPicker } from "@/components/FontPicker";
 import type {
 	CameraXPosition,
 	CameraYPosition,
+	GrowType,
 	MaskMode,
 	MaskShape,
 	SceneMode,
+	TextAlign,
+	TextTransform,
+	VerticalAlign,
 	ZoomSegment,
 } from "@/utils/tauri";
 import { useEditorContext } from "./context";
+import {
+	textContentParagraph,
+	textContentString,
+	textContentStyle,
+	withTextContentParagraph,
+	withTextContentString,
+	withTextContentStyle,
+} from "./text-content";
 import { Field, Slider, Subfield } from "./ui";
+
+const TRANSFORM_OPTIONS: Array<{ label: string; value: TextTransform }> = [
+	{ label: "None", value: "none" },
+	{ label: "UPPERCASE", value: "uppercase" },
+	{ label: "lowercase", value: "lowercase" },
+	{ label: "Capitalize", value: "capitalize" },
+];
+
+const ALIGN_OPTIONS: Array<{ label: string; value: TextAlign }> = [
+	{ label: "Left", value: "left" },
+	{ label: "Center", value: "center" },
+	{ label: "Right", value: "right" },
+	{ label: "Justify", value: "justify" },
+];
+
+const VERTICAL_ALIGN_OPTIONS: Array<{ label: string; value: VerticalAlign }> = [
+	{ label: "Top", value: "top" },
+	{ label: "Middle", value: "center" },
+	{ label: "Bottom", value: "bottom" },
+];
+
+const GROW_TYPE_OPTIONS: Array<{ label: string; value: GrowType }> = [
+	{ label: "Hug (width)", value: "autoWidth" },
+	{ label: "Wrap (height)", value: "autoHeight" },
+	{ label: "Fixed", value: "fixed" },
+];
 
 // Selecting a timeline segment replaces the sidebar's tabs with that
 // segment's own settings, the way Cap's does — the properties that only make
@@ -304,18 +343,52 @@ export function SegmentConfig() {
 		case "text": {
 			const segment = timeline?.textSegments?.[selection.index];
 			if (!segment) return null;
+			const style = textContentStyle(segment.textContent);
+			const paragraph = textContentParagraph(segment.textContent);
+
+			// Segments have carried a single run since 002 — no rich
+			// `contentEditable`, no DOM `Selection` to prefer, so every
+			// run-level control here always patches the whole run.
+			const updateStyle = (patch: Parameters<typeof withTextContentStyle>[1]) =>
+				patchAt("textSegments", selection.index, {
+					textContent: withTextContentStyle(segment.textContent, patch),
+				});
+			const updateParagraph = (
+				patch: Parameters<typeof withTextContentParagraph>[1],
+			) =>
+				patchAt("textSegments", selection.index, {
+					textContent: withTextContentParagraph(segment.textContent, patch),
+				});
+			const updateObject = (
+				patch: Partial<NonNullable<typeof segment.textContent>>,
+			) =>
+				patchAt("textSegments", selection.index, {
+					textContent: segment.textContent
+						? { ...segment.textContent, ...patch }
+						: null,
+				});
 
 			return (
 				<Panel title="Text segment">
 					<Field name="Content">
 						<textarea
-							value={segment.content ?? ""}
+							value={textContentString(segment.textContent)}
 							onChange={(event) =>
 								patchAt("textSegments", selection.index, {
-									content: event.target.value,
+									textContent: withTextContentString(
+										segment.textContent,
+										event.target.value,
+									),
 								})
 							}
 							className="min-h-16 w-full rounded-lg border border-gray-4 bg-gray-2 p-2 text-xs text-gray-12"
+						/>
+					</Field>
+
+					<Field name="Family">
+						<FontPicker
+							value={style.fontFamily}
+							onChange={(fontFamily) => updateStyle({ fontFamily })}
 						/>
 					</Field>
 
@@ -325,18 +398,41 @@ export function SegmentConfig() {
 						format={(v) => `${Math.round(v)}px`}
 						min={8}
 						max={200}
-						value={segment.fontSize ?? 48}
-						onChange={(fontSize) =>
-							patchAt("textSegments", selection.index, { fontSize })
-						}
+						value={style.fontSize}
+						onChange={(fontSize) => updateStyle({ fontSize })}
+					/>
+
+					<Slider
+						size="sm"
+						label="Letter spacing"
+						format={(v) => `${v.toFixed(1)}px`}
+						min={-5}
+						max={20}
+						step={0.5}
+						value={style.letterSpacing}
+						onChange={(letterSpacing) => updateStyle({ letterSpacing })}
 					/>
 
 					<Field name="Style">
+						<Subfield name="Bold">
+							<Switch
+								checked={style.fontWeight >= 700}
+								onCheckedChange={(bold) =>
+									updateStyle({ fontWeight: bold ? 700 : 400 })
+								}
+							/>
+						</Subfield>
 						<Subfield name="Italic">
 							<Switch
-								checked={segment.italic ?? false}
-								onCheckedChange={(italic) =>
-									patchAt("textSegments", selection.index, { italic })
+								checked={style.italic}
+								onCheckedChange={(italic) => updateStyle({ italic })}
+							/>
+						</Subfield>
+						<Subfield name="Underline">
+							<Switch
+								checked={style.decoration === "underline"}
+								onCheckedChange={(on) =>
+									updateStyle({ decoration: on ? "underline" : "none" })
 								}
 							/>
 						</Subfield>
@@ -344,15 +440,76 @@ export function SegmentConfig() {
 							<input
 								type="color"
 								aria-label="Text colour"
-								value={segment.color ?? "#ffffff"}
-								onChange={(event) =>
-									patchAt("textSegments", selection.index, {
-										color: event.target.value,
-									})
-								}
+								value={style.color}
+								onChange={(event) => updateStyle({ color: event.target.value })}
 								className="size-8 cursor-pointer rounded-lg border border-gray-4 bg-transparent"
 							/>
 						</Subfield>
+					</Field>
+
+					<Field name="Case">
+						<Select
+							value={style.transform}
+							onValueChange={(transform) =>
+								transform &&
+								updateStyle({ transform: transform as TextTransform })
+							}
+							options={TRANSFORM_OPTIONS.map(({ label, value }) => ({
+								label,
+								value: String(value),
+							}))}
+						/>
+					</Field>
+
+					<Field name="Align">
+						<Select
+							value={paragraph.align}
+							onValueChange={(align) =>
+								align && updateParagraph({ align: align as TextAlign })
+							}
+							options={ALIGN_OPTIONS.map(({ label, value }) => ({
+								label,
+								value: String(value),
+							}))}
+						/>
+					</Field>
+
+					<Slider
+						size="sm"
+						label="Line height"
+						format={(v) => `${v.toFixed(2)}×`}
+						min={0.8}
+						max={2.5}
+						step={0.05}
+						value={paragraph.lineHeight}
+						onChange={(lineHeight) => updateParagraph({ lineHeight })}
+					/>
+
+					<Field name="Vertical align">
+						<Select
+							value={segment.textContent?.verticalAlign ?? "top"}
+							onValueChange={(verticalAlign) =>
+								verticalAlign &&
+								updateObject({ verticalAlign: verticalAlign as VerticalAlign })
+							}
+							options={VERTICAL_ALIGN_OPTIONS.map(({ label, value }) => ({
+								label,
+								value: String(value),
+							}))}
+						/>
+					</Field>
+
+					<Field name="Grow">
+						<Select
+							value={segment.textContent?.growType ?? "autoHeight"}
+							onValueChange={(growType) =>
+								growType && updateObject({ growType: growType as GrowType })
+							}
+							options={GROW_TYPE_OPTIONS.map(({ label, value }) => ({
+								label,
+								value: String(value),
+							}))}
+						/>
 					</Field>
 				</Panel>
 			);

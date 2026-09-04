@@ -52,6 +52,52 @@ export function SegmentTrack<T extends TimeSpan>({
 						left={timeline.xOf(segment.start)}
 						width={width}
 						title={label(segment, index)}
+						handles={
+							!readOnly && (
+								<>
+									<SegmentHandle
+										position="start"
+										width={width}
+										// Indexed: several segments share a label (every
+										// default scene reads "default"), and identical
+										// accessible names are indistinguishable in a
+										// screen reader's list of controls.
+										label={`Trim ${label(segment, index)} ${index + 1} start`}
+										value={segment.start}
+										min={0}
+										max={segment.end - MIN_DURATION}
+										onAdjust={(delta) => {
+											const initial = segment.start;
+											onChange(index, {
+												...segment,
+												start: Math.min(
+													Math.max(0, snapTime(initial + delta, timeline)),
+													segment.end - MIN_DURATION,
+												),
+											});
+										}}
+									/>
+									<SegmentHandle
+										position="end"
+										width={width}
+										label={`Trim ${label(segment, index)} ${index + 1} end`}
+										value={segment.end}
+										min={segment.start + MIN_DURATION}
+										max={timeline.duration}
+										onAdjust={(delta) => {
+											const initial = segment.end;
+											onChange(index, {
+												...segment,
+												end: Math.max(
+													segment.start + MIN_DURATION,
+													snapTime(initial + delta, timeline),
+												),
+											});
+										}}
+									/>
+								</>
+							)
+						}
 						onPointerDown={(event) => {
 							event.stopPropagation();
 							setSelection({ type: selectionType, index });
@@ -68,26 +114,6 @@ export function SegmentTrack<T extends TimeSpan>({
 							});
 						}}
 					>
-						{!readOnly && (
-							<SegmentHandle
-								position="start"
-								width={width}
-								label={`Trim ${label(segment, index)} start`}
-								onPointerDown={(event) => {
-									const initial = segment.start;
-									startTimeDrag(event, timeline, (delta) => {
-										onChange(index, {
-											...segment,
-											start: Math.min(
-												Math.max(0, snapTime(initial + delta, timeline)),
-												segment.end - MIN_DURATION,
-											),
-										});
-									});
-								}}
-							/>
-						)}
-
 						<SegmentContent width={width} className="justify-center">
 							{renderContent?.(segment, index, width) ?? (
 								<span className="pointer-events-none truncate text-[0.625rem] font-semibold text-[var(--track-label)]">
@@ -96,25 +122,6 @@ export function SegmentTrack<T extends TimeSpan>({
 							)}
 						</SegmentContent>
 
-						{!readOnly && (
-							<SegmentHandle
-								position="end"
-								width={width}
-								label={`Trim ${label(segment, index)} end`}
-								onPointerDown={(event) => {
-									const initial = segment.end;
-									startTimeDrag(event, timeline, (delta) => {
-										onChange(index, {
-											...segment,
-											end: Math.max(
-												segment.start + MIN_DURATION,
-												snapTime(initial + delta, timeline),
-											),
-										});
-									});
-								}}
-							/>
-						)}
 					</SegmentRoot>
 				);
 			})}

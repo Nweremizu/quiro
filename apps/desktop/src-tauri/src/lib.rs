@@ -12,6 +12,7 @@ mod editor;
 mod export;
 mod exit_shutdown;
 mod fake_window;
+mod fonts;
 pub mod frame_ws;
 mod general_settings;
 mod gpu_context;
@@ -1013,6 +1014,44 @@ fn spawn_device_watchers(app: AppHandle) {
 // tauri-specta bindings
 // ---------------------------------------------------------------------------
 
+/// Writes `apps/desktop/src/utils/tauri.ts` from [`specta_bindings`], with
+/// exactly the options `run()`'s own debug-build export uses — the two must
+/// not drift, or regenerating by one route produces a diff against the
+/// other.
+///
+/// Exists as a `pub fn` so `src/bin/export-bindings.rs` can call it:
+/// normally these bindings only regenerate on a debug desktop launch, which
+/// needs a window, a webview and a display. The `--lib` test that used to
+/// serve this purpose cannot run in every environment (a test-harness binary
+/// that fails at load with `STATUS_ENTRYPOINT_NOT_FOUND` while the app's own
+/// binary starts fine), and a plain `[[bin]]` links the same way the working
+/// app does.
+///
+/// Run it with:
+/// `cargo run -p quiro-desktop --bin export-bindings`
+pub fn export_typescript_bindings() -> Result<(), Box<dyn std::error::Error>> {
+    // Anchored to this crate's own directory, not the working directory:
+    // `cargo run --bin export-bindings` runs from the workspace root, where
+    // a relative `../src/...` resolves outside the repository entirely and
+    // silently writes a file nobody is looking at.
+    let out = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../src/utils/tauri.ts")
+        .to_string_lossy()
+        .into_owned();
+
+    specta_bindings().export(
+        specta_typescript::Typescript::default()
+            .bigint(specta_typescript::BigIntExportBehavior::Number)
+            // specta always emits its TAURI_CHANNEL import, which is only
+            // referenced when some command actually takes a Channel — none
+            // of Quiro's do, so tsconfig's `noUnusedLocals` fails the
+            // production build on a generated file nobody can hand-edit.
+            .header("// @ts-nocheck\n"),
+        out,
+    )?;
+    Ok(())
+}
+
 /// Single source of truth for the frontend's `apps/desktop/src/utils/tauri.ts`
 /// bindings — every command/event registered here is what actually gets
 /// exported (in debug builds, see `run()`) and wired into the invoke handler.
@@ -1066,6 +1105,11 @@ fn specta_bindings() -> tauri_specta::Builder {
             screenshot_editor::recognize_screenshot_text,
             screenshot_editor::render_screenshot_for_export,
             screenshot_editor::render_screenshot_project_for_export,
+            screenshot_editor::measure_text,
+            screenshot_editor::font_face_bytes,
+            fonts::list_font_families,
+            fonts::google_font_catalog,
+            fonts::install_google_font,
             permissions::do_permissions_check,
             permissions::open_permission_settings,
             permissions::request_permission,
@@ -1182,29 +1226,23 @@ pub fn run() {
     #[cfg(all(debug_assertions, windows))]
     enable_webview_remote_debugging();
 
+    // Populates the table `ffmpeg::Error`'s Display reads from. Without it
+    // every named FFmpeg error formats as an empty string, so failures
+    // surface to the user as a bare "FFmpeg error:" with nothing after it.
+    if let Err(err) = ffmpeg::init() {
+        warn!(?err, "Failed to initialise FFmpeg");
+    }
+
     let specta_builder = specta_bindings();
 
     // Regenerated on every debug launch so the frontend's bindings can never
     // drift from what's actually registered below — release builds skip this
     // and just use the invoke handler.
+    // One implementation, shared with `cargo run --bin export-bindings`, so
+    // regenerating by either route produces the same file rather than a
+    // diff against the other.
     #[cfg(debug_assertions)]
-    specta_builder
-        .export(
-            // i64/u64 fields (e.g. millisecond timestamps) are within JS's
-            // safe integer range in practice, so export them as `number`
-            // rather than the default `BigIntExportBehavior::Fail`.
-            specta_typescript::Typescript::default()
-                .bigint(specta_typescript::BigIntExportBehavior::Number)
-                // specta always emits its TAURI_CHANNEL import, which is only
-                // referenced when some command actually takes a Channel — none
-                // of Quiro's do, so tsconfig's `noUnusedLocals` fails the
-                // production build (`tsc && vite build`) on a generated file
-                // nobody can hand-edit. Scoped to this file rather than
-                // relaxing the flag repo-wide.
-                .header("// @ts-nocheck\n"),
-            "../src/utils/tauri.ts",
-        )
-        .expect("Failed to export typescript bindings");
+    export_typescript_bindings().expect("Failed to export typescript bindings");
 
     // Extracted before `specta_builder` moves into `.setup()` below — this
     // produces an owned handler closure that doesn't need the builder to
@@ -1326,6 +1364,11 @@ pub fn run() {
                 app.manage(CameraWindowCloseGate::default());
                 app.manage(gpu_context::PendingScreenshots::default());
                 app.manage(screenshot_editor::ScreenshotEditorPaths::default());
+                // Before any window opens: a project referencing a
+                // previously downloaded family has to render with it on the
+                // first frame, not once the font picker happens to be
+                // opened.
+                fonts::load_installed_fonts(&app);
                 app.manage(editor::EditorPaths::default());
                 app.manage(three_spike::SpikeSink::default());
                 app.manage(CameraWindowPositionGuard::default());
@@ -1425,5 +1468,28 @@ fn total_system_memory() -> u64 {
     let mut system = sysinfo::System::new();
     system.refresh_memory();
     system.total_memory()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regenerates `../src/utils/tauri.ts` without launching the app.
+    ///
+    /// **Prefer `cargo run -p quiro-desktop --bin export-bindings`.** This
+    /// test does the same thing, but a test-harness binary does not load in
+    /// every environment (`STATUS_ENTRYPOINT_NOT_FOUND` at process start on
+    /// at least one Windows setup, while the app's own binary and that
+    /// `[[bin]]` both run fine), so the binary is the reliable route and
+    /// this is kept only as the in-suite equivalent.
+    ///
+    /// `#[ignore]`d because it writes a real file as a side effect, which a
+    /// plain `cargo test` run should not do silently. Run explicitly:
+    /// `cargo test -p quiro-desktop --lib -- --ignored export_typescript_bindings`
+    #[test]
+    #[ignore]
+    fn exports_typescript_bindings() {
+        super::export_typescript_bindings().expect("Failed to export typescript bindings");
+    }
 }
 

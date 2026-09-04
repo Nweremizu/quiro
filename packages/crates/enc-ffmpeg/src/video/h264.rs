@@ -799,29 +799,35 @@ impl H264Encoder {
     }
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+// ponytail: NVENC/QSV/AMF thresholds below are dead weight on Windows today —
+// requires_software_encoder()'s Windows branch always forces libx264 (see its
+// own ponytail comment) rather than calling estimate_hw_encoder_max_fps, so
+// only the macOS/VideoToolbox path actually reaches these. Gate matches the
+// real caller instead of the eventual one; widen back to `any(macos, windows)`
+// when Windows hardware encoder selection is actually wired up.
+#[cfg(target_os = "macos")]
 const VIDEOTOOLBOX_4K_MAX_FPS: f64 = 55.0;
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(target_os = "macos")]
 const VIDEOTOOLBOX_1080P_MAX_FPS: f64 = 190.0;
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(target_os = "macos")]
 const NVENC_4K_MAX_FPS: f64 = 120.0;
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(target_os = "macos")]
 const NVENC_1080P_MAX_FPS: f64 = 500.0;
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(target_os = "macos")]
 const QSV_4K_MAX_FPS: f64 = 90.0;
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(target_os = "macos")]
 const QSV_1080P_MAX_FPS: f64 = 300.0;
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(target_os = "macos")]
 const AMF_4K_MAX_FPS: f64 = 100.0;
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(target_os = "macos")]
 const AMF_1080P_MAX_FPS: f64 = 350.0;
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(target_os = "macos")]
 const PIXELS_4K: f64 = 3840.0 * 2160.0;
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(target_os = "macos")]
 const PIXELS_1080P: f64 = 1920.0 * 1080.0;
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(target_os = "macos")]
 fn estimate_hw_encoder_max_fps(encoder_name: &str, width: u32, height: u32) -> f64 {
     let pixels = (width as f64) * (height as f64);
 

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { activeAt, BoxOverlay } from "./BoxOverlay";
 import type { OverlaySize } from "./CanvasElementsOverlay";
 import { useEditorContext } from "./context";
+import { textContentString, withTextContentString } from "./text-content";
 
 // A handle for the text the *renderer* draws, not a second copy of it.
 // Drawing the content here as well put a small duplicate over the real one
@@ -57,9 +58,14 @@ export function TextOverlay({ size }: { size: OverlaySize }) {
 						{editing && (
 							<input
 								autoFocus
-								value={segment.content ?? ""}
+								value={textContentString(segment.textContent)}
 								onChange={(event) =>
-									updateSegment(index, { content: event.target.value })
+									updateSegment(index, {
+										textContent: withTextContentString(
+											segment.textContent,
+											event.target.value,
+										),
+									})
 								}
 								onPointerDown={(event) => event.stopPropagation()}
 								onBlur={() => setEditingIndex(null)}

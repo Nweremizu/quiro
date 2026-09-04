@@ -3848,9 +3848,6 @@ impl ProjectUniforms {
                     _padding1: [0.0; 3],
                     border_color,
                     corner_radii: display_corner_radii,
-                    // Identity: the video path is unaffected by the screenshot
-                    // perspective work.
-                    ..Default::default()
                 },
                 display_parent_motion_px,
                 frame_chrome,
@@ -4438,6 +4435,7 @@ mod tests {
             offset: XY::new(f64::NAN, 500.0),
             scale: 0.0,
             rotation: f64::INFINITY,
+            ..Default::default()
         });
 
         let resolution_base = XY::new(2688, 1512);

@@ -341,6 +341,18 @@ impl StudioRecordingMeta {
         }
     }
 
+    /// The recording's own display video, as captured. Unlike `output_path`
+    /// this exists before the project has ever been exported, so it's what the
+    /// library uses to preview a recording nobody has rendered yet.
+    pub fn display_path(&self) -> Option<RelativePathBuf> {
+        match self {
+            Self::SingleSegment { segment } => Some(segment.display.path.clone()),
+            Self::MultipleSegments { inner, .. } => {
+                inner.segments.first().map(|s| s.display.path.clone())
+            }
+        }
+    }
+
     pub fn camera_path(&self) -> Option<RelativePathBuf> {
         match self {
             Self::SingleSegment { segment } => segment.camera.as_ref().map(|c| c.path.clone()),

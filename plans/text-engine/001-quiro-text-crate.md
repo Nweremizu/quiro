@@ -1,6 +1,6 @@
 # 001 — `quiro-text`: one layout engine, no consumers
 
-**Severity:** HIGH · **Status:** TODO · **Depends on:** 000 · **Blocks:** 002, 003, 004
+**Severity:** HIGH · **Status:** DONE (see Outcome) · **Depends on:** 000 · **Blocks:** 002, 003, 004
 
 ## Problem
 
@@ -186,3 +186,90 @@ with it.
 - **Designing an API with no caller.** Mitigated by sourcing every test case from
   a real migrated project, but 002 and 003 should be allowed to change the
   signature rather than work around it.
+
+## Outcome
+
+Done. `packages/crates/text/` (`lib.rs`, `layout.rs`, `fragment.rs`,
+`fonts.rs`), plus `Cargo.toml`, `packages/crates/rendering/{Cargo.toml,
+src/layers/mod.rs}`, and a new CI step. All acceptance criteria hold:
+`cargo tree -p quiro-text | grep wgpu` and `| grep glyphon` are both empty;
+`cargo tree -i cosmic-text` resolves to exactly one version (`0.14.2`)
+workspace-wide; 14 tests pass in `quiro-text`, all 9
+`vertical_align`×`grow_type` cases pinned, all four wrapping cases, the
+`AutoWidth`+`Center` case, and the cache-hit case. `quiro-project` (76),
+`quiro-rendering` (143) and `cargo check --workspace` are all still green.
+`Cargo.lock` grew by exactly 10 lines — `quiro-text`'s own package entry and
+its edge from `quiro-rendering`; every transitive dependency (fontdb,
+rustybuzz, swash, skrifa…) was already vendored via glyphon, so this added
+zero new crates to the graph, not just zero new versions of one.
+
+### `cargo tree -d` doesn't do what its acceptance line assumed
+
+The plan's acceptance criterion (`cargo tree -d | grep cosmic-text` returns
+one line) doesn't hold as written: `-d` lists every package reachable by more
+than one path, regardless of whether the versions agree, so `cosmic-text`
+prints several lines — one per place it's reached from — even at a single
+resolved version. The check that actually proves the thing this plan cares
+about is `cargo tree -i cosmic-text | grep -oE 'cosmic-text v[0-9.]+' | sort
+-u`, which lists distinct *versions*: exactly one line means no drift, more
+than one means the crate boundary is broken. That's what's in CI
+(`.github/workflows/ci.yml`, new step, `cosmic-text version check`, right
+after clippy) and what the acceptance criteria above should have said.
+
+### Two things the plan's pseudocode left unspecified, resolved during the build
+
+- **How style crosses into `cosmic_text::Attrs`.** The sketch's `spans_from`
+  wasn't real code. `Attrs` supports a per-span `.metrics(Metrics)` and
+  `.letter_spacing(f32)` (in em, so `RunStyle::letter_spacing` — px — is
+  divided by `font_size` when building it) — so every run gets its own
+  correctly-scaled size and line-height regardless of what the buffer-level
+  default `Metrics` says; the buffer's own metrics only matter as the
+  fallback for a paragraph with zero runs.
+- **How a shaped glyph maps back to a `TextRun` for fragment extraction.**
+  Precompute each run's byte range in the paragraph's concatenated,
+  *already-transformed* text (the same cumulative-length walk
+  `Buffer::set_rich_text` does internally), then group consecutive glyphs in
+  each `LayoutRun` by which range their cluster's `start` byte falls in,
+  taking `min`/`max` over `x`/`x+w` and the byte range as the group is built.
+  Chosen over calling `LayoutRun::highlight` once per run per line (the
+  plan's other hinted option) because `highlight` alone doesn't hand back the
+  *substring* actually on that line — needed for a run that wraps mid-run —
+  or the resolved face id, so a second pass would have been needed regardless.
+
+### Two deviations, both load-bearing
+
+- **`Wrap::Word`, set explicitly — not cosmic-text's own `Buffer::new`
+  default (`WordOrGlyph`).** `rendering/src/layers/text.rs:88` already sets
+  `Word` explicitly; matching it was necessary; discovering the *default*
+  differs was not — a test written against the default (an unbreakable word
+  should force-break into a fixed number of lines) failed until this line was
+  added, which is exactly the divergence this plan exists to make impossible
+  to reintroduce by accident.
+- **A cache, not a pure function**, despite the plan's own words ("`layout_text`
+  is pure"). Pure in the sense the plan means — same inputs, same output — but
+  the public signature `fn(&TextContent, Constraint) -> TextLayout` has no
+  `FontSystem` parameter, so a `FontSystem` (expensive to build, per
+  `new_font_system`'s own doc comment) and the memo have to live in
+  process-wide state behind a `Mutex`. No font-set revision, unlike the plan's
+  sketch: nothing in this crate can register a font after the initial system
+  scan, so a revision counter would only ever read `0` — added the day
+  something can actually invalidate it.
+
+### Not done
+
+- **No LRU.** A 256-entry cache that clears itself entirely on overflow,
+  flagged with a `ponytail:`-style comment pointing at the plan's own risk
+  note. Correct as a bound on memory; not tuned against a real access pattern,
+  because there isn't one yet.
+- **`layers/text.rs` is untouched.** It still builds its own buffers inline,
+  now via the *relocated* `new_font_system` but otherwise exactly as before —
+  correctly deferred to 002, which is where `TextLayer::prepare` starts
+  calling `layout_text` instead.
+- **Three pre-existing clippy findings in `quiro-rendering`**
+  (`zoom_spring.rs:63`, `zoom_spring.rs:187`, `lib.rs:3853`), surfaced by
+  running `cargo clippy -p quiro-rendering --all-targets -- -D warnings` for
+  what looks like the first time this session — CI runs exactly that command.
+  None are in a file this plan touches (`layers/mod.rs`/`layers/text.rs` are
+  clean); left alone rather than fixed opportunistically, since fixing
+  unrelated files nobody asked about is its own kind of scope creep. Worth a
+  session of its own.

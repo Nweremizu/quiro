@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Annotation, AnnotationType } from "@/utils/tauri";
+import {
+	type Annotation,
+	type AnnotationType,
+	commands,
+	type Fragment,
+	type TextContent,
+} from "@/utils/tauri";
+import { domToTextContent } from "@/utils/text/from-dom";
+import { textContentToNodes } from "@/utils/text/to-dom";
 import {
 	arrowSpec,
 	bendFromHandle,
@@ -18,7 +26,20 @@ import {
 	type SnapTargets,
 	snap,
 } from "./snapping";
-import { clientToFrame, type FramePx, frameRect, type Pt } from "./space";
+import {
+	anchorScale,
+	clientToFrame,
+	type FramePx,
+	frameRect,
+	type Pt,
+	type Rect as SpaceRect,
+} from "./space";
+import {
+	decorationCss,
+	defaultAnnotationTextContent,
+	textContentString,
+	textContentStyle,
+} from "./text-content";
 import { cardRotationTransform, rectCentre } from "./transform";
 
 /** Mask strength in the contract's 1080p-relative units — see
@@ -47,7 +68,10 @@ type DragState = {
 const clamp = (value: number, min: number, max: number) =>
 	Math.min(Math.max(value, min), max);
 
-const DEFAULT_STROKE = "#F05656";
+// Black, matching the text default. Arrows and shapes are drawn over
+// screenshots that are usually light, and a neutral mark reads as annotation
+// rather than as alarm; the inspector changes it per object from here.
+const DEFAULT_STROKE = "#000000";
 
 /** Only these carry a rotation transform + rotate handle. Arrows rotate by
  * dragging an endpoint; focus has its own rotation; masks resample pixels. */
@@ -99,6 +123,9 @@ export function AnnotationLayer({
 		selectedAnnotationId,
 		setSelectedAnnotationId,
 		history,
+		anchorRect,
+		textFragments,
+		recordTextMeasurement,
 	} = useScreenshotEditorContext();
 
 	// "select" edits existing shapes and "transform" belongs to the capture's
@@ -192,7 +219,21 @@ export function AnnotationLayer({
 	const handleMouseDown = (event: React.MouseEvent<SVGSVGElement>) => {
 		if (textEditingId) {
 			if ((event.target as HTMLElement).closest(".text-editor")) return;
-			setTextEditingId(null);
+			// Typing never patches state directly (`plans/text-engine/004`) — the
+			// only place the DOM gets read back is `TextEditor`'s own `onBlur`.
+			// Blurring it here (rather than clearing `textEditingId` directly)
+			// runs that same commit, so a click outside the editor doesn't
+			// silently discard whatever was just typed. This click ends the
+			// edit only; whatever it would otherwise have done waits for the
+			// next one, since the commit is asynchronous (`measure_text`) and
+			// racing it here would be worse than asking for a second click.
+			const active = document.activeElement as HTMLElement | null;
+			if (active?.classList.contains("text-editor")) {
+				active.blur();
+			} else {
+				setTextEditingId(null);
+			}
+			return;
 		}
 
 		if (activeTool === "select") {
@@ -268,7 +309,13 @@ export function AnnotationLayer({
 			fillColor: "transparent",
 			opacity: 1,
 			rotation: 0,
-			text: activeTool === "text" ? "Text" : null,
+			// Empty, not "Text". The editor opens with a caret rather than a
+			// selection now, so a placeholder word would be appended to rather
+			// than replaced — and an empty box that is discarded on commit is
+			// how every text tool behaves when you click and change your mind.
+			text: activeTool === "text" ? "" : null,
+			textContent:
+				activeTool === "text" ? defaultAnnotationTextContent("") : null,
 			// Blur is the default a new mask gets: it reads as "covered" without
 			// being destructive. Redact is opt-in, from the inspector.
 			maskMode: activeTool === "mask" ? "blur" : null,
@@ -507,7 +554,21 @@ export function AnnotationLayer({
 		patch(dragState.id, { x: newX, y: newY, width: newW, height: newH });
 	};
 
+	// The size of the text as it is being typed, in frame px. Only the
+	// selection bounds read this; the annotation itself is not written until
+	// commit.
+	const [editingSize, setEditingSize] = useState<{
+		width: number;
+		height: number;
+	} | null>(null);
+
 	const handleMouseUp = () => {
+		// A freshly drawn text stays inside the gesture `handleMouseDown`
+		// already began — the eventual `TextEditor` commit resumes it, so
+		// creation, typing and the final content land as one undo entry
+		// (`plans/text-engine/004`).
+		let enteringTextEdit = false;
+
 		if (isDrawing && tempAnnotation) {
 			const annotation = { ...tempAnnotation };
 
@@ -550,15 +611,49 @@ export function AnnotationLayer({
 			setIsDrawing(false);
 			setActiveTool("select");
 			setSelectedAnnotationId(annotation.id);
-			if (annotation.type === "text") setTextEditingId(annotation.id);
+			if (annotation.type === "text") {
+				setTextEditingId(annotation.id);
+				enteringTextEdit = true;
+			}
 		}
 
 		setDragState(null);
 		setSnapGuides({ x: null, y: null });
-		endGesture();
+		if (!enteringTextEdit) endGesture();
 	};
 
 	const startDrag = (event: React.MouseEvent, id: string, handle?: string) => {
+		// A click inside the live editor belongs to the caret, not to a drag.
+		// This runs before the SVG's own `.text-editor` guard can — the
+		// annotation's `<g>` is deeper in the tree, so it sees the event first
+		// and stops it propagating — and the two lines below are exactly what
+		// makes a caret impossible: `preventDefault` suppresses the browser's
+		// own focus and selection handling, and `removeAllRanges` throws away
+		// whatever it managed to place. Bail before either, and let the
+		// browser do what it does with a click on editable text: place the
+		// caret, extend a selection on drag, select a word on double-click.
+		if ((event.target as HTMLElement).closest?.(".text-editor")) return;
+
+		// Grabbing a *different* annotation while one is being edited. The
+		// SVG's own handler would normally end the edit, but it never sees
+		// this event: `stopPropagation` below cuts it off. Left alone, the
+		// `preventDefault` below also stops the editor blurring, so the old
+		// annotation would stay in edit mode while a new one is dragged —
+		// two objects live at once, and the typing committed by neither.
+		//
+		// Blur rather than clearing `textEditingId`, so the commit runs and
+		// nothing typed is lost, and stop here: the commit is asynchronous
+		// (`measure_text`), and racing a drag against it is worse than asking
+		// for a second click. Same policy as `handleMouseDown`.
+		if (textEditingId) {
+			event.preventDefault();
+			event.stopPropagation();
+			const active = document.activeElement as HTMLElement | null;
+			if (active?.classList.contains("text-editor")) active.blur();
+			else setTextEditingId(null);
+			return;
+		}
+
 		event.preventDefault();
 		event.stopPropagation();
 		if (activeTool !== "select") return;
@@ -572,6 +667,27 @@ export function AnnotationLayer({
 		const point = toSvgPoint(event, svg as SVGSVGElement);
 		beginGesture();
 		setSelectedAnnotationId(id);
+
+		// Resizing a text box is a statement about its dimensions, so the grow
+		// type has to admit them: a "Hug" text derives its width from the text
+		// and would discard a dragged one at the next measure, and a "Wrap"
+		// text does the same with height. Promote once, here, rather than on
+		// every pointer move.
+		if (annotation.type === "text" && handle && handle !== "rotate") {
+			const grow = annotation.textContent?.growType ?? "autoWidth";
+			const setsWidth = handle.includes("e") || handle.includes("w");
+			const setsHeight = handle.includes("n") || handle.includes("s");
+			const promoted = setsHeight
+				? "fixed"
+				: setsWidth && grow === "autoWidth"
+					? "autoHeight"
+					: grow;
+			if (promoted !== grow && annotation.textContent) {
+				patch(id, {
+					textContent: { ...annotation.textContent, growType: promoted },
+				});
+			}
+		}
 		setDragState({
 			id,
 			action: handle ? "resize" : "move",
@@ -647,7 +763,17 @@ export function AnnotationLayer({
 						onMouseDown={(event) => startDrag(event, annotation.id)}
 						onDoubleClick={(event) => {
 							event.stopPropagation();
-							if (annotation.type === "text") setTextEditingId(annotation.id);
+							if (
+								annotation.type === "text" &&
+								textEditingId !== annotation.id
+							) {
+								// Paired with the `endGesture()` in `TextEditor`'s commit
+								// below, so entering edit, typing and committing land as
+								// one undo entry — the freshly-drawn path pairs the same
+								// way in `handleMouseUp`.
+								beginGesture();
+								setTextEditingId(annotation.id);
+							}
 						}}
 						style={{
 							pointerEvents: "all",
@@ -657,27 +783,101 @@ export function AnnotationLayer({
 						{textEditingId === annotation.id ? (
 							<TextEditor
 								annotation={annotation}
-								onInput={(text) => patch(annotation.id, { text })}
-								onCommit={(text) => {
-									if (!text.trim()) {
+								anchorRect={anchorRect}
+								onSizeChange={setEditingSize}
+								onCancel={() => {
+									// Nothing to revert: typing only ever touched the
+									// DOM, so the annotation still holds whatever it
+									// had. The one thing Escape must clean up is a box
+									// that was created for this edit and never got any
+									// committed text — leaving it would strand an
+									// invisible, unselectable annotation.
+									if (!textContentString(annotation.textContent).trim()) {
 										setAnnotations(
 											annotations.filter((a) => a.id !== annotation.id),
 										);
 									}
 									setTextEditingId(null);
+									endGesture();
+								}}
+								onCommit={async (content) => {
+									const text = textContentString(content);
+									let sizePatch: Partial<Annotation> = {};
+
+									if (text.trim() && content.growType !== "fixed") {
+										const measured = await commands.measureText(content, {
+											anchorHeight: anchorRect?.height ?? 1080,
+											width: annotation.width,
+											height: annotation.height,
+										});
+										if (measured.status === "ok") {
+											sizePatch =
+												content.growType === "autoWidth"
+													? {
+															width: measured.data.width,
+															height: measured.data.height,
+														}
+													: { height: measured.data.height };
+											// Hands the fragments/faces this call already fetched
+											// straight to `textFragments`, rather than letting
+											// them be thrown away and re-fetched ~200ms later by
+											// the context's own debounced effect.
+											recordTextMeasurement(
+												annotation.id,
+												content,
+												measured.data,
+											);
+										}
+									}
+
+									if (!text.trim()) {
+										setAnnotations(
+											annotations.filter((a) => a.id !== annotation.id),
+										);
+									} else {
+										patch(annotation.id, {
+											textContent: content,
+											...sizePatch,
+										});
+									}
+									setTextEditingId(null);
+									endGesture();
 								}}
 							/>
 						) : (
-							<RenderAnnotation annotation={annotation} />
+							<RenderAnnotation
+								annotation={annotation}
+								fragments={textFragments.get(annotation.id) ?? []}
+								selected={selectedAnnotationId === annotation.id}
+								haloScale={anchorScale(anchorRect)}
+							/>
 						)}
 
 						{selectedAnnotationId === annotation.id &&
-							textEditingId !== annotation.id &&
 							annotation.type !== "focus" && (
 								<SelectionHandles
-									annotation={annotation}
+									// While editing, the bounds follow the text rather
+									// than the annotation's last committed size — a box
+									// that stayed at its old extents while the text grew
+									// past it is the thing that reads as broken.
+									annotation={
+										textEditingId === annotation.id && editingSize
+											? {
+													...annotation,
+													width: editingSize.width,
+													height: editingSize.height,
+												}
+											: annotation
+									}
 									handleSize={handleSize}
 									onResizeStart={startDrag}
+									// Handles are the "this object is ready to be moved
+									// and resized" state. While the caret is in the text
+									// they would say the wrong thing — and a grab on one
+									// blurs the editor mid-keystroke — so editing shows
+									// the outline alone. Enter, or clicking away, ends
+									// the typing phase and brings them back.
+									interactive={textEditingId !== annotation.id}
 								/>
 							)}
 					</g>
@@ -734,42 +934,169 @@ export function AnnotationLayer({
 	);
 }
 
+/**
+ * `to_dom(content) → contentEditable → from_dom(root)`, per
+ * `plans/text-engine/004`: the DOM is an input device here, not a measuring
+ * device. Typing mutates the DOM directly — no `onInput` callback, no state
+ * patch, no IPC, no reflow — and the tree is only read back once, at commit.
+ * cosmic-text (`measure_text`, called by the caller's `onCommit`) is what
+ * actually lays the text out; this only has to look approximately right.
+ */
 function TextEditor({
 	annotation,
-	onInput,
+	anchorRect,
+	onSizeChange,
 	onCommit,
+	onCancel,
 }: {
 	annotation: Annotation;
-	onInput: (text: string) => void;
-	onCommit: (text: string) => void;
+	anchorRect: SpaceRect<FramePx> | null;
+	/** Live content size in frame px, reported as the text reflows. The
+	 * selection bounds are drawn from this rather than from the annotation,
+	 * which only learns its final size at commit. */
+	onSizeChange: (size: { width: number; height: number } | null) => void;
+	onCommit: (content: TextContent) => void;
+	/** Escape: leave edit mode without reading the DOM back. Typing never
+	 * patches state (`plans/text-engine/004`), so discarding the edit is
+	 * simply declining to commit — the annotation still holds what it had. */
+	onCancel: () => void;
 }) {
 	const ref = useRef<HTMLDivElement>(null);
+	const scale = anchorScale(anchorRect);
+	const growType = annotation.textContent?.growType ?? "autoWidth";
+	const [size, setSize] = useState<{ width: number; height: number } | null>(
+		null,
+	);
 
-	// contentEditable is uncontrolled by nature: seed it once and select all,
-	// so a freshly placed text annotation can be typed over immediately.
-	// Mount-only on purpose — re-running on every keystroke would reset the caret.
+	// contentEditable is uncontrolled by nature: seed it once. Mount-only on
+	// purpose — re-running on every keystroke would reset the caret, and
+	// typing never touches React state to trigger a re-render anyway.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: see above
 	useEffect(() => {
 		const element = ref.current;
 		if (!element) return;
-		element.textContent = annotation.text ?? "";
+		const content = annotation.textContent ?? defaultAnnotationTextContent("");
+		element.replaceChildren(...textContentToNodes(content, scale));
+
 		const frame = requestAnimationFrame(() => {
 			element.focus();
-			const range = document.createRange();
-			range.selectNodeContents(element);
 			const selection = window.getSelection();
-			selection?.removeAllRanges();
-			selection?.addRange(range);
+			if (!selection) return;
+
+			const range = document.createRange();
+			if (element.textContent === "") {
+				// A newly created object seeds as `<p><br></p>`. Collapsing to the
+				// *end* would put the caret after that `<br>`, so the first
+				// keystroke would start on a second line — aim at the start of
+				// the first block instead.
+				range.setStart(element.firstElementChild ?? element, 0);
+				range.collapse(true);
+			} else {
+				// Existing text is entered by double-clicking it, and a
+				// double-click means "take all of this": the whole run is
+				// highlighted so it can be replaced in one keystroke. Clicking
+				// once inside afterwards moves the caret, which is the way to
+				// amend rather than replace.
+				range.selectNodeContents(element);
+			}
+			selection.removeAllRanges();
+			selection.addRange(range);
 		});
 		return () => cancelAnimationFrame(frame);
 	}, []);
+
+	// The box follows the text as it is typed. A ResizeObserver rather than an
+	// `onInput` handler because wrapping also changes on paste, on IME commit
+	// and on a style change from the panel — all of which resize the element
+	// without necessarily being a keystroke.
+	//
+	// Deliberately local state, not a config patch: writing the annotation on
+	// every reflow would push a render and an IPC round-trip per character,
+	// which is exactly what `plans/text-engine/004` keeps the DOM out of. The
+	// authoritative size still comes from `measure_text` at commit.
+	useEffect(() => {
+		const element = ref.current;
+		if (!element) return;
+
+		const observer = new ResizeObserver(() => {
+			const next = {
+				width: element.offsetWidth,
+				height: element.offsetHeight,
+			};
+			setSize(next);
+			onSizeChange(next);
+		});
+		observer.observe(element);
+		return () => {
+			observer.disconnect();
+			onSizeChange(null);
+		};
+	}, [onSizeChange]);
+
+	// Set by Escape, read by the `onBlur` it triggers — blur is the single
+	// exit, so cancelling has to travel to it rather than around it.
+	const cancelled = useRef(false);
+
+	const commit = () => {
+		const element = ref.current;
+		if (!element) return;
+		if (cancelled.current) {
+			cancelled.current = false;
+			onCancel();
+			return;
+		}
+		const previous = annotation.textContent ?? defaultAnnotationTextContent("");
+		onCommit(domToTextContent(element, previous, scale));
+	};
+
+	// What the editable box is allowed to do, per grow type. "Hug" tracks the
+	// text on both axes; "Wrap" pins the width and lets height follow; "Fixed"
+	// pins both and clips, so the box the panel defines is the box you get.
+	// The run style goes on the container, not just on the spans inside it.
+	// A newly created object has no span yet — it is a `<p><br></p>` — so the
+	// first characters typed are inserted as bare text, and without this they
+	// inherit the webview's default 16px black instead of the style the
+	// object actually carries. `domToTextContent` reads them back against the
+	// same style (its `fallbackStyle`), so what is typed is what is stored.
+	const runStyle = textContentStyle(annotation.textContent);
+	const inheritedStyle: React.CSSProperties = {
+		fontFamily: runStyle.fontFamily || "sans-serif",
+		fontSize: runStyle.fontSize * scale,
+		fontWeight: runStyle.fontWeight,
+		fontStyle: runStyle.italic ? "italic" : "normal",
+		color: runStyle.color,
+		lineHeight: 1.2,
+	};
+
+	const editorStyle: React.CSSProperties =
+		growType === "autoWidth"
+			? { width: "max-content", whiteSpace: "pre", minWidth: "1ch" }
+			: growType === "autoHeight"
+				? {
+						width: Math.max(annotation.width, 16),
+						whiteSpace: "pre-wrap",
+						overflowWrap: "break-word",
+					}
+				: {
+						width: Math.max(annotation.width, 16),
+						height: Math.max(annotation.height, 16),
+						whiteSpace: "pre-wrap",
+						overflowWrap: "break-word",
+						overflow: "hidden",
+					};
+
+	// `foreignObject` clips its children, so it has to be at least as large as
+	// the text currently is — not the size the annotation was last committed
+	// at, which is stale the moment a character is typed.
+	const hostWidth = Math.max(size?.width ?? 0, annotation.width, 16) + 8;
+	const hostHeight = Math.max(size?.height ?? 0, annotation.height, 16) + 8;
 
 	return (
 		<foreignObject
 			x={annotation.x}
 			y={annotation.y}
-			width={Math.max(annotation.width, 100)}
-			height={Math.max(annotation.height, 50)}
+			width={hostWidth}
+			height={hostHeight}
 			className="overflow-visible"
 		>
 			<div
@@ -777,21 +1104,31 @@ function TextEditor({
 				contentEditable
 				suppressContentEditableWarning
 				className="text-editor m-0 bg-transparent p-0 outline-none"
-				style={{
-					fontSize: `${annotation.height}px`,
-					color: annotation.strokeColor,
-					minWidth: "10px",
-					whiteSpace: "nowrap",
-					lineHeight: 1,
-				}}
-				onInput={(event) => onInput(event.currentTarget.textContent ?? "")}
-				onBlur={(event) => onCommit(event.currentTarget.textContent ?? "")}
+				style={{ ...inheritedStyle, ...editorStyle }}
+				onBlur={commit}
 				onKeyDown={(event) => {
 					event.stopPropagation();
+					if (event.key === "Escape") {
+						event.preventDefault();
+						cancelled.current = true;
+						event.currentTarget.blur();
+						return;
+					}
 					if (event.key === "Enter" && !event.shiftKey) {
 						event.preventDefault();
 						event.currentTarget.blur();
 					}
+				}}
+				onPaste={(event) => {
+					// Plain text only — `contentEditable` accepts arbitrary HTML,
+					// and an unfiltered paste is how the tree acquires nodes
+					// `from_dom` has never seen. `execCommand` is deprecated but
+					// still the shortest correct way to insert at the caret with
+					// the browser's own undo/IME state intact; this app already
+					// only targets Chromium (WebView2 / Tauri), where it works.
+					event.preventDefault();
+					const text = event.clipboardData.getData("text/plain");
+					document.execCommand("insertText", false, text);
 				}}
 			/>
 		</foreignObject>
@@ -1019,7 +1356,28 @@ function HeadSvg({
 	return <polygon points={points} fill={color} opacity={opacity} />;
 }
 
-function RenderAnnotation({ annotation }: { annotation: Annotation }) {
+function RenderAnnotation({
+	annotation,
+	fragments = [],
+	selected = false,
+	haloScale = 1,
+}: {
+	annotation: Annotation;
+	/** Empty until `measure_text` returns — `context.tsx`'s job, keyed by
+	 * annotation id. */
+	fragments?: Fragment[];
+	/** A text annotation that is already selected hit-tests on its box, not
+	 * its glyphs — otherwise a click landing between two letters (or in a
+	 * word gap) falls through to whatever is underneath, and the first click
+	 * of a double-click meant to enter edit mode reselects the capture
+	 * instead. `plans/text-engine/003`'s own exemption, ported from Penpot. */
+	selected?: boolean;
+	/** `TextHalo.width` is px@1080 like every other text metric, but it never
+	 * passes through `measure_text` (`Fragment` carries no halo field — this
+	 * is a `plans/text-engine/004` addition Rust doesn't know about), so
+	 * unlike `fragment.fontSize` it has to be scaled here, not server-side. */
+	haloScale?: number;
+}) {
 	const left = Math.min(annotation.x, annotation.x + annotation.width);
 	const top = Math.min(annotation.y, annotation.y + annotation.height);
 	const width = Math.abs(annotation.width);
@@ -1105,21 +1463,68 @@ function RenderAnnotation({ annotation }: { annotation: Annotation }) {
 			);
 		}
 
-		case "text":
+		case "text": {
+			const halo = annotation.textContent?.halo;
 			return (
-				<text
-					x={annotation.x}
-					// SVG text is positioned on its baseline, not its top edge.
-					y={annotation.y + annotation.height}
-					fill={annotation.strokeColor}
-					fontSize={`${annotation.height}px`}
-					fontFamily="sans-serif"
-					opacity={annotation.opacity}
-					style={{ userSelect: "none", whiteSpace: "pre" }}
-				>
-					{annotation.text}
-				</text>
+				<>
+					{selected && (
+						<rect
+							x={left}
+							y={top}
+							width={width}
+							height={height}
+							fill="transparent"
+							style={{ pointerEvents: "all" }}
+						/>
+					)}
+					{fragments.map((fragment, index) => (
+						<text
+							// biome-ignore lint/suspicious/noArrayIndexKey: fragments are recomputed wholesale on every measurement, never reordered in place — there is no stabler identity to key on.
+							key={index}
+							x={
+								fragment.rtl
+									? annotation.x + fragment.x + fragment.width
+									: annotation.x + fragment.x
+							}
+							// Baseline, not top — matches `Fragment::y`'s own convention.
+							y={annotation.y + fragment.y}
+							textLength={fragment.width}
+							lengthAdjust="spacingAndGlyphs"
+							dominantBaseline="alphabetic"
+							// `x` above is the fragment's *right* edge for RTL — this is
+							// what actually anchors the glyphs growing leftward from it,
+							// matching Canvas2D's `textAlign: "right"` for the same case
+							// in `screenshotExport.ts`.
+							textAnchor={fragment.rtl ? "end" : "start"}
+							opacity={annotation.opacity}
+							style={{
+								fontFamily: `quiro-face-${fragment.fontFace}`,
+								fontSize: `${fragment.fontSize}px`,
+								fontWeight: fragment.fontWeight,
+								fontStyle: fragment.italic ? "italic" : "normal",
+								textDecoration: decorationCss(fragment.decoration),
+								fill: fragment.color,
+								userSelect: "none",
+								whiteSpace: "pre",
+								// Legibility over arbitrary screenshot content
+								// (`plans/text-engine/004`). `paintOrder: "stroke fill"`
+								// draws the outline first so the fill sits cleanly on
+								// top, rather than the stroke half-covering the glyph.
+								...(halo
+									? {
+											paintOrder: "stroke fill",
+											stroke: halo.color,
+											strokeWidth: halo.width * haloScale,
+										}
+									: {}),
+							}}
+						>
+							{fragment.text}
+						</text>
+					))}
+				</>
 			);
+		}
 
 		case "focus":
 			// Nothing at all: the defocus itself is the only thing that should be
@@ -1157,18 +1562,19 @@ const BOX_HANDLES = [
 	{ id: "se", x: 1, y: 1 },
 ];
 
-const CORNER_HANDLES = BOX_HANDLES.filter(
-	(handle) => handle.x !== 0.5 && handle.y !== 0.5,
-);
-
 function SelectionHandles({
 	annotation,
 	handleSize,
 	onResizeStart,
+	interactive = true,
 }: {
 	annotation: Annotation;
 	handleSize: number;
 	onResizeStart: (event: React.MouseEvent, id: string, handle: string) => void;
+	/** `false` draws the bounds without grabbable handles — what a text
+	 * annotation being typed into wants, since the box should stay visible
+	 * but a resize drag would fight the caret and the text selection. */
+	interactive?: boolean;
 }) {
 	const half = handleSize / 2;
 
@@ -1225,8 +1631,10 @@ function SelectionHandles({
 		width: Math.abs(annotation.width) + padding * 2,
 		height: Math.abs(annotation.height) + padding * 2,
 	};
-	// Text resizes by font size, so only the corners make sense.
-	const handles = annotation.type === "text" ? CORNER_HANDLES : BOX_HANDLES;
+	// Every annotation gets the full set. Text used to get corners only, from
+	// when a resize scaled its font size; it now sets the box, and the edge
+	// handles are the only way to choose a wrap width by dragging.
+	const handles = BOX_HANDLES;
 
 	const cursorFor = (id: string) => {
 		if (id === "n" || id === "s") return "ns-resize";
@@ -1252,7 +1660,7 @@ function SelectionHandles({
 				strokeWidth={half * 0.25}
 				style={{ pointerEvents: "none" }}
 			/>
-			{canRotate(annotation) && (
+			{interactive && canRotate(annotation) && (
 				<>
 					<line
 						x1={rotateX}
@@ -1277,23 +1685,24 @@ function SelectionHandles({
 					/>
 				</>
 			)}
-			{handles.map((handle) => (
-				<rect
-					key={handle.id}
-					x={rect.x + rect.width * handle.x - half}
-					y={rect.y + rect.height * handle.y - half}
-					width={handleSize}
-					height={handleSize}
-					fill="#fff"
-					stroke={"#F03808"}
-					strokeWidth={half * 0.25}
-					rx={half * 0.4}
-					style={{ cursor: cursorFor(handle.id), pointerEvents: "all" }}
-					onMouseDown={(event) =>
-						onResizeStart(event, annotation.id, handle.id)
-					}
-				/>
-			))}
+			{interactive &&
+				handles.map((handle) => (
+					<rect
+						key={handle.id}
+						x={rect.x + rect.width * handle.x - half}
+						y={rect.y + rect.height * handle.y - half}
+						width={handleSize}
+						height={handleSize}
+						fill="#fff"
+						stroke={"#F03808"}
+						strokeWidth={half * 0.25}
+						rx={half * 0.4}
+						style={{ cursor: cursorFor(handle.id), pointerEvents: "all" }}
+						onMouseDown={(event) =>
+							onResizeStart(event, annotation.id, handle.id)
+						}
+					/>
+				))}
 		</>
 	);
 }

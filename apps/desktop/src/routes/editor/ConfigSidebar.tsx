@@ -5,7 +5,6 @@ import { useState } from "react";
 import { Disclosure } from "@/components/Disclosure";
 import { PanelSection } from "@/components/PanelSection";
 import type {
-	BackgroundSource,
 	BorderConfiguration,
 	CameraXPosition,
 	CameraYPosition,

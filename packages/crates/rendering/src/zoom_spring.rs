@@ -60,7 +60,10 @@ const CENTER_PREAIM_MAX_AMOUNT: f32 = 1.0005;
 /// `cursor_interpolation::spring_lag_ms`); at high magnification the residual
 /// trail is the difference between "tracks the cursor" and "chases it".
 fn spring_lead_ms(config: &SpringMassDamperSimulationConfig) -> f64 {
-    if !(config.tension > 0.0) || !config.friction.is_finite() {
+    // Equivalent to `!(tension > 0.0)`, but without a negated partial-order
+    // comparison — `tension <= 0.0` alone would treat NaN as valid, since
+    // every NaN comparison is false.
+    if config.tension.is_nan() || config.tension <= 0.0 || !config.friction.is_finite() {
         return 0.0;
     }
     (f64::from(config.friction / config.tension) * 1000.0).clamp(0.0, MAX_AIM_LEAD_MS)
@@ -184,7 +187,10 @@ impl CursorPath {
                 let span = after_t - before_t;
 
                 // Coincident timestamps would divide by zero; take the later.
-                if !(span > 0.0) {
+                // (`span.is_nan()` can't actually happen here — timestamps are
+                // always finite — but `span <= 0.0` alone would silently treat
+                // NaN as valid, so spell out the real condition instead.)
+                if span.is_nan() || span <= 0.0 {
                     return Some(after);
                 }
 

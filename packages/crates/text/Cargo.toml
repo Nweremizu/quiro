@@ -1,0 +1,14 @@
+[package]
+name = "quiro-text"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+quiro-project = { path = "../project" }
+cosmic-text = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+specta = { workspace = true }

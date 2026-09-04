@@ -1,7 +1,9 @@
-import type {
-	Annotation,
-	MaskShape,
-	ProjectConfiguration,
+import {
+	type Annotation,
+	commands,
+	type Fragment,
+	type MaskShape,
+	type ProjectConfiguration,
 } from "@/utils/tauri";
 import {
 	arrowBounds,
@@ -12,6 +14,8 @@ import {
 } from "./arrow";
 import { type DofQuality, sharedDofRenderer } from "./dof";
 import { shapePoints } from "./geometry";
+import { TEXT_REFERENCE_HEIGHT } from "./space";
+import { registerFace } from "./text-content";
 import { resolveTransform } from "./transform";
 
 // React port of Cap's `screenshotExport.ts`. The Rust renderer draws the frame
@@ -448,11 +452,48 @@ const tracePolyline = (ctx: CanvasRenderingContext2D, pts: Pt[]) => {
 
 const ROTATABLE_TYPES = new Set(["rectangle", "circle", "text"]);
 
+/** Rust is the only thing that ever measures `textContent` — this is export's
+ * own call, independent of whatever the live editor has already measured
+ * (`context.tsx`'s `textFragments`), because export runs at a different
+ * resolution: `anchorHeight` (and `ann.width`/`height`, already scaled by
+ * `scaleAnnotations`) are export's own, not the preview's. Faces are
+ * registered here too — `registerFace` dedupes against the same
+ * process-global cache the live editor uses, so a face already on screen is
+ * never re-fetched. */
+async function measureExportText(
+	annotations: Annotation[],
+	anchorHeight: number,
+): Promise<Map<string, Fragment[]>> {
+	const result = new Map<string, Fragment[]>();
+
+	for (const ann of annotations) {
+		if (ann.type !== "text" || !ann.textContent) continue;
+
+		const measured = await commands.measureText(ann.textContent, {
+			anchorHeight,
+			width: ann.width,
+			height: ann.height,
+		});
+		if (measured.status === "error") continue;
+
+		await Promise.all(measured.data.faces.map(registerFace));
+		result.set(ann.id, measured.data.fragments);
+	}
+
+	return result;
+}
+
 /** Vector annotations, painted in list order so the layers panel ordering
  * holds. Masks are skipped — `paintMasks` has already burned those in. */
 const drawAnnotations = (
 	ctx: CanvasRenderingContext2D,
 	annotations: Annotation[],
+	textFragments: Map<string, Fragment[]>,
+	// `TextHalo.width` is px@1080 like every other text metric, but it never
+	// passes through `measure_text` (`Fragment` carries no halo field), so
+	// unlike `fragment.fontSize` it has to be scaled here at paint time —
+	// see the identical note on `AnnotationLayer.tsx`'s `RenderAnnotation`.
+	haloScale: number,
 ) => {
 	for (const ann of annotations) {
 		// Masks and focus are image treatments, already burned in above.
@@ -512,10 +553,47 @@ const drawAnnotations = (
 			}
 			paintHead(ctx, built.startHead, ann.strokeColor);
 			paintHead(ctx, built.endHead, ann.strokeColor);
-		} else if (ann.type === "text" && ann.text) {
-			ctx.fillStyle = ann.strokeColor;
-			ctx.font = `${ann.height}px sans-serif`;
-			ctx.fillText(ann.text, ann.x, ann.y + ann.height);
+		} else if (ann.type === "text") {
+			// Same fragment array the SVG editor paints from — this is the one
+			// place both painters read, so a metric mismatch between them isn't
+			// possible: neither ever re-measures the text.
+			const halo = ann.textContent?.halo;
+			for (const fragment of textFragments.get(ann.id) ?? []) {
+				const x = fragment.rtl
+					? ann.x + fragment.x + fragment.width
+					: ann.x + fragment.x;
+				const y = ann.y + fragment.y;
+
+				ctx.font = `${fragment.italic ? "italic " : ""}${fragment.fontWeight} ${fragment.fontSize}px "quiro-face-${fragment.fontFace}"`;
+				ctx.textAlign = fragment.rtl ? "right" : "left";
+				ctx.textBaseline = "alphabetic";
+
+				// Legibility over arbitrary screenshot content
+				// (`plans/text-engine/004`). Stroked first so the fill sits
+				// cleanly on top, matching SVG's `paint-order: stroke fill`.
+				if (halo) {
+					ctx.strokeStyle = halo.color;
+					ctx.lineWidth = halo.width * haloScale * 2;
+					ctx.lineJoin = "round";
+					ctx.strokeText(fragment.text, x, y);
+				}
+
+				ctx.fillStyle = fragment.color;
+				ctx.fillText(fragment.text, x, y);
+
+				if (fragment.decoration !== "none") {
+					const lineY =
+						fragment.decoration === "underline"
+							? y + fragment.fontSize * 0.08
+							: y - fragment.fontSize * 0.3;
+					ctx.strokeStyle = fragment.color;
+					ctx.lineWidth = Math.max(1, fragment.fontSize * 0.06);
+					ctx.beginPath();
+					ctx.moveTo(fragment.rtl ? x - fragment.width : x, lineY);
+					ctx.lineTo(fragment.rtl ? x : x + fragment.width, lineY);
+					ctx.stroke();
+				}
+			}
 		}
 
 		ctx.restore();
@@ -545,7 +623,7 @@ const scaleAnnotations = (
 	}));
 };
 
-export function renderScreenshotExportCanvas({
+export async function renderScreenshotExportCanvas({
 	renderedBitmap,
 	project,
 	annotations,
@@ -642,7 +720,21 @@ export function renderScreenshotExportCanvas({
 		);
 	}
 
-	drawAnnotations(ctx, scaledAnnotations);
+	// `RunStyle::font_size` is px@1080 (see that field's doc comment); this is
+	// export's own anchor height — the capture's content rect at export
+	// resolution, not the preview's — matching `exportRect` above without
+	// needing its block scope.
+	const anchorHeight = imageRect ? imageRect.height * scaleY : canvas.height;
+	const textFragments = await measureExportText(
+		scaledAnnotations,
+		anchorHeight,
+	);
+	drawAnnotations(
+		ctx,
+		scaledAnnotations,
+		textFragments,
+		anchorHeight / TEXT_REFERENCE_HEIGHT,
+	);
 
 	// An annotation dragged outside the frame would otherwise be cropped off the
 	// export, so the output grows to contain everything that was drawn.

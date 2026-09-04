@@ -14,6 +14,7 @@ import IconLucideTrash2 from "~icons/lucide/trash-2";
 import IconLucideType from "~icons/lucide/type";
 import IconLucideX from "~icons/lucide/x";
 import { useScreenshotEditorContext } from "./context";
+import { textContentString } from "./text-content";
 
 // React port of Cap's `LayersPanel.tsx`.
 
@@ -39,7 +40,10 @@ const TYPE_LABELS: Record<Annotation["type"], string> = {
 };
 
 function labelFor(annotation: Annotation) {
-	if (annotation.type === "text" && annotation.text) return annotation.text;
+	if (annotation.type === "text") {
+		const text = textContentString(annotation.textContent);
+		if (text) return text;
+	}
 	return TYPE_LABELS[annotation.type];
 }
 

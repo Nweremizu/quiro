@@ -28,6 +28,7 @@ import {
 	transitionsAfterClipSplit,
 } from "../clip-transitions";
 import { useEditorContext } from "../context";
+import { defaultTextContent, textContentString } from "../text-content";
 import { rippleDeleteAllTracks } from "../timeline-utils";
 import { EditorButton, Slider } from "../ui";
 import { AudioTrack } from "./AudioTrack";
@@ -42,6 +43,15 @@ import { TransitionMarkers } from "./TransitionMarkers";
 import { ZoomTrack } from "./ZoomTrack";
 
 const MIN_VISIBLE_SECONDS = 1;
+/** Tick labels are left-anchored, so one within a label's width of the right
+ * edge spills out of the track. Widest label is "mm:ss" at ~34px. */
+const TICK_LABEL_WIDTH = 40;
+/** Every track sits behind a fixed icon gutter (`w-8` + the row's `gap-2`),
+ * and the ruler and playhead match it with `ml-10`. Time therefore maps onto
+ * the space to its *right*, not the full measured width — dividing by the
+ * latter pushed everything a gutter's worth past the right edge at the end of
+ * the timeline, which is what clipped the last tick label. */
+const TRACK_GUTTER = 40;
 
 function formatTime(seconds: number) {
 	const total = Math.max(0, seconds);
@@ -96,7 +106,8 @@ export function Timeline() {
 
 	// Zero means "not set yet" — fit the whole recording once its length is known.
 	const visible = visibleSeconds > 0 ? visibleSeconds : Math.max(duration, 1);
-	const pixelsPerSecond = trackWidth > 0 ? trackWidth / visible : 0;
+	const trackContentWidth = Math.max(0, trackWidth - TRACK_GUTTER);
+	const pixelsPerSecond = trackContentWidth > 0 ? trackContentWidth / visible : 0;
 	const maxPosition = Math.max(0, duration - visible);
 	const clampedPosition = Math.min(position, maxPosition);
 
@@ -127,7 +138,8 @@ export function Timeline() {
 			const bounds = element.getBoundingClientRect();
 			return Math.min(
 				Math.max(
-					clampedPosition + (clientX - bounds.left) / pixelsPerSecond,
+					clampedPosition +
+						(clientX - bounds.left - TRACK_GUTTER) / pixelsPerSecond,
 					0,
 				),
 				duration,
@@ -388,7 +400,7 @@ export function Timeline() {
 				...(timeline.textSegments ?? []),
 				{
 					...span,
-					content: "Text",
+					textContent: defaultTextContent("Text"),
 					center: { x: 0.5, y: 0.5 },
 					size: { x: 0.4, y: 0.12 },
 				},
@@ -483,7 +495,9 @@ export function Timeline() {
 			0,
 			Math.floor(clampedPosition / tickStep) * tickStep,
 		);
-		const last = Math.min(clampedPosition + visible, duration);
+		const last =
+			Math.min(clampedPosition + visible, duration) -
+			TICK_LABEL_WIDTH / pixelsPerSecond;
 		for (let time = first; time <= last; time += tickStep) result.push(time);
 		return result;
 	}, [clampedPosition, visible, duration, tickStep, pixelsPerSecond]);
@@ -667,7 +681,9 @@ export function Timeline() {
 									segments={timeline?.textSegments ?? []}
 									color="var(--track-text)"
 									selectionType="text"
-									label={(segment) => segment.content || "Text"}
+									label={(segment) =>
+										textContentString(segment.textContent) || "Text"
+									}
 									onChange={(index, next) =>
 										updateTimeline((current) => ({
 											...current,

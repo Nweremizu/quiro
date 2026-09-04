@@ -1,5 +1,6 @@
 import { cn } from "@quiro/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { numericPart, valueFromDisplay } from "./slider-value";
 
 // The scrubber: a slider whose whole body is the track, with its label inside
 // on the left and the live value on the right.
@@ -112,6 +113,7 @@ export function Slider({
 	disabled,
 	size = "xs",
 	ticks = 0,
+	editable = true,
 	className,
 }: {
 	value: number;
@@ -130,11 +132,21 @@ export function Slider({
 	size?: SliderSize;
 	/** Tick marks drawn across the track; 0 hides them. */
 	ticks?: number;
+	/** Click the value to type an exact one. On by default — a scrub cannot
+	 * reliably hit a specific number, and several of these ranges are wide
+	 * enough that a pixel is worth many units. Pass `false` where the value is
+	 * not meaningfully typable. */
+	editable?: boolean;
 	className?: string;
 }) {
 	const trackRef = useRef<HTMLDivElement>(null);
+	const inputRef = useRef<HTMLInputElement>(null);
 	const [dragging, setDragging] = useState(false);
 	const [hovering, setHovering] = useState(false);
+	/** The text being typed, or `null` when the value is just being displayed.
+	 * Held as a string rather than a number so a half-typed "-" or "1." is not
+	 * thrown away mid-keystroke. */
+	const [editingText, setEditingText] = useState<string | null>(null);
 
 	const styles = SLIDER_SIZES[size];
 	const range = max - min;
@@ -180,6 +192,49 @@ export function Slider({
 		},
 		[],
 	);
+
+	// Editing is only offered when the format actually round-trips: a value
+	// with no number in it (or one that runs backwards) has nothing to type.
+	const canEdit = editable && !disabled && numericPart(format(value)) !== null;
+
+	const beginEditing = useCallback(() => {
+		if (!canEdit) return;
+		// Seeded with what is on screen, not the raw value — the number the
+		// user is looking at is the one they mean to replace. For a percentage
+		// slider that is "40", never "0.4".
+		const shown = numericPart(format(value));
+		setEditingText(shown === null ? "" : String(shown));
+	}, [canEdit, format, value]);
+
+	const commitEditing = useCallback(() => {
+		const text = editingText;
+		setEditingText(null);
+		if (text === null) return;
+
+		const typed = numericPart(text);
+		// Anything unparseable leaves the value alone rather than snapping it
+		// to a default — losing a setting to a stray keystroke is worse than
+		// ignoring the keystroke.
+		if (typed === null) return;
+
+		const next = valueFromDisplay(typed, min, max, step, format);
+		if (next === null) return;
+		if (next !== value) {
+			commit(next);
+			// A typed value is one discrete edit, so it closes its own undo
+			// entry the way a keyboard nudge does.
+			onDragEnd?.();
+		}
+	}, [editingText, min, max, step, format, value, commit, onDragEnd]);
+
+	// Focus and select on entry, so typing replaces rather than appends.
+	useEffect(() => {
+		if (editingText === null) return;
+		const input = inputRef.current;
+		if (!input) return;
+		input.focus();
+		input.select();
+	}, [editingText]);
 
 	// `isolate` on the root: the thumb / label / value below use z-index to
 	// stack within the scrubber. Without a stacking context here those escape to
@@ -349,17 +404,104 @@ export function Slider({
 					</div>
 				)}
 
-				<div
-					className="pointer-events-none absolute top-1/2 z-[4] -translate-y-1/2 font-mono text-gray-11"
-					style={{
-						right: styles.paddingX,
-						fontVariantNumeric: "tabular-nums",
-						fontSize: styles.valueSize,
-						fontWeight: 500,
-					}}
-				>
-					{format(value)}
-				</div>
+				{editingText !== null ? (
+					<input
+						ref={inputRef}
+						value={editingText}
+						inputMode="decimal"
+						aria-label={`${ariaLabel ?? label ?? "Value"}, type an exact value`}
+						onChange={(event) => setEditingText(event.target.value)}
+						onBlur={commitEditing}
+						// The input sits inside the track, whose own handlers would
+						// otherwise start a scrub under the caret and read arrow keys
+						// as nudges while they are meant to move the cursor.
+						onPointerDown={(event) => event.stopPropagation()}
+						onKeyDown={(event) => {
+							event.stopPropagation();
+							if (event.key === "Enter") {
+								event.preventDefault();
+								commitEditing();
+								return;
+							}
+							if (event.key === "Escape") {
+								event.preventDefault();
+								setEditingText(null);
+								return;
+							}
+							// Arrow keys nudge by a step while typing, in display
+							// units, so the input stays a precision tool rather than
+							// handing the interaction back to the track.
+							if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+								event.preventDefault();
+								const typed = numericPart(editingText);
+								if (typed === null) return;
+								const base = valueFromDisplay(typed, min, max, step, format);
+								if (base === null) return;
+								const nudged = clampValue(
+									snapToStep(
+										base + (event.key === "ArrowUp" ? step : -step),
+										step,
+										min,
+									),
+									min,
+									max,
+								);
+								const shown = numericPart(format(nudged));
+								if (shown !== null) setEditingText(String(shown));
+							}
+						}}
+						className={cn(
+							"absolute top-1/2 z-[5] -translate-y-1/2 rounded-md bg-gray-1 text-right font-mono",
+							"text-gray-12 outline-none ring-2 ring-accent-focus-ring/50",
+						)}
+						style={{
+							right: styles.paddingX - 4,
+							width: Math.max(48, styles.valueSize * 4.5),
+							paddingInline: 4,
+							paddingBlock: 2,
+							fontVariantNumeric: "tabular-nums",
+							fontSize: styles.valueSize,
+							fontWeight: 500,
+						}}
+					/>
+				) : (
+					<button
+						type="button"
+						disabled={!canEdit}
+						onPointerDown={(event) => {
+							// Same reason as the input: without this the track starts
+							// a scrub and the click never reaches the button.
+							if (!canEdit) return;
+							event.stopPropagation();
+						}}
+						onClick={beginEditing}
+						aria-label={
+							canEdit
+								? `${ariaLabel ?? label ?? "Value"}: ${format(value)}. Click to type an exact value`
+								: undefined
+						}
+						tabIndex={-1}
+						className={cn(
+							"absolute top-1/2 z-[4] -translate-y-1/2 rounded-md font-mono text-gray-11",
+							"transition-colors",
+							canEdit
+								? "cursor-text hover:bg-gray-1/70 hover:text-gray-12"
+								: "pointer-events-none",
+						)}
+						style={{
+							right: styles.paddingX - 4,
+							// Padding rather than a bare span: it is the hit area, and
+							// it is what the hover surface is drawn on.
+							paddingInline: 4,
+							paddingBlock: 2,
+							fontVariantNumeric: "tabular-nums",
+							fontSize: styles.valueSize,
+							fontWeight: 500,
+						}}
+					>
+						{format(value)}
+					</button>
+				)}
 			</div>
 		</div>
 	);

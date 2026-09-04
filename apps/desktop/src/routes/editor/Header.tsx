@@ -135,7 +135,7 @@ export function Header() {
 
 				<Button
 					variant={clipsOpen ? "white" : "gray"}
-					className="flex h-[40px] justify-center gap-1.5"
+					className="flex h-10 justify-center gap-1.5"
 					onClick={() => {
 						clearSelection();
 						setClipsOpen(!clipsOpen);
@@ -149,7 +149,7 @@ export function Header() {
 					type="button"
 					disabled={!instance}
 					className={cn(
-						"flex h-[40px] w-full max-w-[100px] items-center justify-center gap-1.5 rounded-xl px-4 text-[0.8125rem] font-medium text-white outline-hidden",
+						"flex h-10 w-full max-w-25 items-center justify-center gap-1.5 rounded-xl px-4 text-[0.8125rem] font-medium text-white outline-hidden",
 						"bg-linear-to-b from-accent-300 to-accent-400 dark:from-accent-400 dark:to-accent-500",
 						"shadow-[0_4px_14px_-6px_rgba(243,128,31,0.5),inset_0_1px_0_0_rgba(255,255,255,0.22)]",
 						"transition-[box-shadow,filter] duration-200 ease-out",

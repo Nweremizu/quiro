@@ -78,21 +78,25 @@ impl Perspective {
     }
 }
 
-/// Depth-dial endpoints in pixels, matching CSS `perspective` semantics: a
-/// smaller distance is a wider lens close to the card, which reads as more
-/// dramatic convergence for the same tilt angle. Chosen against typical
-/// screenshot-editor output sizes (roughly 800-2500px on the long edge) so
-/// the dial's full range stays visually meaningful without tuning per image.
-const MAX_DISTANCE_PX: f32 = 4000.0;
-const MIN_DISTANCE_PX: f32 = 500.0;
-
-/// Converts the popover's 0-100 depth dial to a camera distance. Linear for
-/// now — a first pass to get the control on screen; worth revisiting once the
-/// look is visible, since perspective falloff is not naturally linear.
-pub fn distance_px_from_depth(depth: f32) -> f32 {
-    let t = (depth / 100.0).clamp(0.0, 1.0);
-    MAX_DISTANCE_PX + (MIN_DISTANCE_PX - MAX_DISTANCE_PX) * t
-}
+/// Camera distance in pixels, matching CSS `perspective` semantics: a smaller
+/// distance is a wider lens closer to the card, which reads as more dramatic
+/// convergence for the same tilt angle.
+///
+/// This used to be a 0-100 `depth` dial on `PerspectiveConfiguration`, whose
+/// default of 45 worked out to 2425px. The panel now offers three angles and
+/// nothing else, so the distance is fixed here — and fixed *shorter* than
+/// that old default, because at 2425px a tilt reads as a nearly-isometric
+/// lean and the control felt inert until it was pushed a long way. Existing
+/// projects that had moved the dial will render differently; ones that left
+/// it alone get a stronger tilt for the same angle, which is the intended
+/// change.
+///
+/// Chosen against typical screenshot-editor output sizes (roughly 800-2500px
+/// on the long edge). It stays comfortably clear of the projection's
+/// singularity: the divide is by `d - z`, and `z` peaks at half the card's
+/// extent when a tilt reaches 90°, so even a 2500px card leaves `d - z`
+/// around 550px rather than approaching zero.
+pub const CAMERA_DISTANCE_PX: f32 = 1800.0;
 
 impl From<&quiro_project::PerspectiveConfiguration> for Perspective {
     fn from(config: &quiro_project::PerspectiveConfiguration) -> Self {
@@ -100,7 +104,7 @@ impl From<&quiro_project::PerspectiveConfiguration> for Perspective {
             tilt_x_deg: config.tilt_x,
             tilt_y_deg: config.tilt_y,
             rotate_deg: config.rotate,
-            distance_px: distance_px_from_depth(config.depth),
+            distance_px: CAMERA_DISTANCE_PX,
         }
     }
 }
@@ -501,19 +505,30 @@ mod tests {
         );
     }
 
+    /// The fixed camera has to stay clear of the projection's singularity for
+    /// every tilt the panel can now reach. The divide is by `d - z`, and `z`
+    /// peaks at half the card's extent as a tilt approaches 90°, so the worst
+    /// case is the largest card the editor realistically produces standing
+    /// fully on edge.
     #[test]
-    fn depth_dial_endpoints_and_default() {
-        // 0 is the flattest the dial goes, 100 the most dramatic; the default
-        // (45) should land between the two, not clamp to either end.
-        assert_eq!(distance_px_from_depth(0.0), MAX_DISTANCE_PX);
-        assert_eq!(distance_px_from_depth(100.0), MIN_DISTANCE_PX);
-        let default_distance = distance_px_from_depth(45.0);
-        assert!(default_distance > MIN_DISTANCE_PX && default_distance < MAX_DISTANCE_PX);
+    fn the_fixed_camera_clears_the_projection_singularity() {
+        let largest_card_extent = 2500.0_f32;
+        let worst_case_z = largest_card_extent / 2.0;
+        assert!(
+            CAMERA_DISTANCE_PX - worst_case_z > 200.0,
+            "camera at {CAMERA_DISTANCE_PX} leaves only {} before the divide blows up",
+            CAMERA_DISTANCE_PX - worst_case_z,
+        );
+    }
 
-        // Out-of-range input (a slider bug, a hand-edited sidecar) must not
-        // send the camera behind the card or out past the flat end.
-        assert_eq!(distance_px_from_depth(-50.0), MAX_DISTANCE_PX);
-        assert_eq!(distance_px_from_depth(150.0), MIN_DISTANCE_PX);
+    /// The distance replaced a 0-100 dial whose default (45) worked out to
+    /// 2425px. Shorter means a stronger tilt for the same angle, which is the
+    /// whole point of fixing it — so this pins the direction of that change,
+    /// not just the number.
+    #[test]
+    fn the_fixed_camera_is_stronger_than_the_old_default() {
+        let old_default_distance = 2425.0_f32;
+        assert!(CAMERA_DISTANCE_PX < old_default_distance);
     }
 
     #[test]
@@ -522,13 +537,12 @@ mod tests {
             tilt_x: 12.0,
             tilt_y: -8.0,
             rotate: 3.0,
-            depth: 80.0,
         };
         let p = Perspective::from(&config);
         assert_eq!(p.tilt_x_deg, 12.0);
         assert_eq!(p.tilt_y_deg, -8.0);
         assert_eq!(p.rotate_deg, 3.0);
-        assert_eq!(p.distance_px, distance_px_from_depth(80.0));
+        assert_eq!(p.distance_px, CAMERA_DISTANCE_PX);
     }
 
     #[test]

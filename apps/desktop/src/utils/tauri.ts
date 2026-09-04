@@ -392,6 +392,74 @@ async renderScreenshotProjectForExport(path: string) : Promise<Result<Screenshot
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Rust is the only thing that ever measures a `TextContent` — an annotation
+ * editor calls this on commit (not per keystroke; that policy is
+ * `plans/text-engine/004`'s) and paints the returned `fragments` verbatim,
+ * never re-measuring the text itself. `constraint.anchor_height` is the
+ * capture's own content-rect height for an annotation, matching the
+ * px@1080 convention `RunStyle::font_size` already uses.
+ */
+async measureText(content: TextContent, constraint: Constraint) : Promise<Result<TextLayoutResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("measure_text", { content, constraint }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * The exact bytes of the face named by `id` (one of `measure_text`'s
+ * returned `faces`), for the webview to register as a `FontFace` and paint
+ * with directly — rather than resolving `font_family` itself, which is only
+ * pinned correctly for the three CSS generics (`layers/mod.rs`'s
+ * `new_font_system`), not for an arbitrary installed family name.
+ */
+async fontFaceBytes(id: FaceId) : Promise<Result<number[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("font_face_bytes", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Every family the shaping engine can resolve right now — the system scan
+ * plus anything already downloaded. The picker's "available" list.
+ */
+async listFontFamilies() : Promise<FontFamily[]> {
+    return await TAURI_INVOKE("list_font_families");
+},
+/**
+ * Google's catalogue, for the picker's browse-and-search half. Cached to
+ * `<app data>/fonts/catalog.json` on first success, and served from there
+ * when the network is unavailable — a picker that empties itself offline
+ * would be worse than one showing a slightly stale list.
+ */
+async googleFontCatalog() : Promise<Result<GoogleFont[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("google_font_catalog") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Downloads one Google family and loads it into the shaping engine, so it
+ * becomes usable everywhere a system font is. Returns the family names the
+ * downloaded file actually contained — normally just the one asked for.
+ * 
+ * Idempotent: a family already on disk is loaded from there rather than
+ * re-fetched.
+ */
+async installGoogleFont(family: string) : Promise<Result<string[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("install_google_font", { family }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async doPermissionsCheck(initialCheck: boolean) : Promise<OSPermissionsCheck> {
     return await TAURI_INVOKE("do_permissions_check", { initialCheck });
 },
@@ -722,7 +790,14 @@ maskDarkness?: number | null;
 /**
  * 0..1 of the region's shorter axis, for [`MaskShape::RoundedRect`].
  */
-maskCornerRadius?: number | null; focus?: FocusConfig | null; arrowCurve?: ArrowCurve | null; arrowBend?: number | null; arrowStartHead?: ArrowHead | null; arrowEndHead?: ArrowHead | null; arrowHeadSize?: number | null; lineStyle?: LineStyle | null; arrowTaper?: boolean | null }
+maskCornerRadius?: number | null; focus?: FocusConfig | null; arrowCurve?: ArrowCurve | null; arrowBend?: number | null; arrowStartHead?: ArrowHead | null; arrowEndHead?: ArrowHead | null; arrowHeadSize?: number | null; lineStyle?: LineStyle | null; arrowTaper?: boolean | null; 
+/**
+ * The tree representation of `text`, for `AnnotationType::Text`. `None`
+ * until `migrate_annotation_space`'s third step wraps `text` and
+ * `height` into it, which needs the capture size and so cannot happen
+ * inside [`ProjectConfiguration::load`].
+ */
+textContent?: TextContent | null }
 export type AnnotationType = "arrow" | "circle" | "rectangle" | "text" | "mask" | "focus"
 export type AppTheme = "system" | "light" | "dark"
 /**
@@ -868,6 +943,19 @@ export type ClipOffsets = { camera?: number; mic?: number; system_audio?: number
 export type ClipSpeedAudioMode = "mute" | "maintainPitch" | "matchSpeed"
 export type ClipTransition = { segmentIndex: number; type: ClipTransitionType; duration: number }
 export type ClipTransitionType = "cross-fade" | "fade-through-black"
+/**
+ * What a layout is measured against. Font sizes are always px@1080 of
+ * `anchor_height` — see `RunStyle::font_size` in `quiro-project`.
+ */
+export type Constraint = { anchorHeight: number; 
+/**
+ * Box width in output px. Ignored for `GrowType::AutoWidth`.
+ */
+width: number; 
+/**
+ * Box height in output px. Ignored unless `GrowType::Fixed`.
+ */
+height: number }
 export type CornerStyle = "squircle" | "rounded"
 export type Crop = { position: XY<number>; size: XY<number> }
 export type CurrentRecordingChanged = null
@@ -894,6 +982,17 @@ export type ExportEstimates = { duration_seconds: number; estimated_time_seconds
 export type ExportPreviewResult = { jpeg_base64: string; estimated_size_mb: number; actual_width: number; actual_height: number; total_frames: number }
 export type ExportPreviewSettings = { fps: number; resolution_base: XY<number>; compression_bpp: number; cursor_only?: boolean }
 export type ExportSettings = ({ format: "Mp4" } & Mp4ExportSettings) | ({ format: "Gif" } & GifExportSettings) | ({ format: "Mov" } & MovExportSettings)
+/**
+ * A face identity that can cross a process boundary. `cosmic_text::fontdb::ID`
+ * can't: it has no `Serialize`/`specta::Type` impl, and its internal
+ * slotmap key is private with no public constructor from a raw integer
+ * (only `ID::dummy()`) — a value the frontend sent back could never be
+ * turned back into a real `fontdb::ID`. This wraps a `FaceRegistry`-assigned
+ * integer instead; two `FaceId`s are equal iff they name the same face in
+ * this crate's one shared `FontSystem`. `plans/text-engine/003` ships the
+ * bytes this id names, via `crate::face_bytes`.
+ */
+export type FaceId = number
 export type FocusConfig = { x: number; y: number; radiusX: number; radiusY: number; 
 /**
  * Degrees, clockwise. Lets the plane of focus follow a diagonal subject.
@@ -923,6 +1022,56 @@ nearBlur: number; farBlur: number }
  * toolbar or a dialog rather than a round object.
  */
 export type FocusShape = "ellipse" | "rectangle"
+/**
+ * A font family the user can pick, as the shaping engine sees it — this is
+ * the authoritative list, because a family that isn't in here is one
+ * cosmic-text cannot shape with, whatever the webview might manage to
+ * render as a preview.
+ */
+export type FontFamily = { name: string; 
+/**
+ * From `fontdb`'s own per-face flag. The only categorisation the system
+ * font database actually carries — serif vs. sans-serif is not
+ * recorded, so the picker only groups Google families (whose catalogue
+ * does carry a category) beyond this.
+ */
+monospaced: boolean }
+/**
+ * One contiguous, same-style piece of a visual (wrapped) line: the
+ * intersection of a cosmic-text `LayoutRun` with one of `TextContent`'s
+ * style runs. Fully resolved — a painter needs nothing else, and never
+ * re-measures.
+ */
+export type Fragment = { 
+/**
+ * Index into `TextRoot`'s flattened paragraph list.
+ */
+paragraph: number; 
+/**
+ * Index into that paragraph's `children` (its style runs).
+ */
+run: number; x: number; 
+/**
+ * Baseline, not top — matches `cosmic_text::LayoutRun::line_y` and the
+ * SVG `dominant-baseline` convention the frontend painter already
+ * assumes for `position-data`-shaped output.
+ */
+y: number; width: number; height: number; 
+/**
+ * The paragraph's bidi direction. cosmic-text runs bidi regardless of
+ * whether a direction control exists in the UI, so this is correct even
+ * though nothing yet lets a user choose it. A painter anchors an RTL
+ * fragment at `x + width`, not `x`.
+ */
+rtl: boolean; text: string; 
+/**
+ * The face this fragment's glyphs actually shaped with — which may
+ * differ from the run's requested `font_family` after fallback
+ * substitution. Taken from the fragment's first glyph; a fallback
+ * substitution mid-fragment (e.g. an emoji inside a Latin run) is not
+ * split into its own fragment.
+ */
+fontFace: FaceId; fontSize: number; fontWeight: number; italic: boolean; color: string; decoration: TextDecoration }
 export type FrameConfiguration = { style: FrameStyle; theme: FrameTheme; 
 /**
  * Text shown in the browser style's URL pill.
@@ -991,6 +1140,18 @@ quality: number | null;
  */
 fast: boolean | null }
 export type GlideDirection = "none" | "left" | "right" | "up" | "down"
+export type GoogleFont = { family: string; 
+/**
+ * `sans-serif`, `serif`, `display`, `handwriting` or `monospace`, as
+ * Google categorises it — the picker groups by this.
+ */
+category: string }
+/**
+ * Width and height from content (no wrapping), width from the box height
+ * from content, or both from the box with content clipping. See
+ * `plans/text-engine/000-text-content-model.md`.
+ */
+export type GrowType = "autoWidth" | "autoHeight" | "fixed"
 export type HapticPattern = "alignment" | "levelChange" | "generic"
 export type HapticPerformanceTime = "default" | "now" | "drawCompleted"
 export type Hotkey = { code: string; meta: boolean; ctrl: boolean; alt: boolean; shift: boolean }
@@ -1025,9 +1186,20 @@ export type LayerTransform = {
  */
 offset: XY<number>; 
 /**
- * Uniform scale about the layer's own centre.
+ * Uniform scale about [`Self::scale_origin`].
  */
 scale: number; 
+/**
+ * The point the scale is anchored at, as a fraction of the layer's own
+ * width and height. `(0.5, 0.5)` — the default — scales about the
+ * centre, which is what this transform did before the field existed, so
+ * an untouched project is bit-identical.
+ * 
+ * This is what lets the Zoom control magnify a corner of the screenshot
+ * rather than always pushing outward from the middle: the point under
+ * the focal handle is the one that stays put.
+ */
+scaleOrigin: XY<number>; 
 /**
  * In-plane rotation about the layer's own centre, in degrees.
  */
@@ -1113,11 +1285,26 @@ export type OSPermissionsCheck = { screenRecording: OSPermissionStatus; micropho
  * `WindowFocusManager::register_escape`) rather than as a DOM keydown.
  */
 export type OnEscapePress = null
+export type Paragraph = { align: TextAlign; 
 /**
- * Screenshot-editor "Perspective" control: tilts the card in 3D. Degrees and
- * a 0-100 depth dial rather than a raw camera distance, so the schema reads
- * the same way the popover's sliders do; `quiro-rendering` converts this into
- * the homography the shader actually wants.
+ * Multiplier, not px — matches cosmic-text's `Metrics::line_height`
+ * convention that `quiro-text` will shape against.
+ */
+lineHeight: number; children: TextRun[] }
+export type ParagraphSet = { children: Paragraph[] }
+/**
+ * Screenshot-editor rotation: tilts the card in 3D. Three angles and nothing
+ * else — X and Y lean it out of the screen plane, Z spins it within that
+ * plane — so the schema reads the way the panel's own X/Y/Z sliders do;
+ * `quiro-rendering` turns them into the homography the shader wants.
+ * 
+ * There is deliberately no camera-distance dial. It used to be a 0-100
+ * `depth` field, which asked people to tune a lens parameter to find out
+ * what a tilt would look like; the renderer now fixes that distance
+ * (`perspective::CAMERA_DISTANCE_PX`) so an angle is the only thing being
+ * chosen. An old sidecar's `depth` is ignored on load rather than migrated:
+ * serde skips the unknown field, and the tilt it described is re-rendered
+ * at the fixed distance.
  */
 export type PerspectiveConfiguration = { 
 /**
@@ -1131,12 +1318,7 @@ tiltY: number;
 /**
  * In-plane spin, degrees. No foreshortening on its own.
  */
-rotate: number; 
-/**
- * 0-100. Higher reads as a wider lens closer to the card, which makes the
- * same tilt angle look more dramatic; lower flattens toward isometric.
- */
-depth: number }
+rotate: number }
 export type PhysicalSize = { width: number; height: number }
 export type Platform = "MacOS" | "Windows" | "Linux"
 export type PostDeletionBehaviour = "doNothing" | "reopenRecordingWindow"
@@ -1174,7 +1356,19 @@ annotationSpaceVersion?: number;
  * [`MaskMode`] and a plain `amount`. Migrated on load — see
  * [`Self::migrate_mask_model`].
  */
-maskModelVersion?: number }
+maskModelVersion?: number; 
+/**
+ * Whether text segments store their typography as a flat set of fields
+ * (0, legacy) or as a [`TextContent`] tree (1). [`Annotation`] gets the
+ * equivalent conversion as a step inside
+ * [`Self::migrate_annotation_space`] instead of here: a legacy text
+ * annotation's `height` only means "fraction of the capture's content
+ * height" — what its `TextContent` font size is derived from — once
+ * that migration has already normalized it. This field's migration has
+ * no such dependency, so it runs inside [`Self::load`], the same as
+ * [`Self::text_size_version`].
+ */
+textContentVersion?: number }
 export type ProjectRecordingsMeta = { segments: SegmentRecordings[] }
 export type RecordingEvent = { variant: "Countdown"; value: number } | { variant: "Started" } | { variant: "Stopped" } | { variant: "Paused" } | { variant: "Resumed" } | { variant: "Failed"; error: string } | { variant: "StartFailed"; error: string } | { variant: "InputLost"; input: RecordingInputKind } | { variant: "InputRestored"; input: RecordingInputKind }
 /**
@@ -1184,7 +1378,13 @@ export type RecordingEvent = { variant: "Countdown"; value: number } | { variant
  */
 export type RecordingInputKind = "microphone" | "camera"
 export type RecordingMeta = (StudioRecordingMeta | InstantRecordingMeta) & { platform?: Platform | null; pretty_name: string; sharing?: SharingMeta | null; upload?: UploadMeta | null }
-export type RecordingMetaWithMetadata = { prettyName: string; sortTimeMillis: number }
+export type RecordingMetaWithMetadata = { prettyName: string; sortTimeMillis: number; 
+/**
+ * The project directory. The row's other path points at a media file
+ * inside it, which is what a preview or the editor wants — but revealing
+ * or deleting a recording means the whole project, not one video.
+ */
+projectPath: string }
 export type RecordingMode = "studio" | "instant" | "screenshot"
 export type RecordingSettingsStore = { target: ScreenCaptureTarget | null; micName: string | null; cameraId: DeviceOrModelID | null; mode: RecordingMode | null; systemAudio: boolean; cameraDeviceSettings: { [key in string]: CameraDeviceSettings }; microphoneDeviceSettings: { [key in string]: MicrophoneDeviceSettings } }
 export type RecordingTargetMode = "display" | "window" | "area" | "camera"
@@ -1202,6 +1402,22 @@ export type RequestSetTargetMode = { target_mode: RecordingTargetMode | null; di
  * calling `start_recording` with a guess.
  */
 export type RequestStartRecording = { mode: RecordingMode }
+export type RunStyle = { fontFamily: string; 
+/**
+ * Output px as if the anchor were 1080 tall — the same convention
+ * [`TextSegment::font_size`] already uses. The anchor is the capture's
+ * content rect for an [`Annotation`], the output frame for a
+ * [`TextSegment`].
+ */
+fontSize: number; 
+/**
+ * `f32`, not cosmic-text's `u16` `Weight` — matches
+ * [`TextSegment::font_size`]'s existing type exactly so migrating a
+ * segment into this shape is a lossless move, not a lossy round. The
+ * clamp to a valid weight belongs to the engine that shapes text, not
+ * to the data model.
+ */
+fontWeight: number; italic: boolean; color: string; letterSpacing: number; decoration: TextDecoration; transform: TextTransform }
 export type S3UploadMeta = { id: string }
 export type SceneMode = "default" | "cameraOnly" | "hideCamera" | "splitScreen" | 
 /**
@@ -1250,10 +1466,52 @@ export type StudioRecordingMeta = { segment: SingleSegment } | { inner: Multiple
 export type StudioRecordingQuality = "compatibility" | "balanced" | "ultra"
 export type StudioRecordingStatus = { status: "InProgress" } | { status: "NeedsRemux" } | { status: "Failed"; error: string } | { status: "Complete" }
 export type TargetUnderCursor = { display_id: DisplayId | null; window: WindowUnderCursor | null }
-export type TextSegment = { start: number; end: number; track?: number; enabled?: boolean; content?: string; center?: XY<number>; size?: XY<number>; fontFamily?: string; fontSize?: number; fontWeight?: number; italic?: boolean; color?: string; fadeDuration?: number }
+export type TextAlign = "left" | "center" | "right" | "justify"
+/**
+ * Text content shared by [`Annotation`] (screenshot labels/callouts) and
+ * [`TextSegment`] (video titles). Nothing in this crate lays this out —
+ * that is the one job of `quiro-text` (`plans/text-engine/001`), which
+ * nothing has built yet, so this type has no consumer until then.
+ */
+export type TextContent = { root: TextRoot; growType: GrowType; verticalAlign: VerticalAlign; 
+/**
+ * Outline drawn around each glyph, for legibility over arbitrary
+ * screenshot content. `None` draws no outline.
+ */
+halo: TextHalo | null }
+export type TextDecoration = "none" | "underline" | "lineThrough"
+export type TextHalo = { width: number; color: string }
+/**
+ * `quiro_text::TextLayout` minus its `buffers` — those are cosmic-text's own
+ * shaped glyph runs and never leave the process (`plans/text-engine/003`);
+ * `fragments` is everything a frontend painter needs to draw the same
+ * glyphs itself, in SVG on screen and Canvas2D at export.
+ */
+export type TextLayoutResult = { fragments: Fragment[]; width: number; height: number; 
+/**
+ * Every distinct face `fragments` references, in first-seen order — so
+ * a caller can register each one exactly once (via `font_face_bytes`)
+ * without first walking `fragments` itself to dedupe them.
+ */
+faces: FaceId[] }
+/**
+ * Always exactly one child in practice: paragraph sets carry no styling of
+ * their own and exist only for structural parity with how paragraphs nest
+ * inside them.
+ */
+export type TextRoot = { children: ParagraphSet[] }
+export type TextRun = { text: string; style: RunStyle }
+export type TextSegment = { start: number; end: number; track?: number; enabled?: boolean; content?: string; center?: XY<number>; size?: XY<number>; fontFamily?: string; fontSize?: number; fontWeight?: number; italic?: boolean; color?: string; fadeDuration?: number; 
+/**
+ * The tree representation. `None` until `migrate_text_content` wraps the
+ * fields above into it — see [`ProjectConfiguration::text_content_version`].
+ */
+textContent?: TextContent | null }
+export type TextTransform = "none" | "uppercase" | "lowercase" | "capitalize"
 export type TimelineConfiguration = { segments: TimelineSegment[]; transitions: ClipTransition[]; zoomSegments: ZoomSegment[]; sceneSegments?: SceneSegment[]; maskSegments?: MaskSegment[]; textSegments?: TextSegment[]; captionSegments?: CaptionTrackSegment[]; keyboardSegments?: KeyboardTrackSegment[]; audioSegments?: AudioTrackSegment[] }
 export type TimelineSegment = { recordingSegment?: number; timescale: number; start: number; end: number; name?: string | null; speedAudioMode?: ClipSpeedAudioMode | null }
 export type UploadMeta = { state: "MultipartUpload"; video_id: string; file_path: string; pre_created_video: VideoUploadInfo; recording_dir: string } | { state: "SinglePartUpload"; video_id: string; recording_dir: string; file_path: string; screenshot_path: string } | { state: "SegmentUpload"; video_id: string; pre_created_video: VideoUploadInfo; recording_dir: string } | { state: "Failed"; error: string } | { state: "Complete" }
+export type VerticalAlign = "top" | "center" | "bottom"
 export type Video = { duration: number; width: number; height: number; fps: number; start_time: number }
 export type VideoMeta = { path: string; fps?: number; start_time?: number | null; device_id?: string | null }
 export type VideoUploadInfo = { id: string; link: string; config: S3UploadMeta }

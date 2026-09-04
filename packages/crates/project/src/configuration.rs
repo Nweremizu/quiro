@@ -390,8 +390,17 @@ pub struct LayerTransform {
     /// Displacement from the laid-out position, as a fraction of canvas
     /// width and height. Zero leaves the layer where layout put it.
     pub offset: XY<f64>,
-    /// Uniform scale about the layer's own centre.
+    /// Uniform scale about [`Self::scale_origin`].
     pub scale: f64,
+    /// The point the scale is anchored at, as a fraction of the layer's own
+    /// width and height. `(0.5, 0.5)` — the default — scales about the
+    /// centre, which is what this transform did before the field existed, so
+    /// an untouched project is bit-identical.
+    ///
+    /// This is what lets the Zoom control magnify a corner of the screenshot
+    /// rather than always pushing outward from the middle: the point under
+    /// the focal handle is the one that stays put.
+    pub scale_origin: XY<f64>,
     /// In-plane rotation about the layer's own centre, in degrees.
     pub rotation: f64,
 }
@@ -411,6 +420,7 @@ impl Default for LayerTransform {
         Self {
             offset: XY::new(0.0, 0.0),
             scale: 1.0,
+            scale_origin: XY::new(0.5, 0.5),
             rotation: 0.0,
         }
     }
@@ -439,15 +449,30 @@ impl LayerTransform {
                 finite(self.offset.y, 0.0).clamp(-MAX_LAYER_OFFSET, MAX_LAYER_OFFSET),
             ),
             scale: finite(self.scale, 1.0).clamp(MIN_LAYER_SCALE, MAX_LAYER_SCALE),
+            // Outside the layer the anchor stops meaning "a point on the
+            // card", and a wild value from a hand-edited sidecar would fling
+            // the rect off-canvas under any scale at all.
+            scale_origin: XY::new(
+                finite(self.scale_origin.x, 0.5).clamp(0.0, 1.0),
+                finite(self.scale_origin.y, 0.5).clamp(0.0, 1.0),
+            ),
             rotation: finite(self.rotation, 0.0) % 360.0,
         }
     }
 }
 
-/// Screenshot-editor "Perspective" control: tilts the card in 3D. Degrees and
-/// a 0-100 depth dial rather than a raw camera distance, so the schema reads
-/// the same way the popover's sliders do; `quiro-rendering` converts this into
-/// the homography the shader actually wants.
+/// Screenshot-editor rotation: tilts the card in 3D. Three angles and nothing
+/// else — X and Y lean it out of the screen plane, Z spins it within that
+/// plane — so the schema reads the way the panel's own X/Y/Z sliders do;
+/// `quiro-rendering` turns them into the homography the shader wants.
+///
+/// There is deliberately no camera-distance dial. It used to be a 0-100
+/// `depth` field, which asked people to tune a lens parameter to find out
+/// what a tilt would look like; the renderer now fixes that distance
+/// (`perspective::CAMERA_DISTANCE_PX`) so an angle is the only thing being
+/// chosen. An old sidecar's `depth` is ignored on load rather than migrated:
+/// serde skips the unknown field, and the tilt it described is re-rendered
+/// at the fixed distance.
 #[derive(Type, Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct PerspectiveConfiguration {
@@ -457,9 +482,6 @@ pub struct PerspectiveConfiguration {
     pub tilt_y: f32,
     /// In-plane spin, degrees. No foreshortening on its own.
     pub rotate: f32,
-    /// 0-100. Higher reads as a wider lens closer to the card, which makes the
-    /// same tilt angle look more dramatic; lower flattens toward isometric.
-    pub depth: f32,
 }
 
 impl Default for PerspectiveConfiguration {
@@ -468,7 +490,6 @@ impl Default for PerspectiveConfiguration {
             tilt_x: 0.0,
             tilt_y: 0.0,
             rotate: 0.0,
-            depth: 45.0,
         }
     }
 }
@@ -1067,6 +1088,10 @@ pub struct TextSegment {
     pub color: String,
     #[serde(default = "TextSegment::default_fade_duration")]
     pub fade_duration: f64,
+    /// The tree representation. `None` until `migrate_text_content` wraps the
+    /// fields above into it — see [`ProjectConfiguration::text_content_version`].
+    #[serde(default)]
+    pub text_content: Option<TextContent>,
 }
 
 impl TextSegment {
@@ -1803,6 +1828,157 @@ impl Default for FocusConfig {
     }
 }
 
+/// Text content shared by [`Annotation`] (screenshot labels/callouts) and
+/// [`TextSegment`] (video titles). Nothing in this crate lays this out —
+/// that is the one job of `quiro-text` (`plans/text-engine/001`), which
+/// nothing has built yet, so this type has no consumer until then.
+#[derive(Type, Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TextContent {
+    pub root: TextRoot,
+    pub grow_type: GrowType,
+    pub vertical_align: VerticalAlign,
+    /// Outline drawn around each glyph, for legibility over arbitrary
+    /// screenshot content. `None` draws no outline.
+    pub halo: Option<TextHalo>,
+}
+
+/// Always exactly one child in practice: paragraph sets carry no styling of
+/// their own and exist only for structural parity with how paragraphs nest
+/// inside them.
+#[derive(Type, Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TextRoot {
+    pub children: Vec<ParagraphSet>,
+}
+
+#[derive(Type, Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ParagraphSet {
+    pub children: Vec<Paragraph>,
+}
+
+#[derive(Type, Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Paragraph {
+    pub align: TextAlign,
+    /// Multiplier, not px — matches cosmic-text's `Metrics::line_height`
+    /// convention that `quiro-text` will shape against.
+    pub line_height: f32,
+    pub children: Vec<TextRun>,
+}
+
+impl Default for Paragraph {
+    fn default() -> Self {
+        Self {
+            align: TextAlign::default(),
+            line_height: 1.2,
+            children: Vec::new(),
+        }
+    }
+}
+
+#[derive(Type, Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TextRun {
+    pub text: String,
+    pub style: RunStyle,
+}
+
+#[derive(Type, Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RunStyle {
+    pub font_family: String,
+    /// Output px as if the anchor were 1080 tall — the same convention
+    /// [`TextSegment::font_size`] already uses. The anchor is the capture's
+    /// content rect for an [`Annotation`], the output frame for a
+    /// [`TextSegment`].
+    pub font_size: f32,
+    /// `f32`, not cosmic-text's `u16` `Weight` — matches
+    /// [`TextSegment::font_size`]'s existing type exactly so migrating a
+    /// segment into this shape is a lossless move, not a lossy round. The
+    /// clamp to a valid weight belongs to the engine that shapes text, not
+    /// to the data model.
+    pub font_weight: f32,
+    pub italic: bool,
+    pub color: String,
+    pub letter_spacing: f32,
+    pub decoration: TextDecoration,
+    pub transform: TextTransform,
+}
+
+impl Default for RunStyle {
+    fn default() -> Self {
+        Self {
+            font_family: "sans-serif".to_string(),
+            font_size: 14.0,
+            font_weight: 400.0,
+            italic: false,
+            color: "#000000".to_string(),
+            letter_spacing: 0.0,
+            decoration: TextDecoration::default(),
+            transform: TextTransform::default(),
+        }
+    }
+}
+
+#[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum TextAlign {
+    #[default]
+    Left,
+    Center,
+    Right,
+    Justify,
+}
+
+#[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum TextDecoration {
+    #[default]
+    None,
+    Underline,
+    LineThrough,
+}
+
+#[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum TextTransform {
+    #[default]
+    None,
+    Uppercase,
+    Lowercase,
+    Capitalize,
+}
+
+/// Width and height from content (no wrapping), width from the box height
+/// from content, or both from the box with content clipping. See
+/// `plans/text-engine/000-text-content-model.md`.
+#[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum GrowType {
+    AutoWidth,
+    #[default]
+    AutoHeight,
+    Fixed,
+}
+
+#[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum VerticalAlign {
+    #[default]
+    Top,
+    Center,
+    Bottom,
+}
+
+#[derive(Type, Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TextHalo {
+    pub width: f32,
+    pub color: String,
+}
+
 #[derive(Debug, PartialEq)]
 pub enum AnnotationValidationError {
     MaskModeMissing {
@@ -1823,6 +1999,13 @@ pub enum AnnotationValidationError {
         id: String,
     },
     FocusDataNotAllowed {
+        id: String,
+        annotation_type: AnnotationType,
+    },
+    TextContentMissing {
+        id: String,
+    },
+    TextContentNotAllowed {
         id: String,
         annotation_type: AnnotationType,
     },
@@ -1856,6 +2039,16 @@ impl fmt::Display for AnnotationValidationError {
             } => write!(
                 f,
                 "annotation {id} with type {annotation_type:?} cannot include focus data"
+            ),
+            Self::TextContentMissing { id } => {
+                write!(f, "annotation {id} of type text is missing textContent")
+            }
+            Self::TextContentNotAllowed {
+                id,
+                annotation_type,
+            } => write!(
+                f,
+                "annotation {id} with type {annotation_type:?} cannot include text content"
             ),
         }
     }
@@ -1919,6 +2112,12 @@ pub struct Annotation {
     pub line_style: Option<LineStyle>,
     #[serde(default)]
     pub arrow_taper: Option<bool>,
+    /// The tree representation of `text`, for `AnnotationType::Text`. `None`
+    /// until `migrate_annotation_space`'s third step wraps `text` and
+    /// `height` into it, which needs the capture size and so cannot happen
+    /// inside [`ProjectConfiguration::load`].
+    #[serde(default)]
+    pub text_content: Option<TextContent>,
 }
 
 impl Annotation {
@@ -1941,6 +2140,13 @@ impl Annotation {
 
         if self.annotation_type != AnnotationType::Focus && self.focus.is_some() {
             return Err(AnnotationValidationError::FocusDataNotAllowed {
+                id: self.id.clone(),
+                annotation_type: self.annotation_type,
+            });
+        }
+
+        if self.annotation_type != AnnotationType::Text && self.text_content.is_some() {
+            return Err(AnnotationValidationError::TextContentNotAllowed {
                 id: self.id.clone(),
                 annotation_type: self.annotation_type,
             });
@@ -1978,6 +2184,23 @@ impl Annotation {
             AnnotationType::Focus => {
                 if self.focus.is_none() {
                     return Err(AnnotationValidationError::FocusDataMissing {
+                        id: self.id.clone(),
+                    });
+                }
+
+                Ok(())
+            }
+            AnnotationType::Text => {
+                // `text_content` is filled in by `migrate_annotation_space`'s
+                // third step, which needs the capture size and so cannot run
+                // inside `load` — a config freshly deserialized but not yet
+                // through that migration legitimately has `text_content:
+                // None` here. Accept the legacy `text` string as an equally
+                // valid, soon-to-be-migrated representation, the same way
+                // `migrate_mask_model` tolerates a mask amount that is still
+                // in pre-migration units.
+                if self.text_content.is_none() && self.text.is_none() {
+                    return Err(AnnotationValidationError::TextContentMissing {
                         id: self.id.clone(),
                     });
                 }
@@ -2037,20 +2260,46 @@ pub struct ProjectConfiguration {
     /// [`Self::migrate_mask_model`].
     #[serde(default)]
     pub mask_model_version: u32,
+    /// Whether text segments store their typography as a flat set of fields
+    /// (0, legacy) or as a [`TextContent`] tree (1). [`Annotation`] gets the
+    /// equivalent conversion as a step inside
+    /// [`Self::migrate_annotation_space`] instead of here: a legacy text
+    /// annotation's `height` only means "fraction of the capture's content
+    /// height" — what its `TextContent` font size is derived from — once
+    /// that migration has already normalized it. This field's migration has
+    /// no such dependency, so it runs inside [`Self::load`], the same as
+    /// [`Self::text_size_version`].
+    #[serde(default)]
+    pub text_content_version: u32,
 }
 
 pub const TEXT_SIZE_VERSION: u32 = 1;
+
+/// Version 1 wraps [`TextSegment`]'s flat typography fields into
+/// [`TextSegment::text_content`]. See
+/// [`ProjectConfiguration::text_content_version`].
+pub const TEXT_CONTENT_VERSION: u32 = 1;
 
 /// Version 1 stores annotation geometry normalized to its anchor. See
 /// [`ProjectConfiguration::annotation_space_version`].
 /// 1 normalized geometry to the anchor. 2 additionally converted mask
 /// strength from frame pixels to the contract's 1080p-relative units, so a
-/// screenshot mask means the same thing as a timeline one.
-pub const ANNOTATION_SPACE_VERSION: u32 = 2;
+/// screenshot mask means the same thing as a timeline one. 3 additionally
+/// wraps a legacy text annotation's `text` and `height` into
+/// `Annotation::text_content`, once step 1 has already made `height` mean
+/// what that conversion needs it to mean.
+pub const ANNOTATION_SPACE_VERSION: u32 = 3;
 
 /// The height mask amounts are expressed relative to, matching
 /// `MASK_EFFECT_BASE_HEIGHT` in the renderer.
 const MASK_AMOUNT_BASE_HEIGHT: f64 = 1080.0;
+
+/// The height `RunStyle::font_size` (and every other px@1080 quantity in
+/// [`TextContent`]) is expressed relative to — the same 1080p-relative
+/// convention as [`MASK_AMOUNT_BASE_HEIGHT`], named separately because it
+/// converts an unrelated quantity. `pub` so `quiro-text` scales against this
+/// exact constant rather than a second copy of the magic number 1080.0.
+pub const TEXT_REFERENCE_HEIGHT: f64 = 1080.0;
 
 /// Version 1 stores an explicit [`MaskMode`] rather than a category plus a
 /// magic offset. See [`ProjectConfiguration::mask_model_version`].
@@ -2091,6 +2340,7 @@ impl Default for ProjectConfiguration {
             text_size_version: TEXT_SIZE_VERSION,
             annotation_space_version: ANNOTATION_SPACE_VERSION,
             mask_model_version: MASK_MODEL_VERSION,
+            text_content_version: TEXT_CONTENT_VERSION,
         }
     }
 }
@@ -2129,6 +2379,12 @@ impl ProjectConfiguration {
     /// when the frame cannot be resolved. Guessing a divisor here would move
     /// every annotation in the project silently, which is strictly worse than
     /// deferring.
+    ///
+    /// Version 3 additionally wraps a legacy `Text` annotation's `text` and
+    /// `height` into [`Annotation::text_content`] — `height` doubled as the
+    /// font size, and only means "fraction of the capture's content height"
+    /// once this same function's version-1 step has run, which is why that
+    /// conversion lives here and not in [`Self::load`].
     pub fn migrate_annotation_space(&mut self, capture_size: XY<u32>) -> bool {
         if self.annotation_space_version >= ANNOTATION_SPACE_VERSION {
             return false;
@@ -2153,7 +2409,10 @@ impl ProjectConfiguration {
             return false;
         };
 
-        if !(size.x > 0.0) || !(size.y > 0.0) {
+        // Equivalent to `!(size.x > 0.0) || !(size.y > 0.0)`, but without a
+        // negated partial-order comparison — `x <= 0.0` alone would treat
+        // NaN as valid, since every NaN comparison is false.
+        if size.x.is_nan() || size.x <= 0.0 || size.y.is_nan() || size.y <= 0.0 {
             return false;
         }
 
@@ -2194,6 +2453,50 @@ impl ProjectConfiguration {
                 // `scaled_effect_size`. At a 1080-tall frame this is identity,
                 // which is why the two units were never noticed to differ.
                 *amount = *amount * MASK_AMOUNT_BASE_HEIGHT / frame_height;
+            }
+
+            if from_version < 3
+                && annotation.annotation_type == AnnotationType::Text
+                && annotation.text_content.is_none()
+            {
+                // `annotation.height` is already normalized here: the
+                // `from_version < 1` step above ran first, in this same
+                // iteration, for a version-0 annotation; for one already at
+                // version 1 or 2 it was normalized on an earlier load.
+                let font_size = (annotation.height * TEXT_REFERENCE_HEIGHT) as f32;
+                annotation.text_content = Some(TextContent {
+                    root: TextRoot {
+                        children: vec![ParagraphSet {
+                            children: vec![Paragraph {
+                                align: TextAlign::Left,
+                                line_height: 1.2,
+                                children: vec![TextRun {
+                                    text: annotation.text.clone().unwrap_or_default(),
+                                    style: RunStyle {
+                                        // The old renderer hardcoded this
+                                        // family for every text annotation
+                                        // (`AnnotationLayer.tsx`,
+                                        // `screenshotExport.ts`); carry it
+                                        // forward so a migrated annotation
+                                        // looks the same.
+                                        font_family: "sans-serif".to_string(),
+                                        font_size,
+                                        font_weight: 400.0,
+                                        italic: false,
+                                        color: annotation.stroke_color.clone(),
+                                        letter_spacing: 0.0,
+                                        decoration: TextDecoration::None,
+                                        transform: TextTransform::None,
+                                    },
+                                }],
+                            }],
+                        }],
+                    },
+                    // Reproduces the old renderer's `white-space: nowrap`.
+                    grow_type: GrowType::AutoWidth,
+                    vertical_align: VerticalAlign::Top,
+                    halo: None,
+                });
             }
         }
 
@@ -2290,6 +2593,61 @@ impl ProjectConfiguration {
         true
     }
 
+    /// Wrap each [`TextSegment`]'s flat typography fields into
+    /// [`TextSegment::text_content`]. The flat fields are already px@1080
+    /// (see [`Self::text_size_version`]) and carry over unchanged; only the
+    /// shape of the data changes, so — unlike the equivalent conversion for
+    /// [`Annotation`] — this needs no capture size and can run inside
+    /// [`Self::load`].
+    ///
+    /// Every existing video title is centred only because the renderer
+    /// hardcoded it (`rendering/src/layers/text.rs`); this model's own
+    /// default is `Left`. `align: Center` is written explicitly here so
+    /// nothing moves when an existing project is opened.
+    fn migrate_text_content(&mut self) -> bool {
+        if self.text_content_version >= TEXT_CONTENT_VERSION {
+            return false;
+        }
+
+        if let Some(timeline) = self.timeline.as_mut() {
+            for segment in &mut timeline.text_segments {
+                if segment.text_content.is_some() {
+                    continue;
+                }
+
+                segment.text_content = Some(TextContent {
+                    root: TextRoot {
+                        children: vec![ParagraphSet {
+                            children: vec![Paragraph {
+                                align: TextAlign::Center,
+                                line_height: 1.2,
+                                children: vec![TextRun {
+                                    text: segment.content.clone(),
+                                    style: RunStyle {
+                                        font_family: segment.font_family.clone(),
+                                        font_size: segment.font_size,
+                                        font_weight: segment.font_weight,
+                                        italic: segment.italic,
+                                        color: segment.color.clone(),
+                                        letter_spacing: 0.0,
+                                        decoration: TextDecoration::None,
+                                        transform: TextTransform::None,
+                                    },
+                                }],
+                            }],
+                        }],
+                    },
+                    grow_type: GrowType::AutoHeight,
+                    vertical_align: VerticalAlign::Top,
+                    halo: None,
+                });
+            }
+        }
+
+        self.text_content_version = TEXT_CONTENT_VERSION;
+        true
+    }
+
     pub fn load(project_path: impl AsRef<Path>) -> Result<Self, std::io::Error> {
         let project_path = project_path.as_ref();
         let config_path = project_path.join("project-config.json");
@@ -2339,6 +2697,7 @@ impl ProjectConfiguration {
         }
 
         let needs_mask_model_migration = config.migrate_mask_model(parsed_value.as_ref());
+        let needs_text_content_migration = config.migrate_text_content();
 
         config
             .validate()
@@ -2346,6 +2705,7 @@ impl ProjectConfiguration {
 
         if needs_camera_migration
             || needs_mask_model_migration
+            || needs_text_content_migration
             || needs_motion_blur_clamp
             || needs_screen_motion_blur_migration
             || needs_text_size_migration
@@ -2726,6 +3086,7 @@ mod tests {
                     italic: false,
                     color: "#ffffff".to_string(),
                     fade_duration: 0.15,
+                    text_content: None,
                 }],
                 caption_segments: Vec::new(),
                 keyboard_segments: Vec::new(),
@@ -2790,6 +3151,118 @@ mod tests {
 
         let segment = &config.timeline.as_ref().unwrap().text_segments[0];
         assert_eq!(segment.font_size, 96.0);
+    }
+
+    /// The flat fields wrap into `text_content` unchanged, and `align` is
+    /// stamped `Center` explicitly so an existing title does not move — the
+    /// model's own default is `Left`.
+    #[test]
+    fn legacy_text_segment_wraps_into_text_content() {
+        let dir = tempfile::tempdir().unwrap();
+        // size_y at the base height (0.2) so the unrelated text_size_version
+        // migration — which also fires here, since both flags share the
+        // absent-version-key trigger — is a no-op and font_size carries
+        // through unchanged.
+        write_config_with_text_segment(dir.path(), 96.0, 0.2, None);
+
+        // `write_config_with_text_segment` serializes a `ProjectConfiguration`
+        // built with `..Default::default()`, which already sets
+        // `text_content_version` to the current target — so the file it wrote
+        // has to have that key stripped back out, the same way the helper
+        // itself does for `textSizeVersion`, or this test would exercise no
+        // migration at all.
+        let config_path = dir.path().join("project-config.json");
+        let mut value: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
+        value.as_object_mut().unwrap().remove("textContentVersion");
+        std::fs::write(&config_path, serde_json::to_string(&value).unwrap()).unwrap();
+
+        let config = ProjectConfiguration::load(dir.path()).unwrap();
+
+        assert_eq!(config.text_content_version, TEXT_CONTENT_VERSION);
+        let segment = &config.timeline.as_ref().unwrap().text_segments[0];
+        let content = segment.text_content.as_ref().unwrap();
+        assert_eq!(content.grow_type, GrowType::AutoHeight);
+        let paragraph = &content.root.children[0].children[0];
+        assert_eq!(paragraph.align, TextAlign::Center);
+        assert_eq!(paragraph.line_height, 1.2);
+        let run = &paragraph.children[0];
+        assert_eq!(run.text, "Text");
+        assert_eq!(run.style.font_family, "sans-serif");
+        assert_eq!(run.style.font_size, 96.0);
+        assert_eq!(run.style.font_weight, 700.0);
+        assert_eq!(run.style.color, "#ffffff");
+
+        // The migration must persist so it never runs twice.
+        let reloaded = ProjectConfiguration::load(dir.path()).unwrap();
+        let segment = &reloaded.timeline.as_ref().unwrap().text_segments[0];
+        assert!(segment.text_content.is_some());
+    }
+
+    /// A segment that already carries `text_content` (post-migration, or
+    /// hand-authored by a future editor) must not be rewritten — the
+    /// migration would otherwise clobber a deliberate `Left` alignment back
+    /// to the legacy default of `Center`.
+    #[test]
+    fn current_text_content_is_not_rebaked() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = ProjectConfiguration {
+            text_content_version: TEXT_CONTENT_VERSION,
+            timeline: Some(TimelineConfiguration {
+                segments: Vec::new(),
+                transitions: Vec::new(),
+                zoom_segments: Vec::new(),
+                scene_segments: Vec::new(),
+                mask_segments: Vec::new(),
+                text_segments: vec![TextSegment {
+                    start: 0.0,
+                    end: 1.0,
+                    track: 0,
+                    enabled: true,
+                    content: "Text".to_string(),
+                    center: XY::new(0.5, 0.5),
+                    size: XY::new(0.35, 0.2),
+                    font_family: "sans-serif".to_string(),
+                    font_size: 48.0,
+                    font_weight: 700.0,
+                    italic: false,
+                    color: "#ffffff".to_string(),
+                    fade_duration: 0.15,
+                    text_content: Some(TextContent {
+                        root: TextRoot {
+                            children: vec![ParagraphSet {
+                                children: vec![Paragraph {
+                                    align: TextAlign::Left,
+                                    line_height: 1.2,
+                                    children: vec![TextRun {
+                                        text: "Text".to_string(),
+                                        style: RunStyle::default(),
+                                    }],
+                                }],
+                            }],
+                        },
+                        grow_type: GrowType::AutoHeight,
+                        vertical_align: VerticalAlign::Top,
+                        halo: None,
+                    }),
+                }],
+                caption_segments: Vec::new(),
+                keyboard_segments: Vec::new(),
+                audio_segments: Vec::new(),
+            }),
+            ..Default::default()
+        };
+        std::fs::write(
+            dir.path().join("project-config.json"),
+            serde_json::to_string(&config).unwrap(),
+        )
+        .unwrap();
+
+        let loaded = ProjectConfiguration::load(dir.path()).unwrap();
+
+        let segment = &loaded.timeline.as_ref().unwrap().text_segments[0];
+        let paragraph = &segment.text_content.as_ref().unwrap().root.children[0].children[0];
+        assert_eq!(paragraph.align, TextAlign::Left);
     }
 
     #[test]
@@ -2908,6 +3381,7 @@ mod annotation_space_tests {
             arrow_head_size: None,
             line_style: None,
             arrow_taper: None,
+            text_content: None,
         }
     }
 
@@ -3034,6 +3508,58 @@ mod annotation_space_tests {
         assert!(config.migrate_annotation_space(capture));
         assert!(config.annotations[0].width < 0.0);
         assert!(config.annotations[0].height < 0.0);
+    }
+
+    /// `height` doubled as the font size in the legacy renderer; once step 1
+    /// has normalized it to a fraction of the capture's content height, step
+    /// 3 converts it to `font_size` by the same 1080p-relative rule
+    /// `TextSegment::font_size` already uses.
+    #[test]
+    fn text_annotation_wraps_into_text_content() {
+        let capture = XY::new(1920u32, 1080u32);
+        let mut text_annotation = annotation(10.0, 10.0, 0.0, 45.0);
+        text_annotation.annotation_type = AnnotationType::Text;
+        text_annotation.text = Some("Save".to_string());
+        text_annotation.stroke_color = "#ff0000".to_string();
+        let mut config = config_with(0.0, vec![text_annotation]);
+
+        let (base_w, base_h) = frame_layout::base_size(&config, capture);
+        let (_, size) =
+            frame_layout::content_rect(&config, capture, XY::new(base_w, base_h)).unwrap();
+        let expected_font_size = (45.0 / size.y * 1080.0) as f32;
+
+        assert!(config.migrate_annotation_space(capture));
+        assert_eq!(config.annotation_space_version, ANNOTATION_SPACE_VERSION);
+
+        let content = config.annotations[0].text_content.as_ref().unwrap();
+        assert_eq!(content.grow_type, GrowType::AutoWidth);
+        let paragraph = &content.root.children[0].children[0];
+        assert_eq!(paragraph.align, TextAlign::Left);
+        let run = &paragraph.children[0];
+        assert_eq!(run.text, "Save");
+        assert_eq!(run.style.color, "#ff0000");
+        assert!(
+            (run.style.font_size - expected_font_size).abs() < 0.01,
+            "expected {expected_font_size}, got {}",
+            run.style.font_size
+        );
+    }
+
+    /// A second run is a full no-op: the version gate at the top of the
+    /// function returns before the loop runs, so `text_content` cannot be
+    /// double-wrapped.
+    #[test]
+    fn text_annotation_migration_is_idempotent() {
+        let capture = XY::new(1920u32, 1080u32);
+        let mut text_annotation = annotation(0.0, 0.0, 0.0, 45.0);
+        text_annotation.annotation_type = AnnotationType::Text;
+        text_annotation.text = Some("Save".to_string());
+        let mut config = config_with(0.0, vec![text_annotation]);
+
+        assert!(config.migrate_annotation_space(capture));
+        let after_first = config.annotations[0].text_content.clone();
+        assert!(!config.migrate_annotation_space(capture));
+        assert_eq!(config.annotations[0].text_content, after_first);
     }
 }
 
@@ -3352,6 +3878,72 @@ mod annotation_mask_tests {
         assert!(
             annotation.validate().is_err(),
             "the new mask fields must be covered by the exclusivity check too"
+        );
+    }
+}
+
+#[cfg(test)]
+mod text_content_validate_tests {
+    use super::*;
+
+    fn base_annotation(annotation_type: &str) -> serde_json::Value {
+        serde_json::json!({
+            "id": "t1",
+            "type": annotation_type,
+            "x": 0.1, "y": 0.1, "width": 0.2, "height": 0.05,
+            "strokeColor": "#000", "strokeWidth": 4.0,
+            "fillColor": "transparent", "opacity": 1.0, "rotation": 0.0,
+            "text": null
+        })
+    }
+
+    #[test]
+    fn text_content_not_allowed_on_a_non_text_annotation() {
+        let mut value = base_annotation("rectangle");
+        value["textContent"] = serde_json::json!({});
+        let annotation: Annotation = serde_json::from_value(value).unwrap();
+
+        assert_eq!(
+            annotation.validate(),
+            Err(AnnotationValidationError::TextContentNotAllowed {
+                id: "t1".to_string(),
+                annotation_type: AnnotationType::Rectangle,
+            })
+        );
+    }
+
+    /// `text_content` is filled in by `migrate_annotation_space`, which runs
+    /// outside `load` and so has not necessarily run yet. A legacy `text`
+    /// string alone must still pass, or every not-yet-migrated project with
+    /// a text annotation would fail to load at all.
+    #[test]
+    fn legacy_text_string_alone_is_valid() {
+        let mut value = base_annotation("text");
+        value["text"] = serde_json::json!("Save");
+        let annotation: Annotation = serde_json::from_value(value).unwrap();
+
+        assert_eq!(annotation.validate(), Ok(()));
+    }
+
+    #[test]
+    fn text_content_alone_is_valid() {
+        let mut value = base_annotation("text");
+        value["textContent"] = serde_json::json!({});
+        let annotation: Annotation = serde_json::from_value(value).unwrap();
+
+        assert_eq!(annotation.validate(), Ok(()));
+    }
+
+    #[test]
+    fn text_annotation_with_neither_is_invalid() {
+        let value = base_annotation("text");
+        let annotation: Annotation = serde_json::from_value(value).unwrap();
+
+        assert_eq!(
+            annotation.validate(),
+            Err(AnnotationValidationError::TextContentMissing {
+                id: "t1".to_string(),
+            })
         );
     }
 }

@@ -189,6 +189,28 @@ export const canvasNormRectToFrame = (
  * capture's unrotated frame — which is all of it. Omitted (or zero degrees)
  * this is the pre-rotation path, unchanged.
  */
+/** `RunStyle.font_size` is defined "as if the anchor were 1080 tall" — see
+ * that field's Rust doc comment. This is the same conversion `quiro-text`
+ * applies server-side via `Constraint::anchor_height`, replicated here only
+ * for the contentEditable shown while a text annotation is being typed; the
+ * fragments a commit measures afterward are the real answer, not this one. */
+export const TEXT_REFERENCE_HEIGHT = 1080;
+
+export function fontSizeToFramePx(
+	fontSize: number,
+	anchor: Rect<FramePx>,
+): FramePx {
+	return framePx(fontSize * (anchor.height / TEXT_REFERENCE_HEIGHT));
+}
+
+/** The bare scale factor `fontSizeToFramePx` applies — `to-dom.ts`/
+ * `from-dom.ts` need it directly, to convert every px@1080 quantity in a
+ * `TextContent` (not just one `fontSize` value) into the contentEditable's
+ * real CSS pixels and back. 1 (a no-op) with no anchor yet. */
+export function anchorScale(anchor: Rect<FramePx> | null): number {
+	return anchor ? anchor.height / TEXT_REFERENCE_HEIGHT : 1;
+}
+
 export function clientToFrame(
 	event: { clientX: number; clientY: number },
 	svg: SVGSVGElement,

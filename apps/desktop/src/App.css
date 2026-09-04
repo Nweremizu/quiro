@@ -1679,3 +1679,93 @@
     animation: none;
   }
 }
+
+/* Panel reveal — transitions.dev's recipe, with the axis and the layout
+   squeeze this app's panels actually need.
+
+   Usage (see `SidePanel` in routes/screenshot-editor/SidePanel.tsx, which
+   owns the mount/unmount timing):
+
+     <div class="t-panel-slide" data-open="false"
+          style="--panel-width: 14rem; --panel-translate-x: -50%">
+       <!-- panel contents, at their own fixed width -->
+     </div>
+
+   Two deliberate departures from the published recipe:
+
+   1. `translateX`, not `translateY`. The recipe slides on Y because it is
+      written for a panel that reveals in place. The screenshot editor's
+      panels are docked left and right, so they travel along the axis they
+      are attached to — a Y slide on a left-docked panel reads as the panel
+      falling rather than opening. Both vars exist and default to 0, so the
+      class still serves the original vertical case unchanged.
+
+   2. `width` is in the transition list. These panels squeeze the canvas
+      rather than floating over it (a floating panel can cover the part of
+      the screenshot being worked on — see `index.tsx`), so the canvas has
+      to reflow *with* the slide. Animating width costs a layout pass per
+      frame, which transform/opacity/filter alone would not; that is the
+      price of the squeeze, and at these widths it is affordable. The
+      alternative was overlaying the canvas, which the panels are
+      specifically not supposed to do.
+
+   `overflow: hidden` clips the contents to the animating width, so the
+   panel is revealed rather than reflowed — its own inner layout never changes,
+   which is what keeps the text inside from re-wrapping mid-animation. */
+:root {
+    --panel-open-dur: 280ms;
+    --panel-close-dur: 220ms;
+    --panel-blur: 2px;
+    --panel-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.t-panel-slide {
+    --panel-translate-x: 0px;
+    --panel-translate-y: 0px;
+    width: 0;
+    overflow: hidden;
+    flex-shrink: 0;
+    /* Belt-and-braces. A flex item's `min-width: auto` would otherwise floor
+       this at its content's min-content width, and a panel that cannot reach
+       width 0 never reflows the canvas and never fires the `width`
+       transitionend `SidePanel` unmounts on. The `overflow: hidden` above
+       already zeroes that automatic minimum, so this is redundant today —
+       it is here so the collapse does not quietly break if the clipping
+       ever moves to a parent. */
+    min-width: 0;
+    transform: translate(var(--panel-translate-x), var(--panel-translate-y));
+    opacity: 0;
+    filter: blur(var(--panel-blur));
+    pointer-events: none;
+    transition:
+        width var(--panel-close-dur) var(--panel-ease),
+        transform var(--panel-close-dur) var(--panel-ease),
+        opacity var(--panel-close-dur) var(--panel-ease),
+        filter var(--panel-close-dur) var(--panel-ease);
+    will-change: transform, opacity, filter;
+}
+
+.t-panel-slide[data-open="true"] {
+    width: var(--panel-width);
+    transform: translate(0, 0);
+    opacity: 1;
+    filter: blur(0);
+    pointer-events: auto;
+    transition:
+        width var(--panel-open-dur) var(--panel-ease),
+        transform var(--panel-open-dur) var(--panel-ease),
+        opacity var(--panel-open-dur) var(--panel-ease),
+        filter var(--panel-open-dur) var(--panel-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    /* Both selectors, matching the specificity of the `[data-open]` rule
+       above rather than reaching for `!important` to outrank it — the open
+       state carries its own `transition`, so a bare `.t-panel-slide` here
+       would lose to it and the panel would still animate. */
+    .t-panel-slide,
+    .t-panel-slide[data-open="true"] {
+        transition: none;
+    }
+}
+

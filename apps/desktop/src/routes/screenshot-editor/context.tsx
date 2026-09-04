@@ -13,8 +13,10 @@ import {
 	type Annotation,
 	type AnnotationType,
 	commands,
+	type Fragment,
 	type ProjectConfiguration,
 	type SerializedScreenshotEditorInstance,
+	type TextContent,
 } from "@/utils/tauri";
 import { connectFrameSocket, type SocketFrame } from "./frameSocket";
 import {
@@ -23,6 +25,7 @@ import {
 	type Rect,
 	resolveAnnotation,
 } from "./space";
+import { registerFace } from "./text-content";
 
 // React port of Cap's screenshot-editor `context.tsx`. Same responsibilities:
 // own the ProjectConfiguration, own the annotation list and its history, push
@@ -32,13 +35,24 @@ import {
 
 export type ScreenshotEditorTool = AnnotationType | "select";
 
-export type ActivePopover = "perspective" | null;
+/** Which contextual panel the right-hand container is showing. One value
+ * rather than a boolean per panel: the container holds exactly one panel at a
+ * time, so two independent flags could describe a state it cannot render. */
+export type RightPanel = "style" | "transform";
 
 /** Two update rates, as in Cap: the renderer gets edits immediately so the
  * canvas keeps up with a drag, while the disk write is debounced far longer.
  * Without the split, dragging a slider is hundreds of file writes. */
 const RENDER_THROTTLE_MS = 1000 / 60;
 const SAVE_DEBOUNCE_MS = 1000;
+/** `measure_text` is an IPC round-trip, not a per-frame call — "called on
+ * commit, not per keystroke" (`plans/text-engine/003`). Typing patches
+ * `textContent` on every keystroke today (004 owns the finer-grained
+ * policy), so this debounce is what keeps a fast typist from firing one
+ * Tauri command per character; the stale fragments in between are never
+ * visible; the annotation being typed into renders as a contentEditable,
+ * not as fragments, until it commits. */
+const MEASURE_DEBOUNCE_MS = 200;
 
 export type ScreenshotEditorContextValue = {
 	instance: SerializedScreenshotEditorInstance | null;
@@ -70,19 +84,36 @@ export type ScreenshotEditorContextValue = {
 	updateAnnotation: (id: string, patch: Partial<Annotation>) => void;
 	removeAnnotation: (id: string) => void;
 
+	/** `measure_text`'s fragments for every text annotation, by id — Rust is
+	 * the only thing that measures `textContent`; the painter (`AnnotationLayer`,
+	 * `screenshotExport.ts`) never re-measures. Empty for an annotation whose
+	 * measurement hasn't landed yet (or that has no `textContent`). */
+	textFragments: Map<string, Fragment[]>;
+	/** Lets a caller that already ran its own `measure_text` (the commit path
+	 * in `AnnotationLayer.tsx`, which needs the result synchronously to
+	 * auto-resize before ending its undo gesture) hand the result straight
+	 * to `textFragments` instead of it being silently overwritten a moment
+	 * later by the debounced effect re-measuring the same content. */
+	recordTextMeasurement: (
+		id: string,
+		content: TextContent,
+		result: { fragments: Fragment[]; faces: number[] },
+	) => void;
+
 	selectedAnnotationId: string | null;
 	setSelectedAnnotationId: (id: string | null) => void;
 	activeTool: ScreenshotEditorTool;
 	setActiveTool: (tool: ScreenshotEditorTool) => void;
 	layersPanelOpen: boolean;
 	setLayersPanelOpen: (open: boolean) => void;
-	/** Persistent right-hand inspector (Background / Border / Shadow), the
-	 * counterpart to the layers panel on the left. Mutually exclusive with
-	 * AnnotationConfig, which takes the same slot while a shape is selected. */
-	stylePanelOpen: boolean;
-	setStylePanelOpen: (open: boolean) => void;
-	activePopover: ActivePopover;
-	setActivePopover: (popover: ActivePopover) => void;
+	/** Which panel the right-hand container shows, or `null` for closed.
+	 * `AnnotationConfig` is not in here: it is contextual on the selection
+	 * rather than toggled, so it overrides this while a shape is selected and
+	 * hands the slot back untouched afterwards. */
+	rightPanel: RightPanel | null;
+	setRightPanel: (panel: RightPanel | null) => void;
+	/** Opens `panel`, or closes the container if it is already showing. */
+	toggleRightPanel: (panel: RightPanel) => void;
 
 	/** Newest canvas layer from the renderer — background source, blur and
 	 * noise, with nothing on it. Already decoded.
@@ -176,8 +207,16 @@ export function ScreenshotEditorProvider({
 	>(null);
 	const [activeTool, setActiveTool] = useState<ScreenshotEditorTool>("select");
 	const [layersPanelOpen, setLayersPanelOpen] = useState(false);
-	const [stylePanelOpen, setStylePanelOpen] = useState(true);
-	const [activePopover, setActivePopover] = useState<ActivePopover>(null);
+	const [rightPanel, setRightPanel] = useState<RightPanel | null>("style");
+	const toggleRightPanel = useCallback((panel: RightPanel) => {
+		setRightPanel((current) => (current === panel ? null : panel));
+		// The container holds one panel, and a selected shape outranks the
+		// toggled one — so asking for Style while a shape is selected would
+		// otherwise set state that nothing displays, leaving the toolbar
+		// button lit next to a panel it did not open. Clearing the selection
+		// is what makes the button mean what it says.
+		setSelectedAnnotationIdState(null);
+	}, []);
 
 	// --- load ---------------------------------------------------------------
 
@@ -391,10 +430,33 @@ export function ScreenshotEditorProvider({
 	const saveTimer = useRef<number | undefined>(undefined);
 	const lastRenderAt = useRef(0);
 
+	// Annotations are deliberately not a render input. `quiro-rendering` has
+	// no annotation concept at all — it draws the frame (background, padding,
+	// rounding, shadow, crop) and nothing else, and every arrow, shape, mask
+	// and text is composited in the browser: as SVG for the preview, as
+	// Canvas2D at export resolution (`screenshotExport.ts`). Both read the
+	// same data, which is what keeps the export identical to the preview.
+	//
+	// So an annotation edit cannot change the rendered frame, and pushing one
+	// at 60fps bought an IPC call, a GPU render and a full frame over the
+	// socket to receive a byte-identical picture. Recolouring a shape, or
+	// dragging one, now costs a repaint of one SVG node and nothing else —
+	// which is also what `plans/text-engine/003` asks for in as many words:
+	// "dragging a selected text annotation still costs no renderer frame —
+	// check the config revision does not advance during a drag".
+	const annotationsRef = useRef(annotations);
+	annotationsRef.current = annotations;
+
 	useEffect(() => {
 		if (!instance || !project) return;
 
-		const config: ProjectConfiguration = { ...project, annotations };
+		// Annotations ride along so the payload is a complete configuration,
+		// but they are read from a ref: they must not be a dependency, or this
+		// effect is back to firing on every annotation edit.
+		const config: ProjectConfiguration = {
+			...project,
+			annotations: annotationsRef.current,
+		};
 		const revision = ++revisionRef.current;
 		setConfigRevision(revision);
 
@@ -416,13 +478,26 @@ export function ScreenshotEditorProvider({
 			);
 		}
 
+		return () => {
+			window.clearTimeout(renderTimer.current);
+		};
+	}, [project, instance]);
+
+	// Persistence is the other half, and it *does* care about annotations —
+	// they are part of the project file even though they are not part of the
+	// rendered frame. Debounced far longer than the render, so a drag is one
+	// write rather than hundreds.
+	useEffect(() => {
+		if (!instance || !project) return;
+
+		const config: ProjectConfiguration = { ...project, annotations };
 		window.clearTimeout(saveTimer.current);
 		saveTimer.current = window.setTimeout(() => {
 			void commands.updateScreenshotConfig(config, true, revisionRef.current);
 		}, SAVE_DEBOUNCE_MS);
 
 		return () => {
-			window.clearTimeout(renderTimer.current);
+			window.clearTimeout(saveTimer.current);
 		};
 	}, [project, annotations, instance]);
 
@@ -472,6 +547,131 @@ export function ScreenshotEditorProvider({
 				: annotations,
 		[annotations, anchorRect],
 	);
+
+	// --- text fragments and font faces ---------------------------------------
+	//
+	// Fragments are derived state, never stored in the project file: recomputed
+	// here whenever a text annotation's content actually changes, and dropped
+	// once the annotation is gone. `measuredKeys` remembers what was last sent
+	// to `measure_text` per annotation id, so a pure position/rotation drag —
+	// which changes `resolvedAnnotations`' identity every pointer move without
+	// touching `textContent` — never re-measures.
+	const [textFragments, setTextFragments] = useState<Map<string, Fragment[]>>(
+		new Map(),
+	);
+	const measuredKeys = useRef<Map<string, string>>(new Map());
+	/** Ids with a `measure_text` call outstanding. `measuredKeys` used to be
+	 * written before the await to stop the effect re-firing for the same
+	 * annotation; that conflated "in flight" with "done", which is what made a
+	 * failure permanent. These are separate concerns and now separate sets. */
+	const measuring = useRef<Set<string>>(new Set());
+
+	/** Records a `measure_text` result a caller already has in hand — the
+	 * commit path in `AnnotationLayer.tsx` calls `measure_text` itself
+	 * (synchronously, inside the same paused undo gesture, to auto-resize
+	 * before `endGesture()`), and without this its `fragments`/`faces`
+	 * would otherwise be thrown away and re-fetched ~200ms later by the
+	 * debounced effect below — a stale-fragment flash plus a wasted IPC
+	 * round trip for a measurement this process already has. */
+	const recordTextMeasurement = useCallback(
+		(
+			id: string,
+			content: TextContent,
+			result: { fragments: Fragment[]; faces: number[] },
+		) => {
+			measuredKeys.current.set(id, JSON.stringify(content));
+			for (const faceId of result.faces) void registerFace(faceId);
+			setTextFragments((current) => {
+				const next = new Map(current);
+				next.set(id, result.fragments);
+				return next;
+			});
+		},
+		[],
+	);
+
+	useEffect(() => {
+		// Height feeds `anchorHeight`, which is what scales every font size. A
+		// zero or negative one measures glyphs at zero and paints nothing, so
+		// wait for a real rect rather than caching that result.
+		if (!anchorRect || anchorRect.height <= 0) return;
+
+		const textAnnotations = resolvedAnnotations.filter(
+			(a) => a.type === "text" && a.textContent != null,
+		);
+
+		const liveIds = new Set(textAnnotations.map((a) => a.id));
+		for (const id of measuredKeys.current.keys()) {
+			if (!liveIds.has(id)) measuredKeys.current.delete(id);
+		}
+		setTextFragments((current) => {
+			let changed = false;
+			const next = new Map(current);
+			for (const id of next.keys()) {
+				if (!liveIds.has(id)) {
+					next.delete(id);
+					changed = true;
+				}
+			}
+			return changed ? next : current;
+		});
+
+		const pending = textAnnotations.filter(
+			(a) =>
+				!measuring.current.has(a.id) &&
+				measuredKeys.current.get(a.id) !== JSON.stringify(a.textContent),
+		);
+		if (pending.length === 0) return;
+
+		// The debounce is there to stop a fast typist firing one IPC per
+		// character. An annotation that has never been measured is not that:
+		// it is a project being opened, and every millisecond of debounce is a
+		// millisecond of blank canvas where text should be. Measure those at
+		// once and keep the wait for edits to already-measured text.
+		const firstMeasurement = pending.every(
+			(a) => !measuredKeys.current.has(a.id),
+		);
+
+		const timer = window.setTimeout(
+			() => {
+				void (async () => {
+					for (const a of pending) {
+						if (!a.textContent) continue;
+						measuring.current.add(a.id);
+
+						const result = await commands.measureText(a.textContent, {
+							anchorHeight: anchorRect.height,
+							width: a.width,
+							height: a.height,
+						});
+						measuring.current.delete(a.id);
+
+						// Only a *successful* measurement is remembered. Marking the
+						// key before the call meant one failure hid that text for the
+						// rest of the session: nothing repaints text without
+						// fragments, and the annotation could never re-enter
+						// `pending` because its key already matched. Reopening a
+						// project was the common way to see it — the text was
+						// selectable in the layers panel and invisible on canvas
+						// until a style edit changed the key and forced a retry.
+						if (result.status === "error") continue;
+						measuredKeys.current.set(a.id, JSON.stringify(a.textContent));
+
+						for (const faceId of result.data.faces) void registerFace(faceId);
+
+						setTextFragments((current) => {
+							const next = new Map(current);
+							next.set(a.id, result.data.fragments);
+							return next;
+						});
+					}
+				})();
+			},
+			firstMeasurement ? 0 : MEASURE_DEBOUNCE_MS,
+		);
+
+		return () => window.clearTimeout(timer);
+	}, [resolvedAnnotations, anchorRect]);
 
 	const setAnnotations = useCallback(
 		(next: Annotation[]) => commit({ annotations: next.map(toStored) }),
@@ -532,6 +732,8 @@ export function ScreenshotEditorProvider({
 			setAnchorRect,
 			updateAnnotation,
 			removeAnnotation,
+			textFragments,
+			recordTextMeasurement,
 			selectedAnnotationId,
 			setSelectedAnnotationId,
 			cardCanvas,
@@ -542,10 +744,9 @@ export function ScreenshotEditorProvider({
 			setActiveTool,
 			layersPanelOpen,
 			setLayersPanelOpen,
-			stylePanelOpen,
-			setStylePanelOpen,
-			activePopover,
-			setActivePopover,
+			rightPanel,
+			setRightPanel,
+			toggleRightPanel,
 			latestFrame,
 			latestCardFrame,
 			originalImageSize,
@@ -573,11 +774,13 @@ export function ScreenshotEditorProvider({
 			addAnnotation,
 			updateAnnotation,
 			removeAnnotation,
+			textFragments,
+			recordTextMeasurement,
 			selectedAnnotationId,
 			activeTool,
 			layersPanelOpen,
-			stylePanelOpen,
-			activePopover,
+			rightPanel,
+			toggleRightPanel,
 			latestFrame,
 			latestCardFrame,
 			originalImageSize,

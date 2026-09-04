@@ -47,6 +47,20 @@ jobs:
         run: cargo fmt --all --check
       - name: clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: cosmic-text version check
+        # quiro-text (cosmic-text directly) and quiro-rendering (cosmic-text
+        # via glyphon) must resolve to the exact same version, or Buffer
+        # becomes two incompatible types sharing one name at the crate
+        # boundary between them — a failure Cargo itself does not catch at
+        # `cargo check` time. See plans/text-engine/001-quiro-text-crate.md.
+        run: |
+          versions=$(cargo tree -i cosmic-text | grep -oE 'cosmic-text v[0-9.]+' | sort -u)
+          count=$(echo "$versions" | grep -c .)
+          if [ "$count" -ne 1 ]; then
+            echo "Expected exactly one cosmic-text version across the workspace, found $count:"
+            echo "$versions"
+            exit 1
+          fi
       - name: test
         run: cargo test --workspace
 

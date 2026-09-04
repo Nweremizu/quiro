@@ -41,6 +41,46 @@ export function ZoomTrack() {
 						selected={selected}
 						left={timeline.xOf(segment.start)}
 						width={width}
+						handles={
+							<>
+								<SegmentHandle
+									position="start"
+									width={width}
+									label={`Trim zoom ${index + 1} start`}
+									value={segment.start}
+									min={0}
+									max={segment.end - MIN_ZOOM_DURATION}
+									onAdjust={(delta) => {
+										const initial = segment.start;
+										updateSegment(index, (current) => ({
+											...current,
+											start: Math.min(
+												Math.max(0, initial + delta),
+												current.end - MIN_ZOOM_DURATION,
+											),
+										}));
+									}}
+								/>
+								<SegmentHandle
+									position="end"
+									width={width}
+									label={`Trim zoom ${index + 1} end`}
+									value={segment.end}
+									min={segment.start + MIN_ZOOM_DURATION}
+									max={timeline.duration}
+									onAdjust={(delta) => {
+										const initial = segment.end;
+										updateSegment(index, (current) => ({
+											...current,
+											end: Math.max(
+												current.start + MIN_ZOOM_DURATION,
+												initial + delta,
+											),
+										}));
+									}}
+								/>
+							</>
+						}
 						onPointerDown={(event) => {
 							event.stopPropagation();
 							setSelection({ type: "zoom", index });
@@ -58,47 +98,12 @@ export function ZoomTrack() {
 							});
 						}}
 					>
-						<SegmentHandle
-							position="start"
-							width={width}
-							label="Trim zoom start"
-							onPointerDown={(event) => {
-								const initial = segment.start;
-								startTimeDrag(event, timeline, (delta) => {
-									updateSegment(index, (current) => ({
-										...current,
-										start: Math.min(
-											Math.max(0, initial + delta),
-											current.end - MIN_ZOOM_DURATION,
-										),
-									}));
-								});
-							}}
-						/>
-
 						<SegmentContent width={width} className="justify-center">
 							<span className="pointer-events-none truncate text-[0.625rem] font-semibold tabular-nums text-[var(--track-label)]">
 								{segment.amount.toFixed(1)}x
 							</span>
 						</SegmentContent>
 
-						<SegmentHandle
-							position="end"
-							width={width}
-							label="Trim zoom end"
-							onPointerDown={(event) => {
-								const initial = segment.end;
-								startTimeDrag(event, timeline, (delta) => {
-									updateSegment(index, (current) => ({
-										...current,
-										end: Math.max(
-											current.start + MIN_ZOOM_DURATION,
-											initial + delta,
-										),
-									}));
-								});
-							}}
-						/>
 					</SegmentRoot>
 				);
 			})}

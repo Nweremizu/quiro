@@ -1,6 +1,6 @@
 # 002 — Move video text onto the engine and delete the `1.05` hack
 
-**Severity:** HIGH · **Status:** TODO · **Depends on:** 000, 001
+**Severity:** HIGH · **Status:** DONE (see Outcome) · **Depends on:** 000, 001
 
 ## Problem
 
@@ -119,3 +119,105 @@ storage and the layout call, not a feature.
 - **`PreparedText` is `Clone`d per frame** and now carries a tree rather than a
   `String` and six scalars. Clone the `Arc`, not the tree, or the per-frame
   allocation traded for the shaping win comes back.
+
+## Outcome
+
+**Done on the Rust side; blocked on the TypeScript side by a bindings
+regeneration failure specific to this environment — see below.**
+
+`packages/crates/rendering/src/layers/text.rs`'s `prepare` now asks
+`quiro_text::layout_text` for a `TextLayout` per `PreparedText` and paints its
+buffers directly; `wrap_width`, `wrap_dx` and the `0.98` threshold are gone
+(`grep -n "1\.05\|wrap_dx\|0\.98" packages/crates/rendering/src/layers/text.rs`
+returns nothing). `packages/crates/rendering/src/text.rs`'s `PreparedText` now
+carries `content: TextContent` instead of six flattened fields, and the
+`font_size.clamp(MIN, MAX) * height_scale` line is deleted outright — the
+engine applies the anchor rule via `Constraint::anchor_height`.
+**Correction, found while building 003's annotation path**: at the time this
+was first written, `Constraint::anchor_height` was declared on the struct and
+documented, but never actually read anywhere in `quiro-text/src/layout.rs` —
+the "engine applies the anchor rule" claim above was aspirational, not true
+yet. Every test in both crates used `anchor_height: 1080.0` (a no-op scale),
+so nothing caught it. Fixed in 003's Outcome (`layout.rs`'s `scale` variable);
+this file's own behavior at 1080p output was already correct by coincidence
+(scale of 1), so no video output changed — but 4K+ output was silently
+rendering titles smaller, relative to their box, than the px@1080 convention
+promises. `quiro-text` picked up a regression test
+(`anchor_height_scales_font_size_and_fragment_geometry`) that this file's own
+tests would not have caught, since none of them vary `anchor_height`.
+
+`quiro-text`
+gained a `paragraph_y_offsets: Vec<f32>` field on `TextLayout` (a buffer is
+shaped from its own `(0, 0)`; only `fragments[..].y` carried the stacking
+offset, so a caller painting buffers directly, as `TextLayer::prepare` does,
+needed it separately) and a public `cache_stats() -> (u64, u64)`, promoted
+from a private test helper so `quiro-rendering`'s own suite can assert the
+memo behavior across the crate boundary rather than re-deriving it. 4 new
+tests in `rendering/src/text.rs` (previously untested) cover the acceptance
+criteria that are checkable without a GPU device: a static title across two
+steady-state frames hits the layout cache
+(`steady_state_frames_hit_the_layout_cache`), font size is clamped but never
+height-scaled by output resolution
+(`font_size_is_clamped_but_never_scaled_by_output_size`), disabled/hidden/
+out-of-range segments are still culled, and the fade envelope bakes into the
+color's alpha byte rather than a separate field. `quiro-project` (76),
+`quiro-text` (17), `quiro-rendering` (147) all pass; `cargo fmt` and
+`cargo clippy --all-targets -- -D warnings` are clean for all three touched
+crates (three pre-existing `-D warnings` findings remain in
+`rendering/src/zoom_spring.rs` and `rendering/src/lib.rs`, both untouched by
+this plan — left alone per the same out-of-scope reasoning as 000's Outcome).
+
+### The TypeScript half — unblocked once bindings were live
+
+Originally blocked here: `SegmentConfig.tsx` and `TextOverlay.tsx` both need
+`apps/desktop/src/utils/tauri.ts` to carry `TextContent`'s TypeScript type,
+and this session's environment could not regenerate it
+(`STATUS_ENTRYPOINT_NOT_FOUND` on the desktop test binary — see 003's
+Outcome for the full investigation). The blocker resolved itself mid-session:
+a `quiro-desktop.exe` instance already running on the machine had launched in
+debug mode and regenerated `tauri.ts` on its own startup before it was
+closed. Once bindings existed, both files were finished:
+
+- `SegmentConfig.tsx`'s "text" case now writes the Content textarea, Font
+  size slider, Italic switch and Colour picker into
+  `segment.textContent.root.children[0].children[0].children[0]` via three
+  small helpers in a new `apps/desktop/src/routes/editor/text-content.ts`
+  (`textContentString`/`Style`, `withTextContentString`/`Style`,
+  `defaultTextContent`) rather than the flat fields.
+- `TextOverlay.tsx`'s in-place `<input>` (the double-click-to-edit overlay on
+  the video canvas) reads and writes through the same helpers.
+- `Timeline/index.tsx`'s `addText()` (new-segment creation) and its track
+  label (previously `segment.content || "Text"`) both moved onto the tree —
+  a freshly created segment now seeds `textContent` directly instead of the
+  flat `content` field, matching the values `migrate_text_content` would
+  have produced (`align: "center"`, `lineHeight: 1.2`, `fontWeight: 700`,
+  `color: "#ffffff"`, `fontSize: 48`).
+- `rendering/src/text.rs::text_content_from_segment` (the flat-field
+  synthesis bridge this Outcome originally described as temporary) is
+  deleted. `prepare_texts` now reads `segment.text_content` directly via a
+  new `prepared_content`, which clones the tree, bakes `fade_alpha` into the
+  one run's colour, and clamps its font size — the same two adjustments the
+  old bridge made, just applied to real data instead of synthesized data. A
+  segment with no tree at all (a project this session's `load()` hasn't
+  migrated, or one from a build older than this plan) is skipped rather than
+  guessed at; the next `load()` backfills it. Flat `TextSegment` fields
+  (`content`, `fontSize`, `fontWeight`, `italic`, `color`) are no longer read
+  by either the frontend or the renderer — they stay in the type and in old
+  project files, unmaintained, until 004 deletes them for real.
+
+### The fade/cache tension, resolved by baking alpha into the cached color
+
+The plan's sketch implies `PreparedText` keeps a separate opacity applied "at
+draw time," outside the cache key. `glyphon::TextArea` has no such hook —
+its only color field is `default_color`, a fallback for glyphs with no
+`Attrs.color_opt`, which `quiro-text` always sets. Carrying fade as an actual
+field on `TextContent` would make every frame of a fade a distinct cache key
+for no benefit (the shape doesn't change, only the color does) but leaving it
+out of the content entirely would make `layout_text` return stale color.
+Resolved by baking `fade_alpha` into `RunStyle::color` as an 8-digit
+`#rrggbbaa` string (`with_alpha`) before it ever reaches `layout_text` —
+`quiro-text`'s `parse_color` was extended to accept both 6- and 8-digit hex.
+Steady-state frames (the vast majority of a title's on-screen time) produce
+byte-identical `TextContent` and hit the cache; only the ~0.15s fade
+transition pays for distinct cache entries per frame, which is the plan's own
+stated cost, just paid through the color rather than a dedicated field.

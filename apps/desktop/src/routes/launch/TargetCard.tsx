@@ -63,6 +63,7 @@ type TargetCardProps = (
 	| {
 			variant: "screenshot";
 			target: ScreenshotWithPath;
+			onRefetch?: () => void;
 	  }
 ) &
 	Omit<ComponentProps<"button">, "children"> & {
@@ -78,7 +79,17 @@ export default function TargetCard(props: TargetCardProps) {
 	const windowTarget = variant === "window" ? target : undefined;
 	const recordingTarget = variant === "recording" ? target : undefined;
 	const screenshotTarget = variant === "screenshot" ? target : undefined;
-	const onRefetch = props.variant === "recording" ? props.onRefetch : undefined;
+	const onRefetch =
+		props.variant === "recording" || props.variant === "screenshot"
+			? props.onRefetch
+			: undefined;
+
+	// `onRefetch` lives on some union members, so it survives into `rest` and
+	// would be spread onto the <button> as an unknown DOM attribute (React logs
+	// "Unknown event handler property `onRefetch`"). Strip it before spreading.
+	const { onRefetch: _onRefetch, ...domProps } = rest as typeof rest & {
+		onRefetch?: () => void;
+	};
 
 	const renderIcon = (iconClassName: string) =>
 		variant === "display" ? (
@@ -203,7 +214,7 @@ export default function TargetCard(props: TargetCardProps) {
 	const handleOpenFolder = (e: ReactMouseEvent) => {
 		e.stopPropagation();
 		if (!recordingTarget) return;
-		revealItemInDir(recordingTarget.path).catch((error) => {
+		revealItemInDir(recordingTarget.projectPath).catch((error) => {
 			console.error("Failed to open recording folder:", error);
 			toast.error("Failed to open folder");
 		});
@@ -214,7 +225,7 @@ export default function TargetCard(props: TargetCardProps) {
 		if (!recordingTarget) return;
 		if (!(await ask("Are you sure you want to delete this recording?"))) return;
 		try {
-			await remove(recordingTarget.path, { recursive: true });
+			await remove(recordingTarget.projectPath, { recursive: true });
 			onRefetch?.();
 		} catch (error) {
 			console.error("Failed to delete recording:", error);
@@ -222,10 +233,25 @@ export default function TargetCard(props: TargetCardProps) {
 		}
 	};
 
+	const handleDeleteScreenshot = async (e: ReactMouseEvent) => {
+		e.stopPropagation();
+		if (!screenshotTarget) return;
+		if (!(await ask("Are you sure you want to delete this screenshot?")))
+			return;
+		try {
+			await remove(screenshotTarget.path);
+			toast.success("Screenshot deleted");
+			onRefetch?.();
+		} catch (error) {
+			console.error("Failed to delete screenshot:", error);
+			toast.error("Failed to delete screenshot");
+		}
+	};
+
 	return (
 		<button
 			type="button"
-			{...rest}
+			{...domProps}
 			disabled={disabled}
 			data-variant={variant}
 			className={cn(
@@ -291,6 +317,11 @@ export default function TargetCard(props: TargetCardProps) {
 						<ActionButton tooltip="Save as..." onClick={handleSave}>
 							<IconLucideSave className="size-3.5" />
 						</ActionButton>
+						{onRefetch && (
+							<ActionButton tooltip="Delete" onClick={handleDeleteScreenshot}>
+								<IconLucideTrash2 className="size-3.5" />
+							</ActionButton>
+						)}
 					</div>
 				)}
 				{variant === "recording" && (

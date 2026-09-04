@@ -1,7 +1,6 @@
-use glyphon::cosmic_text::Align;
 use glyphon::{
-    Attrs, Buffer, Cache, Color, Family, FontSystem, Metrics, Resolution, Shaping, Style,
-    SwashCache, TextArea, TextAtlas, TextBounds, TextRenderer, Viewport, Weight,
+    Cache, Color, FontSystem, Resolution, SwashCache, TextArea, TextAtlas, TextBounds,
+    TextRenderer, Viewport,
 };
 use log::warn;
 use wgpu::{Device, Queue};
@@ -10,16 +9,25 @@ use crate::text::PreparedText;
 
 pub struct TextLayer {
     font_system: FontSystem,
+    /// The `quiro_text::font_generation()` `font_system` was built at. A font
+    /// installed mid-session (the picker's Google Fonts path) has to reach
+    /// this `FontSystem` too, or `quiro-text` shapes with the real face while
+    /// glyphon paints it from a database that has never heard of it.
+    font_generation: u64,
     swash_cache: SwashCache,
     text_atlas: TextAtlas,
     text_renderer: TextRenderer,
     viewport: Viewport,
-    buffers: Vec<Buffer>,
+    /// One `quiro_text::TextLayout` per `PreparedText`, each owning one
+    /// `cosmic_text::Buffer` per paragraph — kept alive here because
+    /// `TextArea` only borrows a buffer, and `text_renderer.prepare` reads
+    /// those borrows.
+    layouts: Vec<quiro_text::TextLayout>,
 }
 
 impl TextLayer {
     pub fn new(device: &Device, queue: &Queue) -> Self {
-        let font_system = super::new_font_system();
+        let (font_system, font_generation) = super::new_font_system_at();
         let swash_cache = SwashCache::new();
         let cache = Cache::new(device);
         let viewport = Viewport::new(device, &cache);
@@ -33,11 +41,12 @@ impl TextLayer {
 
         Self {
             font_system,
+            font_generation,
             swash_cache,
             text_atlas,
             text_renderer,
             viewport,
-            buffers: Vec::new(),
+            layouts: Vec::new(),
         }
     }
 
@@ -48,111 +57,79 @@ impl TextLayer {
         output_size: (u32, u32),
         texts: &[PreparedText],
     ) {
-        self.buffers.clear();
-        self.buffers.reserve(texts.len());
-        let mut text_area_data = Vec::with_capacity(texts.len());
+        // A font installed since the last frame changes what `layout_text`
+        // below resolves; this database has to follow it. `fontdb::ID`s are
+        // append-only across a rebuild (see `quiro_text::fonts`), so the
+        // atlas and swash cache keyed on them stay valid and are kept.
+        if self.font_generation != super::font_generation() {
+            let (font_system, generation) = super::new_font_system_at();
+            self.font_system = font_system;
+            self.font_generation = generation;
+        }
+
+        self.layouts.clear();
+        self.layouts.reserve(texts.len());
+
+        // (layout index, buffer index within that layout, left, top, clip bounds)
+        // — collected up front so the TextArea iterator below can borrow
+        // self.layouts immutably without also holding it mutably here.
+        let mut placements: Vec<(usize, usize, f32, f32, TextBounds)> = Vec::new();
 
         for text in texts {
-            let alpha = text.color[3].clamp(0.0, 1.0) * text.opacity.clamp(0.0, 1.0);
-            let color = Color::rgba(
-                (text.color[0].clamp(0.0, 1.0) * 255.0) as u8,
-                (text.color[1].clamp(0.0, 1.0) * 255.0) as u8,
-                (text.color[2].clamp(0.0, 1.0) * 255.0) as u8,
-                (alpha * 255.0) as u8,
-            );
-
             let width = (text.bounds[2] - text.bounds[0]).max(1.0);
             let height = (text.bounds[3] - text.bounds[1]).max(1.0);
 
-            // Shape with a little more width than the editor-measured box:
-            // the webview and cosmic-text can disagree by a few pixels per
-            // line, and without slack a line that fit in the editor wraps in
-            // the render. The room is split evenly so centered lines stay
-            // centered. Boxes already spanning the frame keep their exact
-            // width — there the editor genuinely wrapped too.
-            let output_width = (output_size.0 as f32).max(1.0);
-            let wrap_width = if width < output_width * 0.98 {
-                (width * 1.05 + 4.0).min(output_width.max(width))
-            } else {
-                width
-            };
-            let wrap_dx = (wrap_width - width) / 2.0;
-
-            let metrics = Metrics::new(text.font_size, text.font_size * 1.2);
-            let mut buffer = Buffer::new(&mut self.font_system, metrics);
-            // The box only constrains wrapping; height is unbounded so every
-            // line is laid out even when the configured box is a little
-            // shorter than the shaped text (e.g. font metric differences
-            // between the editor's measurement and cosmic-text).
-            buffer.set_size(&mut self.font_system, Some(wrap_width), None);
-            buffer.set_wrap(&mut self.font_system, glyphon::Wrap::Word);
-
-            let family = match text.font_family.trim() {
-                "" => Family::SansSerif,
-                name => match name.to_ascii_lowercase().as_str() {
-                    "sans" | "sans-serif" | "system sans" | "system sans-serif" => {
-                        Family::SansSerif
-                    }
-                    "serif" | "system serif" => Family::Serif,
-                    "mono" | "monospace" | "system mono" | "system monospace" => Family::Monospace,
-                    _ => Family::Name(name),
-                },
-            };
-            let weight = Weight(text.font_weight.round().clamp(100.0, 900.0) as u16);
-            let attrs = Attrs::new()
-                .family(family)
-                .color(color)
-                .weight(weight)
-                .style(if text.italic {
-                    Style::Italic
-                } else {
-                    Style::Normal
-                });
-
-            buffer.set_text(
-                &mut self.font_system,
+            let layout = quiro_text::layout_text(
                 &text.content,
-                &attrs,
-                Shaping::Advanced,
+                quiro_text::Constraint {
+                    anchor_height: output_size.1 as f32,
+                    width,
+                    height,
+                },
             );
 
-            for line in buffer.lines.iter_mut() {
-                line.set_align(Some(Align::Center));
-            }
-
-            buffer.shape_until_scroll(&mut self.font_system, false);
-
-            // Clip horizontally at the (slack-expanded) wrap box, but extend
-            // the bottom to the laid-out text height so descenders and extra
-            // lines never get cut off; glyphon intersects these bounds with
-            // the viewport.
-            let laid_out_height = buffer.layout_runs().count() as f32 * metrics.line_height;
+            // Clip at the box's own width — no slack term. Extend the
+            // bottom to the laid-out height so descenders and any extra
+            // wrapped lines are never cut off when the box the editor
+            // measured is a touch shorter than what actually shaped.
+            let laid_out_height = layout.height.max(height);
             let bounds = TextBounds {
-                left: (text.bounds[0] - wrap_dx).floor() as i32,
+                left: text.bounds[0].floor() as i32,
                 top: text.bounds[1].floor() as i32,
-                right: (text.bounds[0] + width + wrap_dx).ceil() as i32,
-                bottom: (text.bounds[1] + height.max(laid_out_height)).ceil() as i32,
+                right: (text.bounds[0] + width).ceil() as i32,
+                bottom: (text.bounds[1] + laid_out_height).ceil() as i32,
             };
 
-            self.buffers.push(buffer);
-            // The buffer origin shifts left by the slack so centered lines
-            // stay centered on the box.
-            text_area_data.push((bounds, text.bounds[0] - wrap_dx, text.bounds[1], color));
+            let layout_index = self.layouts.len();
+            for (buffer_index, y_offset) in layout.paragraph_y_offsets.iter().enumerate() {
+                placements.push((
+                    layout_index,
+                    buffer_index,
+                    text.bounds[0],
+                    text.bounds[1] + y_offset,
+                    bounds,
+                ));
+            }
+            self.layouts.push(layout);
         }
 
-        let text_areas = self
-            .buffers
+        let text_areas = placements
             .iter()
-            .zip(text_area_data)
-            .map(|(buffer, (bounds, left, top, color))| TextArea {
-                buffer,
-                left,
-                top,
-                scale: 1.0,
-                bounds,
-                default_color: color,
-                custom_glyphs: &[],
-            })
+            .map(
+                |&(layout_index, buffer_index, left, top, bounds)| TextArea {
+                    buffer: &self.layouts[layout_index].buffers[buffer_index],
+                    left,
+                    top,
+                    scale: 1.0,
+                    bounds,
+                    // Never actually read: every glyph's Attrs already carries
+                    // its own resolved colour (quiro_text::layout::build_attrs),
+                    // so color_opt is always Some and default_color is purely
+                    // the fallback glyphon's API requires a value for.
+                    default_color: Color::rgba(255, 255, 255, 255),
+                    custom_glyphs: &[],
+                },
+            )
             .collect::<Vec<_>>();
 
         self.viewport.update(
@@ -163,6 +140,11 @@ impl TextLayer {
             },
         );
 
+        // A second FontSystem instance from the one quiro_text shaped these
+        // buffers with — safe only because both come from new_font_system's
+        // shared OnceLock template. Cloning that template's fontdb::Database
+        // preserves every face's fontdb::ID exactly, so a LayoutGlyph::font_id
+        // baked in by one clone resolves correctly against any other.
         if let Err(error) = self.text_renderer.prepare(
             device,
             queue,

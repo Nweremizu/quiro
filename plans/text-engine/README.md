@@ -21,11 +21,11 @@ Audited against `main` @ `6c4370f`.
 
 | # | Plan | Severity | Status |
 | --- | --- | --- | --- |
-| 000 | [One `TextContent` model for annotations and text segments](000-text-content-model.md) | HIGH | TODO |
-| 001 | [`quiro-text`: one layout engine, no consumers](001-quiro-text-crate.md) | HIGH | TODO |
-| 002 | [Move video text onto the engine and delete the `1.05` hack](002-video-text-on-engine.md) | HIGH | TODO |
-| 003 | [Fragments over IPC, and the font bytes that make them true](003-fragments-ipc-fonts.md) | HIGH | TODO |
-| 004 | [Rich text editing for annotations](004-annotation-text-editor.md) | MEDIUM | TODO |
+| 000 | [One `TextContent` model for annotations and text segments](000-text-content-model.md) | HIGH | DONE |
+| 001 | [`quiro-text`: one layout engine, no consumers](001-quiro-text-crate.md) | HIGH | DONE |
+| 002 | [Move video text onto the engine and delete the `1.05` hack](002-video-text-on-engine.md) | HIGH | DONE |
+| 003 | [Fragments over IPC, and the font bytes that make them true](003-fragments-ipc-fonts.md) | HIGH | DONE |
+| 004 | [Rich text editing for annotations](004-annotation-text-editor.md) | MEDIUM | DONE, with scope decisions |
 
 ## Execution order
 

@@ -18,6 +18,12 @@ const CHECKS = [
 	"src/routes/screenshot-editor/geometry.check.ts",
 	"src/routes/screenshot-editor/space.check.ts",
 	"src/routes/screenshot-editor/transform.check.ts",
+	"src/routes/screenshot-editor/text-content.check.ts",
+	"src/routes/editor/text-content.check.ts",
+	"src/routes/editor/Timeline/handle-geometry.check.ts",
+	"src/utils/text/dom-roundtrip.check.ts",
+	"src/components/font-rows.check.ts",
+	"src/components/slider-value.check.ts",
 ];
 
 const require = createRequire(join(desktopDir, "package.json"));

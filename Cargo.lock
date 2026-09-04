@@ -6320,6 +6320,7 @@ dependencies = [
  "quiro-project",
  "quiro-recording",
  "quiro-rendering",
+ "quiro-text",
  "quiro-utils",
  "regex",
  "relative-path",
@@ -6690,6 +6691,7 @@ dependencies = [
  "quiro-cursor-info",
  "quiro-flags",
  "quiro-project",
+ "quiro-text",
  "quiro-video-decode",
  "rayon",
  "reactive_graph",
@@ -6706,6 +6708,17 @@ dependencies = [
  "wgpu-hal",
  "windows 0.58.0",
  "windows 0.60.0",
+]
+
+[[package]]
+name = "quiro-text"
+version = "0.1.0"
+dependencies = [
+ "cosmic-text",
+ "quiro-project",
+ "serde",
+ "serde_json",
+ "specta",
 ]
 
 [[package]]

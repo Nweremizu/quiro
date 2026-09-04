@@ -23,6 +23,10 @@ use tauri::{AppHandle, Manager};
 pub struct RecordingMetaWithMetadata {
     pub pretty_name: String,
     pub sort_time_millis: i64,
+    /// The project directory. The row's other path points at a media file
+    /// inside it, which is what a preview or the editor wants — but revealing
+    /// or deleting a recording means the whole project, not one video.
+    pub project_path: String,
 }
 
 #[derive(Serialize, Deserialize, Type, Clone)]
@@ -111,16 +115,28 @@ pub fn list_recordings(app: AppHandle) -> Vec<(String, RecordingMetaWithMetadata
         .filter_map(|entry| {
             let project_path = entry.path();
             let meta = quiro_project::RecordingMeta::load_for_project(&project_path).ok()?;
+
+            // `output_path` is the *exported* render, which only exists once
+            // someone has actually exported the project — requiring it hid
+            // every recording and every import until its first export. Fall
+            // back to the captured display video, which is there from the
+            // moment the project is written.
             let output_path = meta.output_path();
-            if !output_path.exists() {
-                return None;
-            }
+            let media_path = if output_path.exists() {
+                output_path
+            } else {
+                meta.studio_meta()
+                    .and_then(|studio| studio.display_path())
+                    .map(|relative| meta.path(&relative))
+                    .filter(|path| path.exists())?
+            };
 
             Some((
-                output_path.to_string_lossy().to_string(),
+                media_path.to_string_lossy().to_string(),
                 RecordingMetaWithMetadata {
                     sort_time_millis: sort_time_millis_from_pretty_name(&meta.pretty_name),
                     pretty_name: meta.pretty_name,
+                    project_path: project_path.to_string_lossy().to_string(),
                 },
             ))
         })

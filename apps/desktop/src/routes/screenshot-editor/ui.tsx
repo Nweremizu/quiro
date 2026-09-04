@@ -66,14 +66,21 @@ export function Field({
 	icon,
 	value,
 	children,
+	shouldFlexRow = false,
 }: {
 	name: string;
 	icon?: ReactNode;
 	value?: ReactNode;
 	children: ReactNode;
+	shouldFlexRow?: boolean;
 }) {
 	return (
-		<div className="flex flex-col gap-2">
+		<div
+			className={cn(
+				"flex flex-col gap-2",
+				shouldFlexRow && "flex-row w-full gap-2 items-center justify-between",
+			)}
+		>
 			<span className="flex flex-row items-center gap-1.5 text-xs font-medium text-gray-11">
 				{icon}
 				{name}
@@ -167,9 +174,55 @@ export function ToolbarDivider() {
 	return <div className="mx-0.5 h-5 w-px shrink-0 bg-gray-12/10" />;
 }
 
+// Resource paths, resolved once per process rather than once per mount.
+//
+// `WallpaperThumbnail` used to call `resolveResource` from an effect on every
+// mount, and render no `<img>` until that call came back. With 38 wallpapers
+// in two panels that either editor can open and close repeatedly, each open
+// cost 38 IPC round-trips and 38 images fading up from nothing — which is
+// what read as the wallpapers "reloading", and what made opening the panel
+// lag. A bundled resource's path cannot change while the app is running, so
+// the second open has no reason to ask again.
+//
+// The point of the cache is not just the saved IPC: a cached path is
+// available *synchronously*, during the component's first render, so the
+// `<img>` carries its `src` on the very first frame and the browser serves
+// it from its own memory cache. That is what removes the flash, rather than
+// merely making it shorter.
+const resolvedResourcePaths = new Map<string, string>();
+/** In-flight resolves, so 38 thumbnails mounting at once — or a remount
+ * while the first pass is still pending — share one call per filename
+ * instead of starting a second. */
+const pendingResourcePaths = new Map<string, Promise<string | null>>();
+/** A bundled file that failed to load stays missing for the life of the
+ * process, so a reopened panel should not retry the same 404 thirty-eight
+ * times. */
+const brokenResources = new Set<string>();
+
+function resolveResourceCached(relativePath: string): Promise<string | null> {
+	const cached = resolvedResourcePaths.get(relativePath);
+	if (cached !== undefined) return Promise.resolve(cached);
+
+	const inFlight = pendingResourcePaths.get(relativePath);
+	if (inFlight) return inFlight;
+
+	const request = resolveResource(relativePath)
+		.then((path) => {
+			resolvedResourcePaths.set(relativePath, path);
+			return path;
+		})
+		.catch(() => null)
+		.finally(() => {
+			pendingResourcePaths.delete(relativePath);
+		});
+
+	pendingResourcePaths.set(relativePath, request);
+	return request;
+}
+
 /** One bundled wallpaper. The renderer takes a real filesystem path, so each
- * thumbnail resolves its resource once and hands that same path to the
- * config on click. */
+ * thumbnail resolves its resource once per process (see the cache above) and
+ * hands that same path to the config on click. */
 /** Exported so callers besides `WallpaperTab` can reuse the same
  * resolve-then-select logic for a filename outside `WALLPAPER_FILENAMES` —
  * the video editor's gradient-section image presets, for one. */
@@ -182,26 +235,39 @@ export function WallpaperThumbnail({
 	selectedPath: string | null;
 	onSelect: (resolvedPath: string) => void;
 }) {
-	const [resolved, setResolved] = useState<string | null>(null);
+	const resourcePath = `assets/backgrounds/${filename}`;
+	// Seeded from the cache so a reopened panel renders the <img> with its
+	// real `src` on the first frame, instead of mounting empty and filling in
+	// an IPC round-trip later.
+	const [resolved, setResolved] = useState<string | null>(
+		() => resolvedResourcePaths.get(resourcePath) ?? null,
+	);
 	// `resolveResource` only joins the path against the app's resource dir —
 	// it doesn't check the file is actually there, so a missing asset used to
 	// leave the button enabled with a broken <img> and a console 404 instead
 	// of reading as unavailable. The <img>'s own onError is what actually
 	// catches a missing file.
-	const [broken, setBroken] = useState(false);
+	const [broken, setBroken] = useState(() => brokenResources.has(resourcePath));
 
 	useEffect(() => {
+		const cached = resolvedResourcePaths.get(resourcePath);
+		setBroken(brokenResources.has(resourcePath));
+		if (cached !== undefined) {
+			// Still assigned, because `filename` may have changed to one that
+			// was already cached — in which case there is no request below to
+			// deliver it.
+			setResolved(cached);
+			return;
+		}
+
 		let cancelled = false;
-		setBroken(false);
-		resolveResource(`assets/backgrounds/${filename}`)
-			.then((path) => {
-				if (!cancelled) setResolved(path);
-			})
-			.catch(() => {});
+		void resolveResourceCached(resourcePath).then((path) => {
+			if (!cancelled && path !== null) setResolved(path);
+		});
 		return () => {
 			cancelled = true;
 		};
-	}, [filename]);
+	}, [resourcePath]);
 
 	const usable = resolved !== null && !broken;
 	const selected = usable && resolved === selectedPath;
@@ -232,7 +298,10 @@ export function WallpaperThumbnail({
 					alt=""
 					loading="lazy"
 					draggable={false}
-					onError={() => setBroken(true)}
+					onError={() => {
+						brokenResources.add(resourcePath);
+						setBroken(true);
+					}}
 					className="size-full object-cover"
 				/>
 			)}

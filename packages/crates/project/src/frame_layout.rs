@@ -247,6 +247,9 @@ pub fn card_pass_config(config: &ProjectConfiguration) -> ProjectConfiguration {
     stripped.background.display_transform = Some(LayerTransform {
         offset: XY::new(0.0, 0.0),
         scale: 1.0,
+        // Inert at scale 1.0 — the anchor only has an effect while something
+        // is being scaled — so the centre default keeps this pass identical.
+        scale_origin: XY::new(0.5, 0.5),
         rotation: if card_is_tilted(config) {
             transform.clamped().rotation
         } else {
@@ -270,9 +273,18 @@ pub fn transform_rect(
     canvas: XY<f64>,
 ) -> (XY<f64>, XY<f64>) {
     let scaled = size * transform.scale;
-    let centre = offset + size / 2.0;
     let delta = XY::new(transform.offset.x * canvas.x, transform.offset.y * canvas.y);
-    (centre + delta - scaled / 2.0, scaled)
+    // Scale about `scale_origin` rather than the centre: the point sitting
+    // under that fraction of the rect is the one that must not move, so the
+    // Zoom control can magnify a corner instead of always pushing outward
+    // from the middle. Solving "anchor stays put" for the new offset gives
+    // `offset + size * origin * (1 - scale)`, which at the default origin of
+    // (0.5, 0.5) reduces exactly to the old `centre - scaled / 2`.
+    let anchored = XY::new(
+        offset.x + size.x * transform.scale_origin.x * (1.0 - transform.scale),
+        offset.y + size.y * transform.scale_origin.y * (1.0 - transform.scale),
+    );
+    (anchored + delta, scaled)
 }
 
 /// Where the capture sits inside the frame, in output-frame pixels.
@@ -316,6 +328,7 @@ mod split_preview_tests {
             offset: XY::new(0.3, -0.2),
             scale: 1.75,
             rotation,
+            ..Default::default()
         });
         config
     }
@@ -402,5 +415,95 @@ mod split_preview_tests {
 
         assert_eq!(card_rect, plain_rect, "the card pass must be untransformed");
         assert_ne!(card_rect, placed_rect, "the export pass must not be");
+    }
+}
+
+#[cfg(test)]
+mod scale_origin_tests {
+    use super::*;
+
+    const CANVAS: XY<f64> = XY {
+        x: 1000.0,
+        y: 1000.0,
+    };
+
+    fn rect() -> (XY<f64>, XY<f64>) {
+        (XY::new(100.0, 100.0), XY::new(400.0, 200.0))
+    }
+
+    fn transform(scale: f64, origin: XY<f64>) -> LayerTransform {
+        LayerTransform {
+            offset: XY::new(0.0, 0.0),
+            scale,
+            scale_origin: origin,
+            rotation: 0.0,
+        }
+    }
+
+    /// The whole point of the field: the point under the focal handle is the
+    /// one that does not move. Checked at three different anchors, because a
+    /// formula that only holds at the centre is the bug this replaced.
+    #[test]
+    fn the_anchor_point_is_a_fixed_point_of_the_scale() {
+        let (offset, size) = rect();
+        for origin in [
+            XY::new(0.5, 0.5),
+            XY::new(0.0, 0.0),
+            XY::new(1.0, 1.0),
+            XY::new(0.25, 0.75),
+        ] {
+            for scale in [0.5, 1.0, 1.6, 4.0] {
+                let (new_offset, new_size) =
+                    transform_rect(offset, size, &transform(scale, origin), CANVAS);
+
+                // Where the anchor sat before, and where it sits after.
+                let before = XY::new(offset.x + size.x * origin.x, offset.y + size.y * origin.y);
+                let after = XY::new(
+                    new_offset.x + new_size.x * origin.x,
+                    new_offset.y + new_size.y * origin.y,
+                );
+
+                assert!(
+                    (before.x - after.x).abs() < 1e-9 && (before.y - after.y).abs() < 1e-9,
+                    "origin {origin:?} at scale {scale}: anchor moved from {before:?} to {after:?}",
+                );
+            }
+        }
+    }
+
+    /// The default origin has to reproduce the old centre-anchored maths
+    /// exactly, or every project that predates the field shifts on load.
+    #[test]
+    fn the_default_origin_still_scales_about_the_centre() {
+        let (offset, size) = rect();
+        for scale in [0.5, 1.0, 2.0, 6.0] {
+            let (new_offset, new_size) =
+                transform_rect(offset, size, &transform(scale, XY::new(0.5, 0.5)), CANVAS);
+
+            let centre = offset + size / 2.0;
+            let expected = centre - (size * scale) / 2.0;
+            assert!(
+                (new_offset.x - expected.x).abs() < 1e-9
+                    && (new_offset.y - expected.y).abs() < 1e-9,
+                "scale {scale}: got {new_offset:?}, want {expected:?}",
+            );
+            assert_eq!(new_size, size * scale);
+        }
+    }
+
+    /// An anchor outside the layer stops meaning "a point on the card"; a
+    /// hand-edited sidecar must not be able to fling the rect off-canvas.
+    #[test]
+    fn an_out_of_range_origin_is_clamped() {
+        let wild = LayerTransform {
+            offset: XY::new(0.0, 0.0),
+            scale: 2.0,
+            scale_origin: XY::new(-5.0, f64::NAN),
+            rotation: 0.0,
+        }
+        .clamped();
+
+        assert_eq!(wild.scale_origin.x, 0.0);
+        assert_eq!(wild.scale_origin.y, 0.5);
     }
 }

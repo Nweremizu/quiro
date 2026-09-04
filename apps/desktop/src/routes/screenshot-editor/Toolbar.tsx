@@ -1,5 +1,6 @@
 import { Select } from "@quiro/ui";
 import { useEffect, useState } from "react";
+import IconLucideBox from "~icons/lucide/box";
 import IconLucideCrop from "~icons/lucide/crop";
 import IconLucideMinus from "~icons/lucide/minus";
 import IconLucidePlus from "~icons/lucide/plus";
@@ -10,7 +11,6 @@ import { CropDialog } from "./CropDialog";
 import { ASPECT_RATIO_OPTIONS } from "./constants";
 import { useScreenshotEditorContext } from "./context";
 import { clampZoom, DEFAULT_VIEWPORT, type Viewport } from "./Preview";
-import { PerspectivePopover } from "./popovers/PerspectivePopover";
 import { EditorButton, ToolbarDivider } from "./ui";
 
 // Structurally Cap's editor header — every control is its own always-visible
@@ -28,15 +28,8 @@ export function Toolbar({
 	viewport: Viewport;
 	onViewportChange: (viewport: Viewport) => void;
 }) {
-	const {
-		project,
-		setProject,
-		updateBackground,
-		activePopover,
-		setActivePopover,
-		stylePanelOpen,
-		setStylePanelOpen,
-	} = useScreenshotEditorContext();
+	const { project, setProject, rightPanel, toggleRightPanel } =
+		useScreenshotEditorContext();
 
 	// Crop is a modal dialog rather than a popover: it needs the whole image at
 	// a workable size, which does not fit in a toolbar bubble.
@@ -59,12 +52,12 @@ export function Toolbar({
 			}
 
 			event.preventDefault();
-			setStylePanelOpen(!stylePanelOpen);
+			toggleRightPanel("style");
 		};
 
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [stylePanelOpen, setStylePanelOpen]);
+	}, [toggleRightPanel]);
 
 	if (!project) return null;
 
@@ -80,14 +73,14 @@ export function Toolbar({
 					icon={<IconLucideSlidersHorizontal className="size-4" />}
 					tooltip="Style"
 					kbd={["S"]}
-					active={stylePanelOpen}
-					onClick={() => setStylePanelOpen(!stylePanelOpen)}
+					active={rightPanel === "style"}
+					onClick={() => toggleRightPanel("style")}
 				/>
-				<PerspectivePopover
-					background={project.background}
-					onChange={updateBackground}
-					open={activePopover === "perspective"}
-					onOpenChange={(open) => setActivePopover(open ? "perspective" : null)}
+				<EditorButton
+					icon={<IconLucideBox className="size-4" />}
+					tooltip="Transform"
+					active={rightPanel === "transform"}
+					onClick={() => toggleRightPanel("transform")}
 				/>
 				<EditorButton
 					icon={<IconLucideCrop className="size-4" />}

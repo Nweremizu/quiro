@@ -18,6 +18,7 @@ import {
 	type XY,
 } from "@/utils/tauri";
 import { connectFrameSocket } from "../screenshot-editor/frameSocket";
+import { clipTimelineDuration } from "./clip-transitions";
 import { PlaybackStore, useThrottledPlaybackTime } from "./playback-store";
 
 // Cap's editor renders and seeks in whole frames at a fixed 60fps timebase,
@@ -259,14 +260,13 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 		[requestFrame, playback],
 	);
 
+	// Must match `TimelineConfiguration::duration()` — playback ends where the
+	// backend says it does, and transitions overlap their clips, so a plain sum
+	// of segment lengths reads longer than the video actually is.
 	const duration = useMemo(() => {
 		const timeline = project?.timeline;
 		if (timeline && timeline.segments.length > 0) {
-			return timeline.segments.reduce(
-				(total, segment) =>
-					total + (segment.end - segment.start) / (segment.timescale || 1),
-				0,
-			);
+			return clipTimelineDuration(timeline.segments, timeline.transitions ?? []);
 		}
 		return instance?.recordingDuration ?? 0;
 	}, [project, instance]);
@@ -308,6 +308,9 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 		void commands.stopPlayback();
 		setPlaying(false);
 		playback.setPlaying(false);
+		// The stop check runs off a throttled sample, so the last reported
+		// position is wherever it happened to land; settle on the real end.
+		playback.setTime(duration);
 	}, [playing, playbackTime, duration, playback]);
 
 	const pushProject = useCallback(

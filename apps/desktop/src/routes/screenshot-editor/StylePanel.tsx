@@ -24,7 +24,6 @@ import {
 	Field,
 	ImageTab,
 	PanelSection,
-	RgbInput,
 	rgbToHex,
 	Slider,
 	WallpaperTab,
@@ -401,8 +400,11 @@ function BorderSection({
 		color: [0, 0, 0] as [number, number, number],
 		opacity: 50,
 	};
+	const { history } = useScreenshotEditorContext();
+
 	const setBorder = (patch: Partial<typeof border>) =>
 		onChange({ border: { ...border, ...patch } });
+	const colorScope = useRef<(() => void) | null>(null);
 
 	return (
 		<PanelSection
@@ -418,7 +420,7 @@ function BorderSection({
 				format={(v) => `${Math.round(v)}px`}
 				onChange={(rounding) => onChange({ rounding })}
 			/>
-			<Field name="Corner Style">
+			<Field name="Corner Style" shouldFlexRow>
 				<Select
 					variant="light"
 					className="h-8 w-full text-xs"
@@ -433,7 +435,7 @@ function BorderSection({
 				/>
 			</Field>
 
-			<div className="flex flex-row items-center justify-between border-t border-gray-4 pt-4">
+			<div className="flex flex-row items-center justify-between  border-gray-4 ">
 				<span className="text-xs font-medium text-gray-11">Border</span>
 				<Switch
 					checked={border.enabled}
@@ -463,9 +465,19 @@ function BorderSection({
 							onChange={(opacity) => setBorder({ opacity })}
 						/>
 						<Field name="Color">
-							<RgbInput
+							<ColorPickerPopover
+								label="Border colour"
+								className="w-full"
 								value={border.color}
-								onChange={(color) => setBorder({ color })}
+								showAlpha={false}
+								onChange={({ value }) => setBorder({ color: value })}
+								onInteractStart={() => {
+									colorScope.current = history.pause();
+								}}
+								onInteractEnd={() => {
+									colorScope.current?.();
+									colorScope.current = null;
+								}}
 							/>
 						</Field>
 					</div>
@@ -544,18 +556,18 @@ function ShadowSection({
 }
 
 export function StylePanel() {
-	const { project, updateBackground, setStylePanelOpen } =
+	const { project, updateBackground, setRightPanel } =
 		useScreenshotEditorContext();
 	if (!project) return null;
 	const background = project.background;
 
 	return (
-		<div className="flex h-full w-72 shrink-0 flex-col border-l border-gray-3 bg-gray-1">
+		<div className="flex h-full w-full min-h-0 flex-col">
 			<div className="flex h-11 shrink-0 items-center justify-between px-3">
 				<span className="text-xs font-medium text-gray-12">Style</span>
 				<button
 					type="button"
-					onClick={() => setStylePanelOpen(false)}
+					onClick={() => setRightPanel(null)}
 					aria-label="Close style panel"
 					className="flex size-6 items-center justify-center rounded-md text-gray-10 transition-colors hover:bg-gray-3 hover:text-gray-12"
 				>
@@ -563,7 +575,7 @@ export function StylePanel() {
 				</button>
 			</div>
 
-			<div className="custom-scroll min-h-0 flex-1 overflow-y-auto">
+			<div className="custom-scroll min-h-0 flex-1 overflow-y-auto pb-10">
 				<BackgroundSection
 					background={background}
 					onChange={updateBackground}

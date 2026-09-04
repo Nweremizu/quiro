@@ -38,7 +38,7 @@ function Time({ seconds, className }: { seconds: number; className?: string }) {
 /** The playhead clock, written straight to the DOM on an animation frame so it
  * ticks smoothly without re-rendering the editor. */
 function PlayheadTime({ className }: { className?: string }) {
-	const { playback } = useEditorContext();
+	const { playback, duration } = useEditorContext();
 	const ref = useRef<HTMLSpanElement | null>(null);
 
 	useEffect(() => {
@@ -46,7 +46,11 @@ function PlayheadTime({ className }: { className?: string }) {
 		let shown = "";
 
 		const tick = () => {
-			const next = formatTime(playback.getInterpolatedTime());
+			// Interpolation runs ahead of the last reported position, and stopping
+			// at the end takes a round trip — neither is a reason to show a time
+			// past the end of the video.
+			const time = playback.getInterpolatedTime();
+			const next = formatTime(duration > 0 ? Math.min(time, duration) : time);
 			if (ref.current && next !== shown) {
 				shown = next;
 				ref.current.textContent = next;
@@ -56,7 +60,7 @@ function PlayheadTime({ className }: { className?: string }) {
 
 		tick();
 		return () => cancelAnimationFrame(raf);
-	}, [playback]);
+	}, [playback, duration]);
 
 	return (
 		<span ref={ref} className={cn("text-[0.875rem] tabular-nums", className)} />

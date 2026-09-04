@@ -78,3 +78,18 @@ export function startTimeDrag(
 	window.addEventListener("pointermove", move);
 	window.addEventListener("pointerup", up);
 }
+
+/** Trim handles are this wide where the segment has room for two of them. */
+const HANDLE_WIDTH = 24;
+
+/** Width one trim handle gets on a segment `segmentWidth` pixels wide.
+ *
+ * The start handle is anchored `left-0` and shifted back half its width, the
+ * end handle `right-0` and shifted forward half its width, so they occupy
+ * `[-w/2, w/2]` and `[segmentWidth - w/2, segmentWidth + w/2]`. Those stay
+ * disjoint for as long as `w <= segmentWidth` — the property
+ * `handle-geometry.check.ts` asserts, and the reason narrow segments shrink
+ * their grips instead of stacking two full-size ones on top of each other. */
+export function handleWidthFor(segmentWidth: number) {
+	return Math.min(HANDLE_WIDTH, segmentWidth / 2);
+}

@@ -200,7 +200,7 @@ export function ColorPicker({
 						}}
 					>
 						<SliderTrack className="cap-color-slider-track">
-							<ColorThumb className="cap-color-thumb mt-1" />
+							<ColorThumb className="cap-color-thumb mt-1.25" />
 						</SliderTrack>
 					</ColorSlider>
 
@@ -220,7 +220,7 @@ export function ColorPicker({
 						>
 							<div className="cap-color-alpha-bg">
 								<SliderTrack className="cap-color-slider-track">
-									<ColorThumb className="cap-color-thumb mt-1" />
+									<ColorThumb className="cap-color-thumb mt-1.25" />
 								</SliderTrack>
 							</div>
 						</ColorSlider>
@@ -325,7 +325,7 @@ function ChannelInput({
 		<label
 			className={cn(
 				"flex flex-col items-center gap-1",
-				isAlpha ? "w-fit!  flex-1!" : "min-w-0 flex-1",
+				isAlpha ? "w-fit! max-w-18 flex-1!" : "min-w-0 flex-1",
 			)}
 		>
 			<span className="text-[10px] font-medium uppercase tracking-wide text-gray-10">
@@ -345,7 +345,7 @@ function ChannelInput({
 							event.currentTarget.blur();
 						}
 					}}
-					className="w-full min-w-12 bg-transparent px-1.5 py-1 text-center text-[13px] tabular-nums text-gray-12 outline-none"
+					className="w-full min-w-4 bg-transparent px-1.5 py-1  text-center text-[13px] tabular-nums text-gray-12 outline-none"
 				/>
 				{suffix && (
 					<span className="pr-1.5 text-[11px] text-gray-10">{suffix}</span>

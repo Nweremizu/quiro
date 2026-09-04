@@ -4,6 +4,10 @@ version = "0.1.0"
 description = "Beautiful screen recordings, owned by you."
 authors = ["you"]
 edition = "2024"
+# `src/bin/export-bindings.rs` is a second binary, so a bare `cargo run` —
+# which is exactly what `tauri dev` issues — has no unambiguous target
+# without this.
+default-run = "quiro-desktop"
 
 
 [lints]
@@ -124,6 +128,7 @@ quiro-project = { path = "../../../packages/crates/project" }
 quiro-export = { path = "../../../packages/crates/export" }
 quiro-editor = { path = "../../../packages/crates/editor" }
 quiro-rendering = { path = "../../../packages/crates/rendering" }
+quiro-text = { path = "../../../packages/crates/text" }
 quiro-media = { path = "../../../packages/crates/media" }
 quiro-flags = { path = "../../../packages/crates/flags" }
 quiro-recording = { path = "../../../packages/crates/recording" }

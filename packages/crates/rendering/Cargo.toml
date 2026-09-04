@@ -10,6 +10,7 @@ workspace = true
 anyhow.workspace = true
 bytemuck = { version = "1.7", features = ["derive"] }
 quiro-camera-effects = { path = "../camera-effects" }
+quiro-text = { path = "../text" }
 quiro-flags = { path = "../flags" }
 quiro-project = { path = "../project" }
 quiro-video-decode = { path = "../video-decode" }

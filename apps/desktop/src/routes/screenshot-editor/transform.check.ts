@@ -142,7 +142,12 @@ for (const [name, rect] of RECTS) {
 	const rect = frameRect(100, 50, 800, 600);
 	const out = transformRect(
 		rect,
-		{ offset: { x: 0.1, y: 0.2 }, scale: 2, rotation: 0 },
+		{
+			offset: { x: 0.1, y: 0.2 },
+			scale: 2,
+			scaleOrigin: { x: 0.5, y: 0.5 },
+			rotation: 0,
+		},
 		CANVAS,
 	);
 	const centre = rectCentre(out);
@@ -202,6 +207,7 @@ for (const [name, rect] of RECTS) {
 	const hostile = clampTransform({
 		offset: { x: Number.NaN, y: 500 },
 		scale: 0,
+		scaleOrigin: { x: 0.5, y: 0.5 },
 		rotation: Number.POSITIVE_INFINITY,
 	});
 	ok(
@@ -245,6 +251,7 @@ for (const [name, rect] of RECTS) {
 		resolveTransform({
 			offset: { x: 0, y: 0 },
 			scale: 1,
+			scaleOrigin: { x: 0.5, y: 0.5 },
 			rotation: 720,
 		}) === null,
 	);
@@ -278,7 +285,12 @@ for (const [name, rect] of RECTS) {
 {
 	const out = transformRect(
 		frameRect(0, 0, 0, 0),
-		{ offset: { x: 0.3, y: 0.3 }, scale: 2, rotation: 10 },
+		{
+			offset: { x: 0.3, y: 0.3 },
+			scale: 2,
+			scaleOrigin: { x: 0.5, y: 0.5 },
+			rotation: 10,
+		},
 		{ width: 0, height: 0 },
 	);
 	ok(
@@ -322,9 +334,24 @@ for (const [name, rect] of RECTS) {
 
 	for (const [name, rect] of RECTS) {
 		for (const transform of [
-			{ offset: { x: 0.2, y: -0.1 }, scale: 1, rotation: 0 },
-			{ offset: { x: 0, y: 0 }, scale: 2.5, rotation: 0 },
-			{ offset: { x: -0.4, y: 0.35 }, scale: 0.4, rotation: 0 },
+			{
+				offset: { x: 0.2, y: -0.1 },
+				scale: 1,
+				scaleOrigin: { x: 0.5, y: 0.5 },
+				rotation: 0,
+			},
+			{
+				offset: { x: 0, y: 0 },
+				scale: 2.5,
+				scaleOrigin: { x: 0.5, y: 0.5 },
+				rotation: 0,
+			},
+			{
+				offset: { x: -0.4, y: 0.35 },
+				scale: 0.4,
+				scaleOrigin: { x: 0.5, y: 0.5 },
+				rotation: 0,
+			},
 		]) {
 			const placement = cardLayerPlacement(
 				transform,
@@ -361,7 +388,12 @@ for (const [name, rect] of RECTS) {
 //     viewport would slide the capture around inside the canvas.
 {
 	const rect = frameRect(160, 90, 1600, 900);
-	const transform = { offset: { x: 0.25, y: 0.1 }, scale: 1.2, rotation: 0 };
+	const transform = {
+		offset: { x: 0.25, y: 0.1 },
+		scale: 1.2,
+		scaleOrigin: { x: 0.5, y: 0.5 },
+		rotation: 0,
+	};
 	const small = cardLayerPlacement(transform, rect, CANVAS, CANVAS, true);
 	const large = cardLayerPlacement(
 		transform,
@@ -407,7 +439,12 @@ for (const [name, rect] of RECTS) {
 //     the renderer and must not be spun twice.
 {
 	const rect = frameRect(160, 90, 1600, 900);
-	const transform = { offset: { x: 0, y: 0 }, scale: 1, rotation: 30 };
+	const transform = {
+		offset: { x: 0, y: 0 },
+		scale: 1,
+		scaleOrigin: { x: 0.5, y: 0.5 },
+		rotation: 30,
+	};
 
 	ok("no perspective is not a tilt", !cardIsTilted(null));
 	ok(
@@ -439,10 +476,30 @@ for (const [name, rect] of RECTS) {
 {
 	for (const [name, rect] of RECTS) {
 		for (const transform of [
-			{ offset: { x: 0.2, y: -0.1 }, scale: 1, rotation: 0 },
-			{ offset: { x: 0, y: 0 }, scale: 2.5, rotation: 0 },
-			{ offset: { x: -0.3, y: 0.25 }, scale: 0.6, rotation: 35 },
-			{ offset: { x: 0.4, y: 0.4 }, scale: 1.8, rotation: -120 },
+			{
+				offset: { x: 0.2, y: -0.1 },
+				scale: 1,
+				scaleOrigin: { x: 0.5, y: 0.5 },
+				rotation: 0,
+			},
+			{
+				offset: { x: 0, y: 0 },
+				scale: 2.5,
+				scaleOrigin: { x: 0.5, y: 0.5 },
+				rotation: 0,
+			},
+			{
+				offset: { x: -0.3, y: 0.25 },
+				scale: 0.6,
+				scaleOrigin: { x: 0.5, y: 0.5 },
+				rotation: 35,
+			},
+			{
+				offset: { x: 0.4, y: 0.4 },
+				scale: 1.8,
+				scaleOrigin: { x: 0.5, y: 0.5 },
+				rotation: -120,
+			},
 		]) {
 			const centre = rectCentre(rect);
 			const translate = {
@@ -505,7 +562,12 @@ for (const [name, rect] of RECTS) {
 	const rect = frameRect(160, 90, 1600, 900);
 	const point = frameToCardPoint(
 		{ x: 500, y: 500 },
-		{ offset: { x: 0, y: 0 }, scale: 0, rotation: 0 },
+		{
+			offset: { x: 0, y: 0 },
+			scale: 0,
+			scaleOrigin: { x: 0.5, y: 0.5 },
+			rotation: 0,
+		},
 		rect,
 		CANVAS,
 		0,

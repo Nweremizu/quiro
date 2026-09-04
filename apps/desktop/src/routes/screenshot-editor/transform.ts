@@ -25,6 +25,7 @@ export const MAX_LAYER_OFFSET = 2;
 export const IDENTITY_TRANSFORM: LayerTransform = {
 	offset: { x: 0, y: 0 },
 	scale: 1,
+	scaleOrigin: { x: 0.5, y: 0.5 },
 	rotation: 0,
 };
 
@@ -51,6 +52,11 @@ export const clampTransform = (transform: LayerTransform): LayerTransform => ({
 		),
 	},
 	scale: clamp(finite(transform.scale, 1), MIN_LAYER_SCALE, MAX_LAYER_SCALE),
+	// Outside the layer the anchor stops meaning "a point on the card".
+	scaleOrigin: {
+		x: clamp(finite(transform.scaleOrigin?.x ?? 0.5, 0.5), 0, 1),
+		y: clamp(finite(transform.scaleOrigin?.y ?? 0.5, 0.5), 0, 1),
+	},
 	rotation: finite(transform.rotation, 0) % 360,
 });
 
@@ -75,9 +81,11 @@ export function resolveTransform(
  * Moves and scales a laid-out rect by a layer transform — the mirror of
  * `frame_layout::transform_rect`.
  *
- * Scale is about the rect's own centre so the capture grows in place rather
- * than walking toward the frame origin, and the offset is a fraction of the
- * canvas so it means the same thing at preview resolution and at export.
+ * Scale is anchored at `scaleOrigin`, a fraction of the rect's own size, so
+ * the point under the Zoom panel's focal handle is the one that stays put.
+ * At the default (0.5, 0.5) this reduces exactly to scaling about the centre,
+ * which is what it did before the anchor existed. The offset is a fraction of
+ * the canvas so it means the same thing at preview resolution and at export.
  */
 export function transformRect(
 	rect: Rect<FramePx>,
@@ -86,9 +94,32 @@ export function transformRect(
 ): Rect<FramePx> {
 	const width = rect.width * transform.scale;
 	const height = rect.height * transform.scale;
-	const centreX = rect.x + rect.width / 2 + transform.offset.x * canvas.width;
-	const centreY = rect.y + rect.height / 2 + transform.offset.y * canvas.height;
-	return frameRect(centreX - width / 2, centreY - height / 2, width, height);
+	const origin = transform.scaleOrigin ?? { x: 0.5, y: 0.5 };
+	// Solving "the anchor does not move" for the new origin gives
+	// `x + width * origin * (1 - scale)`.
+	const x =
+		rect.x +
+		rect.width * origin.x * (1 - transform.scale) +
+		transform.offset.x * canvas.width;
+	const y =
+		rect.y +
+		rect.height * origin.y * (1 - transform.scale) +
+		transform.offset.y * canvas.height;
+	return frameRect(x, y, width, height);
+}
+
+/** The frame-space point a scale is anchored at — the one thing a zoom must
+ * leave where it is. `null`, or a transform predating `scaleOrigin`, anchors
+ * at the centre, which is what scaling did before the field existed. */
+export function transformAnchor(
+	rect: FrameRectLike,
+	transform: LayerTransform | null,
+): { x: number; y: number } {
+	const origin = transform?.scaleOrigin ?? { x: 0.5, y: 0.5 };
+	return {
+		x: rect.x + rect.width * origin.x,
+		y: rect.y + rect.height * origin.y,
+	};
 }
 
 /** Frame-space rect in either form. The branded `Rect<FramePx>` is what this
@@ -188,7 +219,10 @@ export function cardLayerPlacement(
 	transformOrigin: string;
 	inset: { left: number; top: number; width: number; height: number };
 } {
-	const centre = rectCentre(laidOutRect);
+	// The anchor, not the centre: this becomes the CSS `transform-origin`, and
+	// the browser's `scale()` has to pivot on the same point the renderer's
+	// `transformRect` does or the preview drifts from the export.
+	const centre = transformAnchor(laidOutRect, transform);
 	const scale = cssSize.width / Math.max(1, frameSize.width);
 	const bleedCss = bleed * scale;
 
@@ -244,7 +278,8 @@ export function frameToCardPoint(
 ): Pt<FramePx> {
 	if (!transform) return framePt(point.x, point.y);
 
-	const centre = rectCentre(laidOutRect);
+	// The scale's fixed point, which is what the inverse has to unwind around.
+	const centre = transformAnchor(laidOutRect, transform);
 	const dx = point.x - transform.offset.x * canvas.width - centre.x;
 	const dy = point.y - transform.offset.y * canvas.height - centre.y;
 

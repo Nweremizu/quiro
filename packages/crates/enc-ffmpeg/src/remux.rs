@@ -856,6 +856,22 @@ fn rescale_video_timestamps_inner(
 /// copy of essentially any codec an input might carry (AAC, Opus, Vorbis, MP3,
 /// FLAC, PCM), where an MP4 audio container would reject several of them and
 /// force a transcode.
+/// Zeroes the `codec_tag` a copied stream inherited from its source container.
+///
+/// `set_parameters` copies the tag along with everything else, and a muxer
+/// rejects any tag it doesn't recognise: an MP4 `mp4a` tag carried into a
+/// Matroska output fails `write_header` with `InvalidData` rather than being
+/// re-derived. Clearing it lets the output muxer choose its own tag, which is
+/// what `ffmpeg -c copy` does.
+fn clear_codec_tag(stream: &mut avformat::stream::StreamMut) {
+    unsafe {
+        let codecpar = (*stream.as_mut_ptr()).codecpar;
+        if !codecpar.is_null() {
+            (*codecpar).codec_tag = 0;
+        }
+    }
+}
+
 pub fn split_media_tracks(
     input_path: &Path,
     video_out: &Path,
@@ -895,6 +911,7 @@ fn split_media_tracks_inner(
     {
         let mut out = video_octx.add_stream(None)?;
         out.set_parameters(video_params);
+        clear_codec_tag(&mut out);
     }
     video_octx.write_header()?;
 
@@ -908,6 +925,7 @@ fn split_media_tracks_inner(
             {
                 let mut out = octx.add_stream(None)?;
                 out.set_parameters(params);
+                clear_codec_tag(&mut out);
             }
             octx.write_header()?;
             Some(octx)
@@ -983,6 +1001,7 @@ fn merge_video_audio_inner(
             out_idx += 1;
             let mut out_stream = octx.add_stream(None)?;
             out_stream.set_parameters(stream.parameters());
+            clear_codec_tag(&mut out_stream);
             unsafe {
                 (*out_stream.as_mut_ptr()).time_base = (*stream.as_ptr()).time_base;
             }
@@ -997,6 +1016,7 @@ fn merge_video_audio_inner(
             out_idx += 1;
             let mut out_stream = octx.add_stream(None)?;
             out_stream.set_parameters(stream.parameters());
+            clear_codec_tag(&mut out_stream);
             unsafe {
                 (*out_stream.as_mut_ptr()).time_base = (*stream.as_ptr()).time_base;
             }
@@ -1160,7 +1180,7 @@ mod tests {
         // cadence; deterministic pseudo-jitter stands in for QPC noise.
         let timestamps: Vec<Duration> = (0..120)
             .map(|i| {
-                let jitter_us = ((i * 7919) % 7000) as u64; // 0..7ms
+                let jitter_us = (i * 7919) % 7000; // 0..7ms
                 Duration::from_nanos(i * 1_000_000_000 / 30 + jitter_us * 1_000)
             })
             .collect();

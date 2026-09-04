@@ -1,6 +1,6 @@
 import type { TimelineSegment } from "@/utils/tauri";
 import { useEditorContext } from "../context";
-import { startTimeDrag, useTimeline } from "./context";
+import { useTimeline } from "./context";
 import { SegmentContent, SegmentHandle, SegmentRoot } from "./Track";
 
 /** Source seconds a segment occupies on the timeline, after its speed. */
@@ -58,6 +58,48 @@ export function ClipTrack({ onSplit }: { onSplit: (time: number) => void }) {
 						selected={selected}
 						left={timeline.xOf(offsets[index])}
 						width={width}
+						handles={
+							<>
+								<SegmentHandle
+									position="start"
+									width={width}
+									label={`Trim clip ${index + 1} start`}
+									value={segment.start}
+									min={0}
+									max={segment.end - MIN_SEGMENT_DURATION}
+									onAdjust={(delta) => {
+										const initial = segment.start;
+										const timescale = segment.timescale || 1;
+										updateSegment(index, (current) => ({
+											...current,
+											start: Math.min(
+												Math.max(0, initial + delta * timescale),
+												current.end - MIN_SEGMENT_DURATION,
+											),
+										}));
+									}}
+								/>
+								<SegmentHandle
+									position="end"
+									width={width}
+									label={`Trim clip ${index + 1} end`}
+									value={segment.end}
+									min={segment.start + MIN_SEGMENT_DURATION}
+									max={Number.POSITIVE_INFINITY}
+									onAdjust={(delta) => {
+										const initial = segment.end;
+										const timescale = segment.timescale || 1;
+										updateSegment(index, (current) => ({
+											...current,
+											end: Math.max(
+												current.start + MIN_SEGMENT_DURATION,
+												initial + delta * timescale,
+											),
+										}));
+									}}
+								/>
+							</>
+						}
 						className={splitMode ? "timeline-scissors-cursor" : undefined}
 						onPointerDown={(event) => {
 							// Selecting or splitting a clip must not also scrub the
@@ -70,25 +112,6 @@ export function ClipTrack({ onSplit }: { onSplit: (time: number) => void }) {
 							setSelection({ type: "clip", index });
 						}}
 					>
-						<SegmentHandle
-							position="start"
-							width={width}
-							label="Trim clip start"
-							onPointerDown={(event) => {
-								const initial = segment.start;
-								const timescale = segment.timescale || 1;
-								startTimeDrag(event, timeline, (delta) => {
-									updateSegment(index, (current) => ({
-										...current,
-										start: Math.min(
-											Math.max(0, initial + delta * timescale),
-											current.end - MIN_SEGMENT_DURATION,
-										),
-									}));
-								});
-							}}
-						/>
-
 						<SegmentContent width={width} className="justify-center">
 							<span className="pointer-events-none truncate text-[0.625rem] font-semibold tabular-nums text-[var(--track-label)]">
 								{segmentDuration(segment).toFixed(1)}s
@@ -96,24 +119,6 @@ export function ClipTrack({ onSplit }: { onSplit: (time: number) => void }) {
 							</span>
 						</SegmentContent>
 
-						<SegmentHandle
-							position="end"
-							width={width}
-							label="Trim clip end"
-							onPointerDown={(event) => {
-								const initial = segment.end;
-								const timescale = segment.timescale || 1;
-								startTimeDrag(event, timeline, (delta) => {
-									updateSegment(index, (current) => ({
-										...current,
-										end: Math.max(
-											current.start + MIN_SEGMENT_DURATION,
-											initial + delta * timescale,
-										),
-									}));
-								});
-							}}
-						/>
 					</SegmentRoot>
 				);
 			})}

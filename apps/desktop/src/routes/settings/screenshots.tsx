@@ -23,12 +23,13 @@ export default function ScreenshotsSettings() {
 				name: "Image",
 				extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp"],
 			}}
-			renderCard={(item, highlightQuery) => (
+			renderCard={(item, highlightQuery, refetch) => (
 				<TargetCard
 					key={item.path}
 					variant="screenshot"
 					target={item}
 					highlightQuery={highlightQuery}
+					onRefetch={refetch}
 				/>
 			)}
 		/>
