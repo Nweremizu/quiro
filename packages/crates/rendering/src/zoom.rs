@@ -108,6 +108,31 @@ fn clamp_unit(v: f64) -> f64 {
     }
 }
 
+/// Sampled motion offsets — deltas to add to the resting canvas transform.
+///
+/// Zero at rest, so a project with no motion state configured produces exactly
+/// the canvas the user set up. Every field is spring-driven on the same
+/// simulation that drives the zoom framing, which is what makes a motion state
+/// ease in and back out with the zoom's feel rather than a separate one.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct MotionOffsets {
+    /// Canvas-width/height fractions.
+    pub offset: XY<f64>,
+    /// In-plane rotation, degrees.
+    pub rotation: f64,
+    /// Out-of-plane perspective tilt, degrees.
+    pub tilt: XY<f64>,
+    /// Perspective in-plane spin, degrees.
+    pub spin: f64,
+}
+
+impl MotionOffsets {
+    /// True when nothing would move, so the render path can skip the work.
+    pub fn is_identity(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
 /// A sampled zoom transform. Produced by `ZoomTransformTimeline::sample`.
 #[derive(Debug, Clone, Copy)]
 pub struct InterpolatedZoom {
@@ -118,6 +143,8 @@ pub struct InterpolatedZoom {
     /// to [0, 1].
     pub t: f64,
     pub bounds: SegmentBounds,
+    /// Canvas transform deltas for this instant. See [`MotionOffsets`].
+    pub motion: MotionOffsets,
 }
 
 impl InterpolatedZoom {
@@ -221,6 +248,7 @@ mod test {
     #[test]
     fn display_amount_is_zoom_scale() {
         let zoom = InterpolatedZoom {
+            motion: MotionOffsets::default(),
             t: 1.0,
             bounds: SegmentBounds::from_amount_center(2.5, XY::new(0.4, 0.6)),
         };

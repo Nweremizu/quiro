@@ -349,7 +349,14 @@ export function Timeline() {
 			...timeline,
 			zoomSegments: [
 				...(timeline.zoomSegments ?? []),
-				{ ...span, amount: 1.5, mode: { manual: { x: 0.5, y: 0.5 } } as const },
+				{
+					...span,
+					amount: 1.5,
+					mode: { manual: { x: 0.5, y: 0.5 } } as const,
+					// A new zoom moves the framing only; movement is opted into
+					// in the panel, so an added zoom behaves exactly as before.
+					motion: {},
+				},
 			].sort((a, b) => a.start - b.start),
 		}));
 	};

@@ -1113,6 +1113,8 @@ async fn stop_recording(
                 timescale: 1.0,
                 name: None,
                 speed_audio_mode: None,
+                transform: None,
+                perspective: None,
             })
         })
         .collect();

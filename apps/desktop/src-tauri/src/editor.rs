@@ -696,6 +696,9 @@ fn zoom_segments_from_clicks(
     merged
         .into_iter()
         .map(|(start, end)| ZoomSegment {
+            // Auto-generated zooms move the framing only; a motion state is
+            // something the user opts into in the panel.
+            motion: Default::default(),
             start: start.round() / MS_PER_SECOND,
             end: end.round() / MS_PER_SECOND,
             amount: AUTO_ZOOM_AMOUNT,

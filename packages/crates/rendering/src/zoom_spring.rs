@@ -4,9 +4,11 @@
 //! `zoom.rs` (spring_ease / spring_ease_out / instant_ease over
 //! `ZOOM_DURATION`) and the cursor-following `ZoomFocusInterpolator` layer.
 //!
-//! Three channels — `amount` (zoom scale), `center` (2D framing center in
-//! `SegmentBounds::from_amount_center` travel space) and `activity` (the 0/1
-//! "any zoom active" step that drives camera scale-during-zoom) — are each
+//! Six channels — `amount` (zoom scale), `center` (2D framing center in
+//! `SegmentBounds::from_amount_center` travel space), `activity` (the 0/1
+//! "any zoom active" step that drives camera scale-during-zoom) and the three
+//! motion-state pairs (offset, tilt, rotation/spin) that carry the canvas into
+//! and back out of a segment's [`MotionState`] — are each
 //! integrated by an analytic [`SpringMassDamperSimulation`] chasing
 //! step-function targets, retargeted every 8 ms step with velocity always
 //! carried across retargets. There are no fixed animation durations and no
@@ -32,7 +34,7 @@ use quiro_project::{
 
 use crate::{
     spring_mass_damper::{SpringMassDamperSimulation, SpringMassDamperSimulationConfig},
-    zoom::{InterpolatedZoom, SegmentBounds},
+    zoom::{InterpolatedZoom, MotionOffsets, SegmentBounds},
 };
 
 /// Fixed precompute step (125 Hz), matching the sampling density the old
@@ -362,6 +364,11 @@ struct TimelineSample {
     center: XY<f32>,
     activity: f32,
     snapped: bool,
+    /// Motion-state channels, paired into the 2D springs that drive them:
+    /// (offset x, offset y), (tilt x, tilt y), (rotation, spin).
+    motion_offset: XY<f32>,
+    motion_tilt: XY<f32>,
+    motion_rot: XY<f32>,
 }
 
 struct PrecomputeState {
@@ -369,6 +376,13 @@ struct PrecomputeState {
     center_sim: SpringMassDamperSimulation,
     /// x = zoom amount, y = zoom activity (0/1 step -> smooth camera driver).
     aux_sim: SpringMassDamperSimulation,
+    /// Motion-state channels. Three 2D springs rather than six 1D ones,
+    /// sharing the zoom's spring config so a motion state departs and returns
+    /// with exactly the zoom's feel. Their rest target is zero, which is what
+    /// makes "transition back to the original state" fall out for free.
+    motion_offset_sim: SpringMassDamperSimulation,
+    motion_tilt_sim: SpringMassDamperSimulation,
+    motion_rot_sim: SpringMassDamperSimulation,
     /// Last center target while a segment was active. Held during zoom-out so
     /// the outgoing framing stays anchored instead of re-aiming mid-flight.
     held_center_target: XY<f32>,
@@ -382,6 +396,9 @@ struct StepTargets {
     amount: f32,
     center: XY<f32>,
     activity: f32,
+    motion_offset: XY<f32>,
+    motion_tilt: XY<f32>,
+    motion_rot: XY<f32>,
     segment_active: bool,
     snap: bool,
     /// The auto-follow aim this step settled on, for the next step's dead
@@ -502,6 +519,9 @@ impl ZoomTransformTimeline {
         if zoom_segments.is_empty() {
             return Self {
                 samples: vec![TimelineSample {
+                    motion_offset: XY::new(0.0, 0.0),
+                    motion_tilt: XY::new(0.0, 0.0),
+                    motion_rot: XY::new(0.0, 0.0),
                     amount: 1.0,
                     center: XY::new(0.5, 0.5),
                     activity: 0.0,
@@ -549,8 +569,26 @@ impl ZoomTransformTimeline {
         aux_sim.set_velocity(XY::new(0.0, 0.0));
         aux_sim.set_target_position(XY::new(initial.amount, initial.activity));
 
+        let mut motion_offset_sim = SpringMassDamperSimulation::new(spring_config);
+        motion_offset_sim.set_position(initial.motion_offset);
+        motion_offset_sim.set_velocity(XY::new(0.0, 0.0));
+        motion_offset_sim.set_target_position(initial.motion_offset);
+
+        let mut motion_tilt_sim = SpringMassDamperSimulation::new(spring_config);
+        motion_tilt_sim.set_position(initial.motion_tilt);
+        motion_tilt_sim.set_velocity(XY::new(0.0, 0.0));
+        motion_tilt_sim.set_target_position(initial.motion_tilt);
+
+        let mut motion_rot_sim = SpringMassDamperSimulation::new(spring_config);
+        motion_rot_sim.set_position(initial.motion_rot);
+        motion_rot_sim.set_velocity(XY::new(0.0, 0.0));
+        motion_rot_sim.set_target_position(initial.motion_rot);
+
         timeline.samples.push(TimelineSample {
             amount: initial.amount.max(1.0),
+            motion_offset: initial.motion_offset,
+            motion_tilt: initial.motion_tilt,
+            motion_rot: initial.motion_rot,
             center: XY::new(
                 initial.center.x.clamp(0.0, 1.0),
                 initial.center.y.clamp(0.0, 1.0),
@@ -561,6 +599,9 @@ impl ZoomTransformTimeline {
         timeline.state = Some(PrecomputeState {
             center_sim,
             aux_sim,
+            motion_offset_sim,
+            motion_tilt_sim,
+            motion_rot_sim,
             held_center_target: initial.center,
             auto_aim: initial.auto_aim,
         });
@@ -684,6 +725,7 @@ impl ZoomTransformTimeline {
             return InterpolatedZoom {
                 t: 0.0,
                 bounds: SegmentBounds::default(),
+                motion: MotionOffsets::default(),
             };
         };
 
@@ -699,6 +741,15 @@ impl ZoomTransformTimeline {
         let center_x = a.center.x + (b.center.x - a.center.x) * frac;
         let center_y = a.center.y + (b.center.y - a.center.y) * frac;
         let activity = a.activity + (b.activity - a.activity) * frac;
+        let lerp2 = |a: XY<f32>, b: XY<f32>| {
+            XY::new(
+                f64::from(a.x + (b.x - a.x) * frac),
+                f64::from(a.y + (b.y - a.y) * frac),
+            )
+        };
+        let offset = lerp2(a.motion_offset, b.motion_offset);
+        let tilt = lerp2(a.motion_tilt, b.motion_tilt);
+        let rot = lerp2(a.motion_rot, b.motion_rot);
 
         InterpolatedZoom {
             t: f64::from(activity).clamp(0.0, 1.0),
@@ -706,6 +757,12 @@ impl ZoomTransformTimeline {
                 f64::from(amount),
                 XY::new(f64::from(center_x), f64::from(center_y)),
             ),
+            motion: MotionOffsets {
+                offset,
+                tilt,
+                rotation: rot.x,
+                spin: rot.y,
+            },
         }
     }
 
@@ -748,6 +805,11 @@ impl ZoomTransformTimeline {
         state
             .aux_sim
             .set_target_position(XY::new(targets.amount, targets.activity));
+        state
+            .motion_offset_sim
+            .set_target_position(targets.motion_offset);
+        state.motion_tilt_sim.set_target_position(targets.motion_tilt);
+        state.motion_rot_sim.set_target_position(targets.motion_rot);
 
         if targets.snap {
             // Instant animation: park the springs on the target with zero
@@ -758,6 +820,17 @@ impl ZoomTransformTimeline {
                 .aux_sim
                 .set_position(XY::new(targets.amount, targets.activity));
             state.aux_sim.set_velocity(XY::new(0.0, 0.0));
+            // Instant animation means instant for the whole motion state too,
+            // or the tilt would still be easing after the cut has landed.
+            for sim in [
+                &mut state.motion_offset_sim,
+                &mut state.motion_tilt_sim,
+                &mut state.motion_rot_sim,
+            ] {
+                let target = sim.target_position;
+                sim.set_position(target);
+                sim.set_velocity(XY::new(0.0, 0.0));
+            }
         } else {
             // While the amount spring sits at identity the viewport shows the
             // whole frame no matter where the center is — the center channel
@@ -774,6 +847,9 @@ impl ZoomTransformTimeline {
             }
             state.center_sim.run(STEP_MS as f32);
             state.aux_sim.run(STEP_MS as f32);
+            state.motion_offset_sim.run(STEP_MS as f32);
+            state.motion_tilt_sim.run(STEP_MS as f32);
+            state.motion_rot_sim.run(STEP_MS as f32);
         }
 
         // Geometric safety: a sprung amount below 1 would show out-of-bounds
@@ -793,6 +869,9 @@ impl ZoomTransformTimeline {
             ),
             activity: state.aux_sim.position.y.clamp(0.0, 1.0),
             snapped: targets.snap,
+            motion_offset: state.motion_offset_sim.position,
+            motion_tilt: state.motion_tilt_sim.position,
+            motion_rot: state.motion_rot_sim.position,
         });
 
         if self.samples.len() >= self.total_samples {
@@ -870,6 +949,11 @@ impl ZoomTransformTimeline {
                     }
                 };
 
+                // The engaged canvas state. Because these are targets rather
+                // than a blend, two adjacent segments with different states
+                // cross-fade through the spring instead of cutting.
+                let motion = &segment.motion;
+
                 StepTargets {
                     amount: amount as f32,
                     center: XY::new(center.0 as f32, center.1 as f32),
@@ -877,10 +961,18 @@ impl ZoomTransformTimeline {
                     segment_active: true,
                     snap,
                     auto_aim,
+                    motion_offset: XY::new(motion.offset_x as f32, motion.offset_y as f32),
+                    motion_tilt: XY::new(motion.tilt_x as f32, motion.tilt_y as f32),
+                    motion_rot: XY::new(motion.rotation as f32, motion.spin as f32),
                 }
             }
             None => StepTargets {
                 amount: 1.0,
+                // Rest is the untransformed canvas, so every motion channel
+                // targets zero and the spring carries the shot back on its own.
+                motion_offset: XY::new(0.0, 0.0),
+                motion_tilt: XY::new(0.0, 0.0),
+                motion_rot: XY::new(0.0, 0.0),
                 // Hold the last active framing while zooming out so the
                 // outgoing shot stays anchored (irrelevant once amount = 1).
                 center: held_center,
@@ -899,7 +991,7 @@ impl ZoomTransformTimeline {
 mod tests {
     use quiro_project::{
         ClipTransition, ClipTransitionType, CursorClickEvent, CursorMoveEvent, GlideDirection,
-        TimelineSegment, ZoomMode,
+        MotionState, TimelineSegment, ZoomMode,
     };
 
     use super::*;
@@ -917,6 +1009,7 @@ mod tests {
             glide_speed: 0.5,
             instant_animation: false,
             edge_snap_ratio: 0.25,
+            motion: MotionState::default(),
         }
     }
 
@@ -960,6 +1053,286 @@ mod tests {
             duration,
             None,
         )
+    }
+
+    fn motion_segment(start: f64, end: f64, motion: MotionState) -> ZoomSegment {
+        ZoomSegment {
+            motion,
+            ..manual_segment(start, end, 1.5, 0.5, 0.5)
+        }
+    }
+
+    /// The whole premise: rest is untransformed, the segment moves the canvas,
+    /// and it comes back on its own with no second keyframe to author.
+    #[test]
+    fn a_motion_state_departs_and_returns_to_rest() {
+        let segments = [motion_segment(
+            2.0,
+            5.0,
+            MotionState {
+                tilt_x: 20.0,
+                offset_x: 0.3,
+                ..Default::default()
+            },
+        )];
+        let mut timeline = timeline_for(&segments, &CursorEvents::default(), 12.0);
+        timeline.ensure_precomputed_until(12.0);
+
+        // Before it starts: exactly the canvas the user configured.
+        assert!(timeline.sample(0.5).motion.is_identity());
+
+        // Fully engaged near the end of the segment.
+        let engaged = timeline.sample(4.8).motion;
+        assert!(
+            engaged.tilt.x > 15.0 && engaged.offset.x > 0.2,
+            "should have reached most of the motion state, got {engaged:?}"
+        );
+
+        // Well after it ends: back to rest, with no authored return.
+        let returned = timeline.sample(11.0).motion;
+        assert!(
+            returned.tilt.x.abs() < 0.5 && returned.offset.x.abs() < 0.01,
+            "should have relaxed back to the resting canvas, got {returned:?}"
+        );
+    }
+
+    /// The end of the chain: the config the renderer actually reads must carry
+    /// the motion. Everything upstream of this passed while the product did
+    /// nothing, so this is the assertion that was missing.
+    #[test]
+    fn resolved_project_carries_the_motion_state() {
+        let mut project = ProjectConfiguration::default();
+        project.timeline = Some(TimelineConfiguration {
+            segments: vec![TimelineSegment {
+                recording_clip: 0,
+                timescale: 1.0,
+                start: 0.0,
+                end: 12.0,
+                name: None,
+                speed_audio_mode: None,
+                transform: None,
+                perspective: None,
+            }],
+            transitions: vec![],
+            zoom_segments: vec![motion_segment(
+                2.0,
+                5.0,
+                MotionState {
+                    tilt_x: 20.0,
+                    offset_x: 0.25,
+                    ..Default::default()
+                },
+            )],
+            scene_segments: vec![],
+            mask_segments: vec![],
+            text_segments: vec![],
+            caption_segments: vec![],
+            keyboard_segments: vec![],
+            audio_segments: vec![],
+        });
+
+        let mut timeline = ZoomTransformTimeline::from_project(
+            &project,
+            &CursorEvents::default(),
+            12.0,
+            XY::new(1920, 1080),
+        );
+        timeline.ensure_precomputed_until(12.0);
+
+        // At rest the renderer must see the untouched project.
+        assert!(
+            crate::resolve_project_for_frame(&project, &timeline, 0.5).is_none(),
+            "resting canvas should need no resolution at all"
+        );
+
+        // Engaged: the fields the render path reads must have moved.
+        let engaged = crate::resolve_project_for_frame(&project, &timeline, 4.8)
+            .expect("an engaged motion state must resolve a project");
+        let perspective = engaged
+            .background
+            .perspective
+            .expect("motion should have created a perspective");
+        let transform = engaged
+            .background
+            .display_transform
+            .expect("motion should have created a display transform");
+
+        assert!(
+            perspective.tilt_x > 15.0,
+            "tilt did not reach the renderer, got {}",
+            perspective.tilt_x
+        );
+        assert!(
+            transform.offset.x > 0.2,
+            "offset did not reach the renderer, got {}",
+            transform.offset.x
+        );
+    }
+
+    /// The app never calls `new` directly — it goes through `from_project`.
+    /// This asserts motion survives that path, so a green unit test on `new`
+    /// can never again pass while the product does nothing.
+    #[test]
+    fn motion_survives_the_from_project_construction_path() {
+        let mut project = ProjectConfiguration::default();
+        project.timeline = Some(TimelineConfiguration {
+            segments: vec![TimelineSegment {
+                recording_clip: 0,
+                timescale: 1.0,
+                start: 0.0,
+                end: 12.0,
+                name: None,
+                speed_audio_mode: None,
+                transform: None,
+                perspective: None,
+            }],
+            transitions: vec![],
+            zoom_segments: vec![motion_segment(
+                2.0,
+                5.0,
+                MotionState {
+                    tilt_x: 20.0,
+                    ..Default::default()
+                },
+            )],
+            scene_segments: vec![],
+            mask_segments: vec![],
+            text_segments: vec![],
+            caption_segments: vec![],
+            keyboard_segments: vec![],
+            audio_segments: vec![],
+        });
+
+        let mut timeline = ZoomTransformTimeline::from_project(
+            &project,
+            &CursorEvents::default(),
+            12.0,
+            XY::new(1920, 1080),
+        );
+        timeline.ensure_precomputed_until(12.0);
+
+        let engaged = timeline.sample(4.8).motion;
+        assert!(
+            engaged.tilt.x > 15.0,
+            "motion did not survive from_project, got {engaged:?}"
+        );
+    }
+
+    /// A segment with no motion configured must not disturb the canvas, so
+    /// every existing zoom-only project renders exactly as before.
+    #[test]
+    fn a_plain_zoom_segment_leaves_the_canvas_untransformed() {
+        let segments = [manual_segment(2.0, 5.0, 2.0, 0.5, 0.5)];
+        let mut timeline = timeline_for(&segments, &CursorEvents::default(), 10.0);
+        timeline.ensure_precomputed_until(10.0);
+
+        for step in 0..100 {
+            let at = step as f32 * 0.1;
+            assert!(
+                timeline.sample(at).motion.is_identity(),
+                "motion leaked at t={at}"
+            );
+        }
+    }
+
+    /// Motion is spring-driven, so it must be continuous — no cut into the
+    /// state and no snap back out of it.
+    #[test]
+    fn motion_moves_continuously_across_the_segment_edges() {
+        let segments = [motion_segment(
+            2.0,
+            5.0,
+            MotionState {
+                tilt_x: 30.0,
+                ..Default::default()
+            },
+        )];
+        let mut timeline = timeline_for(&segments, &CursorEvents::default(), 12.0);
+        timeline.ensure_precomputed_until(12.0);
+
+        let mut previous = timeline.sample(0.0).motion.tilt.x;
+        let mut worst: f64 = 0.0;
+        for step in 1..1200 {
+            let current = timeline.sample(step as f32 * 0.01).motion.tilt.x;
+            worst = worst.max((current - previous).abs());
+            previous = current;
+        }
+
+        // Judged against the travel, not an absolute: a cut moves the whole
+        // 30 degrees in one step, while a spring at peak velocity covers a few
+        // percent of it. Anything under a tenth is unambiguously sprung.
+        assert!(
+            worst < 3.0,
+            "largest 10ms step was {worst} degrees of 30 travelled"
+        );
+    }
+
+    /// Adjacent segments with different states must cross-fade rather than
+    /// cut, which is what springing the *target* buys over blending an
+    /// envelope.
+    #[test]
+    fn adjacent_motion_states_cross_fade() {
+        let segments = [
+            motion_segment(
+                1.0,
+                3.0,
+                MotionState {
+                    tilt_x: 25.0,
+                    ..Default::default()
+                },
+            ),
+            motion_segment(
+                3.0,
+                5.0,
+                MotionState {
+                    tilt_x: -25.0,
+                    ..Default::default()
+                },
+            ),
+        ];
+        let mut timeline = timeline_for(&segments, &CursorEvents::default(), 10.0);
+        timeline.ensure_precomputed_until(10.0);
+
+        let mut previous = timeline.sample(2.5).motion.tilt.x;
+        let mut worst: f64 = 0.0;
+        for step in 0..200 {
+            let current = timeline.sample(2.5 + step as f32 * 0.01).motion.tilt.x;
+            worst = worst.max((current - previous).abs());
+            previous = current;
+        }
+
+        // 50 degrees of travel between the opposing states; a cut would show
+        // the whole swing in a single step.
+        assert!(
+            worst < 5.0,
+            "handover between opposing states jumped {worst} degrees of 50 in one step"
+        );
+    }
+
+    /// Instant animation means instant for the whole state, or the tilt would
+    /// still be easing after the cut has landed.
+    #[test]
+    fn instant_animation_snaps_motion_too() {
+        let segments = [ZoomSegment {
+            instant_animation: true,
+            ..motion_segment(
+                2.0,
+                5.0,
+                MotionState {
+                    tilt_x: 20.0,
+                    ..Default::default()
+                },
+            )
+        }];
+        let mut timeline = timeline_for(&segments, &CursorEvents::default(), 10.0);
+        timeline.ensure_precomputed_until(10.0);
+
+        // A spring would still be climbing this soon after the start.
+        let just_after = timeline.sample(2.1).motion.tilt.x;
+        assert!(
+            (just_after - 20.0).abs() < 0.5,
+            "instant animation should have landed on the state, got {just_after}"
+        );
     }
 
     #[test]
@@ -1729,6 +2102,8 @@ mod tests {
                 end: 20.0,
                 name: None,
                 speed_audio_mode: None,
+                transform: None,
+                perspective: None,
             }],
             transitions: vec![],
             zoom_segments: vec![],
@@ -1785,7 +2160,9 @@ mod tests {
                     end: 4.0,
                     name: None,
                     speed_audio_mode: None,
-                },
+                    transform: None,
+                    perspective: None,
+                    },
                 TimelineSegment {
                     recording_clip: 0,
                     timescale: 1.0,
@@ -1793,7 +2170,9 @@ mod tests {
                     end: 14.0,
                     name: None,
                     speed_audio_mode: None,
-                },
+                    transform: None,
+                    perspective: None,
+                    },
             ],
             transitions: vec![ClipTransition {
                 segment_index: 1,

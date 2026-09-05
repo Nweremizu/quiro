@@ -12,7 +12,13 @@ import type {
 	VerticalAlign,
 	ZoomSegment,
 } from "@/utils/tauri";
-import { useEditorContext } from "./context";
+import {
+	FLAT_PERSPECTIVE,
+	IDENTITY_LAYER_TRANSFORM,
+	TransformControls,
+} from "@/components/TransformControls";
+import { MotionStateControls } from "./MotionStateControls";
+import { OUTPUT_SIZE, useEditorContext } from "./context";
 import {
 	textContentParagraph,
 	textContentString,
@@ -182,6 +188,13 @@ export function SegmentConfig() {
 							</>
 						)}
 					</Field>
+
+					<MotionStateControls
+						motion={segment.motion ?? {}}
+						onChange={(motion) =>
+							patchAt("zoomSegments", selection.index, { motion })
+						}
+					/>
 				</Panel>
 			);
 		}
@@ -604,6 +617,8 @@ export function SegmentConfig() {
 							]}
 						/>
 					</Field>
+
+					<ClipTransform index={selection.index} />
 				</Panel>
 			);
 		}
@@ -611,6 +626,70 @@ export function SegmentConfig() {
 		default:
 			return null;
 	}
+}
+
+/** Zoom / Position / Rotation for one clip.
+ *
+ * Scoped to the clip rather than the project: `TimelineSegment.transform` and
+ * `.perspective` override `background.displayTransform` / `.perspective` for
+ * the stretch of time that clip covers, resolved per frame by
+ * `ProjectConfiguration::with_clip_layer_overrides`. A clip that sets neither
+ * inherits the project-wide placement, so the panel opens showing whatever the
+ * clip currently renders with, and the first drag makes it the clip's own. */
+function ClipTransform({ index }: { index: number }) {
+	const { project, setProject } = useEditorContext();
+	const segment = project?.timeline?.segments?.[index];
+
+	const transform =
+		segment?.transform ??
+		project?.background.displayTransform ??
+		IDENTITY_LAYER_TRANSFORM;
+	const perspective =
+		segment?.perspective ?? project?.background.perspective ?? FLAT_PERSPECTIVE;
+
+	const patchClip = (patch: Partial<NonNullable<typeof segment>>) =>
+		setProject((current) =>
+			current.timeline
+				? {
+						...current,
+						timeline: {
+							...current.timeline,
+							segments: current.timeline.segments.map((clip, i) =>
+								i === index ? { ...clip, ...patch } : clip,
+							),
+						},
+					}
+				: current,
+		);
+
+	// Padding is symmetric and crop is applied before it, so neither moves the
+	// card's *centre* — only `displayPosition` does. That makes the laid-out
+	// centre exact here rather than an approximation, without the video editor
+	// needing the screenshot editor's `getImageRect`.
+	const laidOutCentre = {
+		x: (project?.background.displayPosition?.x ?? 0.5) * OUTPUT_SIZE.x,
+		y: (project?.background.displayPosition?.y ?? 0.5) * OUTPUT_SIZE.y,
+	};
+
+	if (!segment) return null;
+
+	return (
+		<TransformControls
+			transform={transform}
+			perspective={perspective}
+			canvas={{ width: OUTPUT_SIZE.x, height: OUTPUT_SIZE.y }}
+			laidOutCentre={laidOutCentre}
+			// No focus pad: a clip is a span of moving frames, so there is no one
+			// still to place a focal point against. Scale still zooms about
+			// whatever origin the clip already carries.
+			onTransformChange={(patch) =>
+				patchClip({ transform: { ...transform, ...patch } })
+			}
+			onPerspectiveChange={(patch) =>
+				patchClip({ perspective: { ...perspective, ...patch } })
+			}
+		/>
+	);
 }
 
 function Panel({

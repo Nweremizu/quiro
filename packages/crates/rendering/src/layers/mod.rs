@@ -1,3 +1,4 @@
+mod annotation;
 mod background;
 mod blur;
 mod camera;
@@ -22,6 +23,7 @@ pub(crate) use quiro_text::new_font_system;
 /// plain constructor.
 pub(crate) use quiro_text::{font_generation, new_font_system_at};
 
+pub use annotation::*;
 pub use background::*;
 pub use blur::*;
 pub use camera::*;

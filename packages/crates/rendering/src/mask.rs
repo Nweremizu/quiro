@@ -165,6 +165,80 @@ pub fn interpolate_masks(
     prepared
 }
 
+/// A mask annotation as a [`PreparedMask`], so it obscures through the same
+/// shader as a timeline mask segment rather than a second implementation.
+///
+/// `None` for any other annotation type. Where a `MaskSegment` interpolates
+/// keyframes over its own span, an annotation's geometry has already been
+/// resolved by `crate::annotation` — so this only has to map the mode.
+pub fn mask_from_annotation(
+    prepared: &crate::annotation::PreparedAnnotation,
+    output_size: XY<u32>,
+) -> Option<PreparedMask> {
+    let annotation = &prepared.annotation;
+    if annotation.annotation_type != quiro_project::AnnotationType::Mask {
+        return None;
+    }
+
+    let mode = annotation.mask_mode.unwrap_or(MaskMode::Blur);
+    let (render_mode, opacity, effect_amount) = match mode {
+        // Obscuring modes never blend with the source: a half-transparent blur
+        // would leave the original legible underneath it. That holds for an
+        // animating annotation too, so the envelope drives geometry only.
+        MaskMode::Blur => (
+            MaskRenderMode::Blur,
+            1.0,
+            normalize_effect_amount(annotation.mask_amount.unwrap_or(0.0)),
+        ),
+        MaskMode::Pixelate => (
+            MaskRenderMode::Pixelate,
+            1.0,
+            normalize_effect_amount(annotation.mask_amount.unwrap_or(0.0)),
+        ),
+        MaskMode::Redact => (MaskRenderMode::Redact, 1.0, 0.0),
+        // Spotlight darkens rather than obscures, so it is the one mode whose
+        // strength the entrance/exit envelope may safely scale.
+        MaskMode::Spotlight => (MaskRenderMode::Highlight, prepared.alpha, 0.0),
+    };
+
+    // `PreparedMask` is centre and size normalized against the *output*, while
+    // the annotation has already been resolved to output pixels.
+    let [x, y, width, height] = prepared.bounds;
+    let (out_w, out_h) = (output_size.x as f32, output_size.y as f32);
+    if out_w <= 0.0 || out_h <= 0.0 || width <= 0.0 || height <= 0.0 {
+        return None;
+    }
+
+    let shape = annotation.mask_shape.unwrap_or(MaskShape::Rect);
+    Some(PreparedMask {
+        center: XY::new(
+            ((x + width / 2.0) / out_w).clamp(0.0, 1.0),
+            ((y + height / 2.0) / out_h).clamp(0.0, 1.0),
+        ),
+        size: XY::new((width / out_w).clamp(0.0, 2.0), (height / out_h).clamp(0.0, 2.0)),
+        // Feather is suppressed for the same two reasons as a mask segment:
+        // it would smear a spotlight's boundary, and it would leave partially
+        // original pixels inside a redaction, breaking the one mode that
+        // promises irreversibility.
+        feather: match mode {
+            MaskMode::Spotlight | MaskMode::Redact => 0.0,
+            MaskMode::Blur | MaskMode::Pixelate => {
+                annotation.mask_feather.unwrap_or(0.0).max(0.0) as f32
+            }
+        },
+        opacity: opacity as f32,
+        effect_size: scaled_effect_size(output_size, effect_amount),
+        darkness: annotation.mask_darkness.unwrap_or(0.0).clamp(0.0, 1.0) as f32,
+        mode: render_mode,
+        shape,
+        corner_radius: match shape {
+            MaskShape::RoundedRect => 0.25,
+            MaskShape::Rect | MaskShape::Ellipse => 0.0,
+        },
+        output_size,
+    })
+}
+
 fn normalize_effect_amount(amount: f64) -> f64 {
     let contract = mask_effect_contract();
     if amount <= 0.0 {
@@ -177,6 +251,144 @@ fn normalize_effect_amount(amount: f64) -> f64 {
 fn scaled_effect_size(output_size: XY<u32>, amount: f64) -> f32 {
     let resolution_scale = output_size.y as f32 / MASK_EFFECT_BASE_HEIGHT;
     amount as f32 * resolution_scale
+}
+
+#[cfg(test)]
+mod annotation_conversion_tests {
+    use super::*;
+    use crate::annotation::{AnchorRects, prepare_annotation};
+    use quiro_project::{Annotation, AnnotationAnchor, AnnotationType};
+
+    const OUT: XY<u32> = XY { x: 1000, y: 500 };
+
+    fn anchors() -> AnchorRects {
+        AnchorRects {
+            capture: [0.0, 0.0, 1000.0, 500.0],
+            canvas: [0.0, 0.0, 1000.0, 500.0],
+        }
+    }
+
+    fn mask_annotation(mode: MaskMode) -> Annotation {
+        Annotation {
+            id: "m".into(),
+            annotation_type: AnnotationType::Mask,
+            x: 0.25,
+            y: 0.25,
+            width: 0.5,
+            height: 0.5,
+            stroke_color: "transparent".into(),
+            stroke_width: 0.0,
+            fill_color: "transparent".into(),
+            opacity: 1.0,
+            rotation: 0.0,
+            text: None,
+            mask_mode: Some(mode),
+            mask_amount: Some(18.0),
+            mask_shape: Some(MaskShape::Rect),
+            mask_feather: Some(0.1),
+            mask_darkness: Some(0.5),
+            mask_corner_radius: None,
+            focus: None,
+            arrow_curve: None,
+            arrow_bend: None,
+            arrow_start_head: None,
+            arrow_end_head: None,
+            arrow_head_size: None,
+            line_style: None,
+            arrow_taper: None,
+            text_content: None,
+            timing: None,
+            anchor: AnnotationAnchor::Capture,
+        }
+    }
+
+    fn convert(annotation: &Annotation) -> Option<PreparedMask> {
+        let prepared = prepare_annotation(annotation, anchors(), 0.0)?;
+        mask_from_annotation(&prepared, OUT)
+    }
+
+    #[test]
+    fn only_mask_annotations_convert() {
+        let mut other = mask_annotation(MaskMode::Blur);
+        other.annotation_type = AnnotationType::Rectangle;
+
+        assert!(convert(&other).is_none());
+        assert!(convert(&mask_annotation(MaskMode::Blur)).is_some());
+    }
+
+    /// The annotation is resolved to output pixels; `PreparedMask` wants centre
+    /// and size normalized against the output. A slip here would put the mask
+    /// somewhere other than where the editor drew it.
+    #[test]
+    fn geometry_converts_to_output_normalized_centre_and_size() {
+        let mask = convert(&mask_annotation(MaskMode::Blur)).unwrap();
+
+        assert_eq!(mask.center, XY::new(0.5, 0.5));
+        assert_eq!(mask.size, XY::new(0.5, 0.5));
+        assert_eq!(mask.output_size, OUT);
+    }
+
+    /// **The security property, inherited.** A redaction promises the original
+    /// is unrecoverable, and a feathered edge leaves partially-original pixels.
+    /// Annotations must not be a way around that.
+    #[test]
+    fn redact_and_spotlight_suppress_feather() {
+        for mode in [MaskMode::Redact, MaskMode::Spotlight] {
+            let mask = convert(&mask_annotation(mode)).unwrap();
+            assert_eq!(mask.feather, 0.0, "{mode:?} must not feather");
+        }
+
+        for mode in [MaskMode::Blur, MaskMode::Pixelate] {
+            let mask = convert(&mask_annotation(mode)).unwrap();
+            assert!(mask.feather > 0.0, "{mode:?} should keep its feather");
+        }
+    }
+
+    /// Obscuring modes stay fully opaque even mid-animation — a half-faded
+    /// blur would leave the thing it is hiding legible underneath.
+    #[test]
+    fn only_spotlight_takes_the_animation_envelope() {
+        for mode in [MaskMode::Blur, MaskMode::Pixelate, MaskMode::Redact] {
+            let mut annotation = mask_annotation(mode);
+            annotation.opacity = 0.3;
+            let mask = convert(&annotation).unwrap();
+            assert_eq!(mask.opacity, 1.0, "{mode:?} must stay opaque");
+        }
+
+        let mut spotlight = mask_annotation(MaskMode::Spotlight);
+        spotlight.opacity = 0.3;
+        let mask = convert(&spotlight).unwrap();
+        assert!((mask.opacity - 0.3).abs() < 1e-6);
+    }
+
+    #[test]
+    fn shape_selects_its_corner_radius() {
+        let mut rounded = mask_annotation(MaskMode::Blur);
+        rounded.mask_shape = Some(MaskShape::RoundedRect);
+
+        assert_eq!(convert(&rounded).unwrap().corner_radius, 0.25);
+        assert_eq!(
+            convert(&mask_annotation(MaskMode::Blur)).unwrap().corner_radius,
+            0.0
+        );
+    }
+
+    /// A mask annotation outside its timing window must not obscure anything.
+    #[test]
+    fn a_mask_outside_its_span_does_not_convert() {
+        let mut annotation = mask_annotation(MaskMode::Redact);
+        annotation.timing = Some(quiro_project::AnnotationTiming {
+            start: 5.0,
+            end: 6.0,
+            track: 0,
+            enter: quiro_project::AnnotationAnimation::None,
+            exit: quiro_project::AnnotationAnimation::None,
+            enter_duration: 0.0,
+            exit_duration: 0.0,
+        });
+
+        assert!(convert(&annotation).is_none());
+    }
 }
 
 #[cfg(test)]

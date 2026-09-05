@@ -172,7 +172,9 @@ impl EditorInstance {
                             timescale: 1.0,
                             name: None,
                             speed_audio_mode: None,
-                        }],
+                            transform: None,
+                            perspective: None,
+                                    }],
                         _ => {
                             warn!(
                                 "Failed to determine display duration for {}, leaving timeline unset",
@@ -205,7 +207,9 @@ impl EditorInstance {
                             timescale: 1.0,
                             name: None,
                             speed_audio_mode: None,
-                        })
+                            transform: None,
+                            perspective: None,
+                                    })
                     })
                     .collect(),
             };

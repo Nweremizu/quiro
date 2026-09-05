@@ -983,6 +983,7 @@ mod tests {
         project.background.padding = 0.0;
         let resolution_base = XY::new(1080, 1080);
         let zoom = InterpolatedZoom {
+            motion: crate::zoom::MotionOffsets::default(),
             t: 1.0,
             bounds: crate::zoom::SegmentBounds::new(XY::new(0.0, 0.0), XY::new(2.0, 2.0)),
         };

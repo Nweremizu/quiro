@@ -797,7 +797,51 @@ maskCornerRadius?: number | null; focus?: FocusConfig | null; arrowCurve?: Arrow
  * `height` into it, which needs the capture size and so cannot happen
  * inside [`ProjectConfiguration::load`].
  */
-textContent?: TextContent | null }
+textContent?: TextContent | null; 
+/**
+ * Absent means always visible — static semantics, and what every project
+ * written before this field has. Present makes the annotation a timeline
+ * clip. Nothing else in the document distinguishes a screenshot from a
+ * video, which is the point: a screenshot is a project whose annotations
+ * happen to be untimed.
+ */
+timing?: AnnotationTiming | null; anchor?: AnnotationAnchor }
+/**
+ * Which rect an annotation's normalized 0..1 geometry is measured against.
+ * 
+ * The distinction only becomes observable once the camera moves, which is why
+ * it arrives with [`AnnotationTiming`] rather than with the coordinate
+ * normalization in [`ProjectConfiguration::migrate_annotation_space`].
+ */
+export type AnnotationAnchor = 
+/**
+ * 0..1 of the capture. Rides zoom, pan, crop and padding, so a callout
+ * stays on the thing it points at. The default because it is what the
+ * screenshot editor already does — `space.ts`'s `CaptureNorm` — and
+ * because [`FocusConfig`] makes the same argument for the same reason.
+ */
+"capture" | 
+/**
+ * 0..1 of the output canvas, immune to camera movement. For titles and
+ * lower-thirds, which should not drift when the footage zooms.
+ */
+"canvas"
+/**
+ * Entrance and exit treatments for a timed annotation.
+ */
+export type AnnotationAnimation = 
+/**
+ * Appears and disappears on its timing bounds with no treatment.
+ */
+"none" | "fade" | "typewriter" | "slideLeft" | "slideRight" | "slideTop" | "slideBottom" | "scale"
+/**
+ * When a timed annotation is on screen, and how it arrives and leaves.
+ * 
+ * `track` matches the lane convention [`TextSegment`] and [`MaskSegment`] use,
+ * so `timelineTracks.ts` — generic over `{start, end, track?}` — gives
+ * annotation lanes packing, gap-fitting and row layout with no new machinery.
+ */
+export type AnnotationTiming = { start: number; end: number; track?: number; enter?: AnnotationAnimation; exit?: AnnotationAnimation; enterDuration?: number; exitDuration?: number }
 export type AnnotationType = "arrow" | "circle" | "rectangle" | "text" | "mask" | "focus"
 export type AppTheme = "system" | "light" | "dark"
 /**
@@ -1265,6 +1309,36 @@ export type MicrophoneDeviceSettings = { sampleRate: number | null; channels: nu
 export type MicrophoneFormatInfo = { sampleRate: number; channels: number }
 export type MicrophoneInfo = { name: string; sampleRate: number; channels: number; formats: MicrophoneFormatInfo[] }
 export type ModelIDType = string
+/**
+ * The transformed canvas state a zoom segment moves into.
+ * 
+ * Every field is a **delta from the resting canvas**, not an absolute: at rest
+ * they are all zero and the canvas is exactly as the user configured it. A
+ * motion state therefore only ever describes the departure, and the return is
+ * the spring relaxing back to zero — which is why there is nothing here to
+ * express "go back", and no keyframe to place at the end.
+ * 
+ * Deltas also mean motion composes with a hand-placed
+ * [`TimelineSegment::transform`] instead of fighting it: the clip keeps its
+ * static framing and the motion moves relative to that.
+ */
+export type MotionState = { 
+/**
+ * Canvas-width/height fractions, added to the resting placement.
+ */
+offsetX?: number; offsetY?: number; 
+/**
+ * In-plane rotation, degrees.
+ */
+rotation?: number; 
+/**
+ * Out-of-plane perspective tilt, degrees.
+ */
+tiltX?: number; tiltY?: number; 
+/**
+ * The perspective layer's own in-plane spin, degrees.
+ */
+spin?: number }
 export type MovExportSettings = { fps: number; resolution_base: XY<number>; cursor_only?: boolean }
 export type Mp4ExportSettings = { fps: number; resolution_base: XY<number>; compression: ExportCompression; custom_bpp: number | null; force_ffmpeg_decoder?: boolean; optimize_filesize?: boolean }
 export type MultipleSegment = { display: VideoMeta; camera?: VideoMeta | null; mic?: AudioMeta | null; system_audio?: AudioMeta | null; cursor?: string | null; keyboard?: string | null }
@@ -1509,7 +1583,22 @@ export type TextSegment = { start: number; end: number; track?: number; enabled?
 textContent?: TextContent | null }
 export type TextTransform = "none" | "uppercase" | "lowercase" | "capitalize"
 export type TimelineConfiguration = { segments: TimelineSegment[]; transitions: ClipTransition[]; zoomSegments: ZoomSegment[]; sceneSegments?: SceneSegment[]; maskSegments?: MaskSegment[]; textSegments?: TextSegment[]; captionSegments?: CaptionTrackSegment[]; keyboardSegments?: KeyboardTrackSegment[]; audioSegments?: AudioTrackSegment[] }
-export type TimelineSegment = { recordingSegment?: number; timescale: number; start: number; end: number; name?: string | null; speedAudioMode?: ClipSpeedAudioMode | null }
+export type TimelineSegment = { recordingSegment?: number; timescale: number; start: number; end: number; name?: string | null; speedAudioMode?: ClipSpeedAudioMode | null; 
+/**
+ * Free placement of the capture for the stretch of time this clip covers,
+ * overriding [`BackgroundConfiguration::display_transform`].
+ * 
+ * `None` — the default, and what every project written before this field
+ * has — falls back to the project-wide value, so an untouched project
+ * renders byte-identically. Set it and the capture can be framed
+ * differently per clip, which is the whole point of putting it here.
+ */
+transform?: LayerTransform | null; 
+/**
+ * Per-clip 3D tilt, overriding [`BackgroundConfiguration::perspective`]
+ * on the same all-or-nothing basis as [`Self::transform`].
+ */
+perspective?: PerspectiveConfiguration | null }
 export type UploadMeta = { state: "MultipartUpload"; video_id: string; file_path: string; pre_created_video: VideoUploadInfo; recording_dir: string } | { state: "SinglePartUpload"; video_id: string; recording_dir: string; file_path: string; screenshot_path: string } | { state: "SegmentUpload"; video_id: string; pre_created_video: VideoUploadInfo; recording_dir: string } | { state: "Failed"; error: string } | { state: "Complete" }
 export type VerticalAlign = "top" | "center" | "bottom"
 export type Video = { duration: number; width: number; height: number; fps: number; start_time: number }
@@ -1521,7 +1610,16 @@ export type WindowPosition = { x: number; y: number; displayId?: DisplayId | nul
 export type WindowUnderCursor = { id: WindowId; app_name: string; bounds: LogicalBounds }
 export type XY<T> = { x: T; y: T }
 export type ZoomMode = "auto" | { manual: { x: number; y: number } }
-export type ZoomSegment = { start: number; end: number; amount: number; mode: ZoomMode; glideDirection?: GlideDirection; glideSpeed?: number; instantAnimation?: boolean; edgeSnapRatio?: number }
+export type ZoomSegment = { start: number; end: number; amount: number; mode: ZoomMode; 
+/**
+ * How the canvas is transformed while this segment is engaged.
+ * 
+ * Driven by the same springs as [`Self::amount`] and the framing centre,
+ * so it eases in, holds, and eases back out with identical feel — and two
+ * adjacent segments with different states cross-fade rather than cut,
+ * because the spring is chasing a target that moved.
+ */
+motion: MotionState; glideDirection?: GlideDirection; glideSpeed?: number; instantAnimation?: boolean; edgeSnapRatio?: number }
 
 /** tauri-specta globals **/
 

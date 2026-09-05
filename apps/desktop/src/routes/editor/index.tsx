@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { DevDials } from "@/dev/DevDials";
 import { ClipsSidebar } from "./ClipsSidebar";
 import { ConfigSidebar } from "./ConfigSidebar";
 import { EditorProvider, useEditorContext } from "./context";
@@ -25,6 +26,8 @@ export default function EditorRoute() {
 	return (
 		<EditorProvider>
 			<Editor />
+			{/* Dev-only spring tuning; compiles to nothing in production. */}
+			<DevDials />
 		</EditorProvider>
 	);
 }

@@ -1,5 +1,11 @@
 import type { TimelineSegment } from "@/utils/tauri";
 
+/** The part of a clip these helpers actually read. Narrower than
+ * `TimelineSegment` on purpose: callers that have only a span — the cut and
+ * split maths in `timeline-utils.ts` — should not have to invent the fields
+ * they do not touch just to ask how long a clip is. */
+export type ClipSpan = Pick<TimelineSegment, "start" | "end" | "timescale">;
+
 export const DEFAULT_CLIP_TRANSITION_DURATION = 0.5;
 export const MIN_CLIP_TRANSITION_DURATION = 0.05;
 
@@ -13,13 +19,13 @@ export type ClipTransition = {
 
 export type ClipTransitionInput = Omit<ClipTransition, "segmentIndex">;
 
-export function clipDuration(segment: TimelineSegment) {
+export function clipDuration(segment: ClipSpan) {
 	return Math.max(0, (segment.end - segment.start) / segment.timescale);
 }
 
 export function maxTransitionDuration(
-	previous: TimelineSegment | undefined,
-	current: TimelineSegment | undefined,
+	previous: ClipSpan | undefined,
+	current: ClipSpan | undefined,
 ) {
 	if (!previous || !current) return 0;
 	return Math.min(clipDuration(previous), clipDuration(current)) / 2;
@@ -27,8 +33,8 @@ export function maxTransitionDuration(
 
 export function clampTransitionDuration(
 	duration: number,
-	previous: TimelineSegment | undefined,
-	current: TimelineSegment | undefined,
+	previous: ClipSpan | undefined,
+	current: ClipSpan | undefined,
 ) {
 	const maximum = maxTransitionDuration(previous, current);
 	if (maximum < MIN_CLIP_TRANSITION_DURATION) return 0;
@@ -36,7 +42,7 @@ export function clampTransitionDuration(
 }
 
 export function getClipTransition(
-	segments: TimelineSegment[],
+	segments: ClipSpan[],
 	transitions: ClipTransition[],
 	index: number,
 ): ClipTransition | null {
@@ -64,7 +70,7 @@ export function getClipTransition(
 }
 
 export function clipTransitionMap(
-	segments: TimelineSegment[],
+	segments: ClipSpan[],
 	transitions: ClipTransition[],
 ) {
 	const configured = new Array<ClipTransition | undefined>(segments.length);
@@ -89,7 +95,7 @@ export function clipTransitionMap(
 }
 
 export function clipTimelineOffsets(
-	segments: TimelineSegment[],
+	segments: ClipSpan[],
 	transitions: ClipTransition[],
 ) {
 	const offsets = new Array<number>(segments.length);
@@ -106,7 +112,7 @@ export function clipTimelineOffsets(
 }
 
 export function normalizeClipTransitions(
-	segments: TimelineSegment[],
+	segments: ClipSpan[],
 	transitions: ClipTransition[],
 ) {
 	return clipTransitionMap(segments, transitions).filter(
@@ -115,7 +121,7 @@ export function normalizeClipTransitions(
 }
 
 export function clipTimelineDuration(
-	segments: TimelineSegment[],
+	segments: ClipSpan[],
 	transitions: ClipTransition[],
 ) {
 	if (segments.length === 0) return 0;
@@ -126,7 +132,7 @@ export function clipTimelineDuration(
 }
 
 export function rangeIntersectsClipTransition(
-	segments: TimelineSegment[],
+	segments: ClipSpan[],
 	transitions: ClipTransition[],
 	start: number,
 	end: number,
@@ -142,7 +148,7 @@ export function rangeIntersectsClipTransition(
 }
 
 export function clipCutPreservesTransitionGeometry(
-	segments: TimelineSegment[],
+	segments: ClipSpan[],
 	transitions: ClipTransition[],
 	segmentIndex: number,
 	cutStart: number,

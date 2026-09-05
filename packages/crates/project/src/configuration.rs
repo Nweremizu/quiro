@@ -845,6 +845,19 @@ pub struct TimelineSegment {
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub speed_audio_mode: Option<ClipSpeedAudioMode>,
+    /// Free placement of the capture for the stretch of time this clip covers,
+    /// overriding [`BackgroundConfiguration::display_transform`].
+    ///
+    /// `None` — the default, and what every project written before this field
+    /// has — falls back to the project-wide value, so an untouched project
+    /// renders byte-identically. Set it and the capture can be framed
+    /// differently per clip, which is the whole point of putting it here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transform: Option<LayerTransform>,
+    /// Per-clip 3D tilt, overriding [`BackgroundConfiguration::perspective`]
+    /// on the same all-or-nothing basis as [`Self::transform`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub perspective: Option<PerspectiveConfiguration>,
 }
 
 #[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -882,6 +895,46 @@ pub enum GlideDirection {
     Down,
 }
 
+/// The transformed canvas state a zoom segment moves into.
+///
+/// Every field is a **delta from the resting canvas**, not an absolute: at rest
+/// they are all zero and the canvas is exactly as the user configured it. A
+/// motion state therefore only ever describes the departure, and the return is
+/// the spring relaxing back to zero — which is why there is nothing here to
+/// express "go back", and no keyframe to place at the end.
+///
+/// Deltas also mean motion composes with a hand-placed
+/// [`TimelineSegment::transform`] instead of fighting it: the clip keeps its
+/// static framing and the motion moves relative to that.
+#[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct MotionState {
+    /// Canvas-width/height fractions, added to the resting placement.
+    #[serde(default)]
+    pub offset_x: f64,
+    #[serde(default)]
+    pub offset_y: f64,
+    /// In-plane rotation, degrees.
+    #[serde(default)]
+    pub rotation: f64,
+    /// Out-of-plane perspective tilt, degrees.
+    #[serde(default)]
+    pub tilt_x: f64,
+    #[serde(default)]
+    pub tilt_y: f64,
+    /// The perspective layer's own in-plane spin, degrees.
+    #[serde(default)]
+    pub spin: f64,
+}
+
+impl MotionState {
+    /// True when this state asks for no movement at all, so the render path can
+    /// skip it and serialization can leave it out of the file entirely.
+    pub fn is_identity(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
 #[derive(Type, Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ZoomSegment {
@@ -889,6 +942,14 @@ pub struct ZoomSegment {
     pub end: f64,
     pub amount: f64,
     pub mode: ZoomMode,
+    /// How the canvas is transformed while this segment is engaged.
+    ///
+    /// Driven by the same springs as [`Self::amount`] and the framing centre,
+    /// so it eases in, holds, and eases back out with identical feel — and two
+    /// adjacent segments with different states cross-fade rather than cut,
+    /// because the spring is chasing a target that moved.
+    #[serde(default, skip_serializing_if = "MotionState::is_identity")]
+    pub motion: MotionState,
     #[serde(default)]
     pub glide_direction: GlideDirection,
     #[serde(default = "ZoomSegment::default_glide_speed")]
@@ -2056,6 +2117,75 @@ impl fmt::Display for AnnotationValidationError {
 
 impl std::error::Error for AnnotationValidationError {}
 
+/// Entrance and exit treatments for a timed annotation.
+#[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum AnnotationAnimation {
+    /// Appears and disappears on its timing bounds with no treatment.
+    #[default]
+    None,
+    Fade,
+    Typewriter,
+    SlideLeft,
+    SlideRight,
+    SlideTop,
+    SlideBottom,
+    Scale,
+}
+
+/// Which rect an annotation's normalized 0..1 geometry is measured against.
+///
+/// The distinction only becomes observable once the camera moves, which is why
+/// it arrives with [`AnnotationTiming`] rather than with the coordinate
+/// normalization in [`ProjectConfiguration::migrate_annotation_space`].
+#[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum AnnotationAnchor {
+    /// 0..1 of the capture. Rides zoom, pan, crop and padding, so a callout
+    /// stays on the thing it points at. The default because it is what the
+    /// screenshot editor already does — `space.ts`'s `CaptureNorm` — and
+    /// because [`FocusConfig`] makes the same argument for the same reason.
+    #[default]
+    Capture,
+    /// 0..1 of the output canvas, immune to camera movement. For titles and
+    /// lower-thirds, which should not drift when the footage zooms.
+    Canvas,
+}
+
+/// When a timed annotation is on screen, and how it arrives and leaves.
+///
+/// `track` matches the lane convention [`TextSegment`] and [`MaskSegment`] use,
+/// so `timelineTracks.ts` — generic over `{start, end, track?}` — gives
+/// annotation lanes packing, gap-fitting and row layout with no new machinery.
+#[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AnnotationTiming {
+    pub start: f64,
+    pub end: f64,
+    #[serde(default)]
+    pub track: u32,
+    #[serde(default)]
+    pub enter: AnnotationAnimation,
+    #[serde(default)]
+    pub exit: AnnotationAnimation,
+    #[serde(default = "AnnotationTiming::default_transition")]
+    pub enter_duration: f64,
+    #[serde(default = "AnnotationTiming::default_transition")]
+    pub exit_duration: f64,
+}
+
+impl AnnotationTiming {
+    fn default_transition() -> f64 {
+        0.3
+    }
+
+    /// Half-open, like every other span in this file: a clip ending at 2.0 and
+    /// one starting at 2.0 do not both render on the frame at t = 2.0.
+    pub fn contains(&self, time: f64) -> bool {
+        self.start <= time && time < self.end
+    }
+}
+
 #[derive(Type, Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Annotation {
@@ -2118,9 +2248,23 @@ pub struct Annotation {
     /// inside [`ProjectConfiguration::load`].
     #[serde(default)]
     pub text_content: Option<TextContent>,
+    /// Absent means always visible — static semantics, and what every project
+    /// written before this field has. Present makes the annotation a timeline
+    /// clip. Nothing else in the document distinguishes a screenshot from a
+    /// video, which is the point: a screenshot is a project whose annotations
+    /// happen to be untimed.
+    #[serde(default)]
+    pub timing: Option<AnnotationTiming>,
+    #[serde(default)]
+    pub anchor: AnnotationAnchor,
 }
 
 impl Annotation {
+    /// The one rule that lets static and motion be the same document.
+    pub fn visible_at(&self, time: f64) -> bool {
+        self.timing.is_none_or(|timing| timing.contains(time))
+    }
+
     pub fn validate(&self) -> Result<(), AnnotationValidationError> {
         // Type-specific payloads are mutually exclusive: each type must carry
         // its own and nothing else's.
@@ -2747,6 +2891,40 @@ impl ProjectConfiguration {
             .as_ref()
             .and_then(|t| t.get_segment_time(frame_time))
     }
+
+    /// A copy of this config with the clip under `frame_time` having its
+    /// [`TimelineSegment::transform`] / [`TimelineSegment::perspective`] folded
+    /// into the project-wide background fields, or `None` when that clip sets
+    /// neither.
+    ///
+    /// Resolving into the existing fields rather than threading a segment
+    /// through the renderer means every reader — including
+    /// `frame_layout::display_transform`, three call layers down — sees the
+    /// effective value with no signature churn and no risk of one site being
+    /// missed. `None` when there is nothing to override keeps the clone off the
+    /// hot path for every project that does not use the feature.
+    ///
+    /// The clip's value replaces the project's rather than composing with it:
+    /// two placements multiplied together is not something a user could reason
+    /// about from two panels that each show one of them.
+    pub fn with_clip_layer_overrides(&self, frame_time: f64) -> Option<Self> {
+        let (_, segment) = self.get_segment_time(frame_time)?;
+        let transform = segment.transform;
+        let perspective = segment.perspective.clone();
+        if transform.is_none() && perspective.is_none() {
+            return None;
+        }
+
+        let mut resolved = self.clone();
+        if let Some(transform) = transform {
+            resolved.background.display_transform = Some(transform);
+        }
+        if let Some(perspective) = perspective {
+            resolved.background.perspective = Some(perspective);
+        }
+
+        Some(resolved)
+    }
 }
 
 pub const SLOW_SMOOTHING_SAMPLES: usize = 24;
@@ -2761,6 +2939,103 @@ pub const FAST_VELOCITY_THRESHOLD: f64 = 0.015;
 mod tests {
     use super::*;
 
+    fn clip(start: f64, end: f64) -> TimelineSegment {
+        TimelineSegment {
+            recording_clip: 0,
+            timescale: 1.0,
+            start,
+            end,
+            ..Default::default()
+        }
+    }
+
+    fn config_with_clips(segments: Vec<TimelineSegment>) -> ProjectConfiguration {
+        ProjectConfiguration {
+            timeline: Some(TimelineConfiguration {
+                segments,
+                transitions: Vec::new(),
+                zoom_segments: Vec::new(),
+                scene_segments: Vec::new(),
+                mask_segments: Vec::new(),
+                text_segments: Vec::new(),
+                caption_segments: Vec::new(),
+                keyboard_segments: Vec::new(),
+                audio_segments: Vec::new(),
+            }),
+            ..Default::default()
+        }
+    }
+
+    /// A project whose clips override nothing must not pay for the feature, and
+    /// must render byte-identically to before the fields existed.
+    #[test]
+    fn clips_without_overrides_resolve_to_nothing() {
+        let config = config_with_clips(vec![clip(0.0, 4.0), clip(4.0, 8.0)]);
+
+        assert!(config.with_clip_layer_overrides(1.0).is_none());
+        assert!(config.with_clip_layer_overrides(5.0).is_none());
+    }
+
+    #[test]
+    fn a_clips_transform_replaces_the_project_wide_one_for_its_own_span() {
+        let mut first = clip(0.0, 4.0);
+        first.transform = Some(LayerTransform {
+            scale: 2.0,
+            ..Default::default()
+        });
+        let mut config = config_with_clips(vec![first, clip(4.0, 8.0)]);
+        config.background.display_transform = Some(LayerTransform {
+            scale: 1.5,
+            ..Default::default()
+        });
+
+        // Inside the overriding clip the clip wins outright — it replaces
+        // rather than composing, so the two are never multiplied together.
+        let during = config.with_clip_layer_overrides(1.0).unwrap();
+        assert_eq!(during.background.display_transform.unwrap().scale, 2.0);
+
+        // The next clip sets nothing, so the project-wide value stands.
+        assert!(config.with_clip_layer_overrides(5.0).is_none());
+        assert_eq!(config.background.display_transform.unwrap().scale, 1.5);
+    }
+
+    /// Setting one must not blank the other: a clip that tilts but does not
+    /// move should keep the project's placement.
+    #[test]
+    fn overriding_perspective_alone_leaves_the_transform_alone() {
+        let mut first = clip(0.0, 4.0);
+        first.perspective = Some(PerspectiveConfiguration {
+            tilt_x: 12.0,
+            tilt_y: 0.0,
+            rotate: 0.0,
+        });
+        let mut config = config_with_clips(vec![first]);
+        config.background.display_transform = Some(LayerTransform {
+            scale: 1.5,
+            ..Default::default()
+        });
+
+        let resolved = config.with_clip_layer_overrides(1.0).unwrap();
+
+        assert_eq!(resolved.background.perspective.unwrap().tilt_x, 12.0);
+        assert_eq!(resolved.background.display_transform.unwrap().scale, 1.5);
+    }
+
+    /// Old projects on disk have neither field and must deserialize unchanged.
+    #[test]
+    fn a_clip_written_before_these_fields_loads_with_neither() {
+        let segment: TimelineSegment = serde_json::from_value(serde_json::json!({
+            "recordingSegment": 0,
+            "timescale": 1.0,
+            "start": 0.0,
+            "end": 4.0,
+        }))
+        .unwrap();
+
+        assert!(segment.transform.is_none());
+        assert!(segment.perspective.is_none());
+    }
+
     fn timeline_with_transitions(transitions: Vec<ClipTransition>) -> TimelineConfiguration {
         TimelineConfiguration {
             segments: vec![
@@ -2771,7 +3046,9 @@ mod tests {
                     end: 4.0,
                     name: None,
                     speed_audio_mode: None,
-                },
+                    transform: None,
+                    perspective: None,
+                    },
                 TimelineSegment {
                     recording_clip: 1,
                     timescale: 1.0,
@@ -2779,7 +3056,9 @@ mod tests {
                     end: 16.0,
                     name: None,
                     speed_audio_mode: None,
-                },
+                    transform: None,
+                    perspective: None,
+                    },
             ],
             transitions,
             zoom_segments: Vec::new(),
@@ -3382,6 +3661,8 @@ mod annotation_space_tests {
             line_style: None,
             arrow_taper: None,
             text_content: None,
+            timing: None,
+            anchor: AnnotationAnchor::default(),
         }
     }
 
@@ -3945,5 +4226,67 @@ mod text_content_validate_tests {
                 id: "t1".to_string(),
             })
         );
+    }
+
+    /// The additive guarantee: an annotation written before `timing`/`anchor`
+    /// existed must load, and must behave exactly as it did — always visible,
+    /// anchored to the capture.
+    #[test]
+    fn annotation_without_timing_is_always_visible() {
+        let value = base_annotation("rectangle");
+        let annotation: Annotation = serde_json::from_value(value).unwrap();
+
+        assert_eq!(annotation.timing, None);
+        assert_eq!(annotation.anchor, AnnotationAnchor::Capture);
+        for time in [0.0, 0.5, 12.0, 1e6] {
+            assert!(annotation.visible_at(time), "untimed hidden at t={time}");
+        }
+    }
+
+    #[test]
+    fn timed_annotation_is_visible_only_within_its_half_open_span() {
+        let mut annotation: Annotation =
+            serde_json::from_value(base_annotation("rectangle")).unwrap();
+        annotation.timing = Some(AnnotationTiming {
+            start: 1.0,
+            end: 2.0,
+            track: 0,
+            enter: AnnotationAnimation::None,
+            exit: AnnotationAnimation::None,
+            enter_duration: 0.3,
+            exit_duration: 0.3,
+        });
+
+        assert!(!annotation.visible_at(0.999));
+        assert!(annotation.visible_at(1.0));
+        assert!(annotation.visible_at(1.999));
+        // Half-open: a clip ending here and one starting here never overlap.
+        assert!(!annotation.visible_at(2.0));
+    }
+
+    /// Timing and anchor default in from JSON that omits them, which is what
+    /// makes the change safe to land ahead of anything that reads it.
+    #[test]
+    fn timing_and_anchor_round_trip_through_json() {
+        let mut annotation: Annotation =
+            serde_json::from_value(base_annotation("rectangle")).unwrap();
+        annotation.timing = Some(AnnotationTiming {
+            start: 0.25,
+            end: 3.5,
+            track: 2,
+            enter: AnnotationAnimation::Fade,
+            exit: AnnotationAnimation::SlideBottom,
+            enter_duration: 0.4,
+            exit_duration: 0.2,
+        });
+        annotation.anchor = AnnotationAnchor::Canvas;
+
+        let encoded = serde_json::to_value(&annotation).unwrap();
+        assert_eq!(encoded["anchor"], serde_json::json!("canvas"));
+        assert_eq!(encoded["timing"]["exit"], serde_json::json!("slideBottom"));
+
+        let decoded: Annotation = serde_json::from_value(encoded).unwrap();
+        assert_eq!(decoded.timing, annotation.timing);
+        assert_eq!(decoded.anchor, AnnotationAnchor::Canvas);
     }
 }

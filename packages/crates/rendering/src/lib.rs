@@ -11,8 +11,8 @@ use frame_pipeline::{
 };
 use futures::future::OptionFuture;
 use layers::{
-    Background, BackgroundLayer, BackgroundNoise, BlurLayer, CameraLayer, CaptionsLayer,
-    CursorLayer, DisplayLayer, FrameLayer, KeyboardLayer, MaskLayer, TextLayer,
+    AnnotationLayer, Background, BackgroundLayer, BackgroundNoise, BlurLayer, CameraLayer,
+    CaptionsLayer, CursorLayer, DisplayLayer, FrameLayer, KeyboardLayer, MaskLayer, TextLayer,
 };
 use quiro_project::frame_layout;
 use quiro_project::{
@@ -30,6 +30,7 @@ use std::sync::{
 use std::{path::PathBuf, time::Instant};
 use tokio::sync::mpsc;
 
+mod annotation;
 pub mod composite_frame;
 mod coord;
 pub mod cpu_yuv;
@@ -2416,6 +2417,66 @@ pub struct ProjectUniforms {
     pub motion_blur_amount: f32,
     pub masks: Vec<PreparedMask>,
     pub texts: Vec<PreparedText>,
+    /// Annotations on screen this frame, in paint order. Untimed ones are
+    /// always here, which is what makes a screenshot project — every
+    /// annotation untimed — need no special case anywhere downstream.
+    pub annotations: Vec<annotation::PreparedAnnotation>,
+}
+
+/// The configuration the renderer should use at `frame_time`.
+///
+/// Two layers fold into the project-wide fields here so that everything
+/// downstream — including the `display_transform` reads buried in the layout
+/// maths and the copy stored in `ProjectUniforms::project` — sees the effective
+/// value without a segment or a time threaded through it:
+///
+/// 1. A clip's own static placement, via `with_clip_layer_overrides`.
+/// 2. The motion state, sampled off the same spring timeline that drives the
+///    zoom framing, added on top as a delta.
+///
+/// `None` when neither applies, so the clone stays off the hot path for
+/// projects that use neither feature.
+pub fn resolve_project_for_frame(
+    project: &ProjectConfiguration,
+    zoom_timeline: &ZoomTransformTimeline,
+    frame_time: f64,
+) -> Option<ProjectConfiguration> {
+    let clip_overridden = project.with_clip_layer_overrides(frame_time);
+    let motion = zoom_timeline.sample(frame_time as f32).motion;
+
+    if motion.is_identity() {
+        return clip_overridden;
+    }
+
+    let mut resolved = clip_overridden.unwrap_or_else(|| project.clone());
+    apply_motion_offsets(&mut resolved, motion);
+
+
+    Some(resolved)
+}
+
+/// Folds sampled motion deltas into the two fields the whole render path reads.
+///
+/// Additive on purpose: a clip that has been placed or tilted by hand keeps
+/// that framing, and the motion moves relative to it. Missing fields are
+/// created at their identity first, so a project with no static transform still
+/// animates from a sane resting state.
+fn apply_motion_offsets(config: &mut ProjectConfiguration, motion: crate::zoom::MotionOffsets) {
+    let transform = config
+        .background
+        .display_transform
+        .get_or_insert_with(quiro_project::LayerTransform::default);
+    transform.offset.x += motion.offset.x;
+    transform.offset.y += motion.offset.y;
+    transform.rotation += motion.rotation;
+
+    let perspective = config
+        .background
+        .perspective
+        .get_or_insert_with(quiro_project::PerspectiveConfiguration::default);
+    perspective.tilt_x += motion.tilt.x as f32;
+    perspective.tilt_y += motion.tilt.y as f32;
+    perspective.rotate += motion.spin as f32;
 }
 
 impl ProjectUniforms {
@@ -3298,6 +3359,27 @@ impl ProjectUniforms {
         zoom_timeline: &ZoomTransformTimeline,
         cursor_interp_fn: &dyn Fn(f32) -> Option<InterpolatedCursorPosition>,
     ) -> Self {
+        // Resolved HERE rather than in `new`, because `new` is not the only way
+        // in: playback and scrub previews construct through
+        // `new_with_precomputed_cursor`, which reaches this function directly.
+        // Resolving in one of the two public constructors meant a clip's own
+        // placement — and the motion state built on top of it — applied on
+        // export but silently did nothing during playback. `new_inner` is the
+        // single point every caller passes through, so it is the only correct
+        // home for this.
+        //
+        // Everything below, including the `display_transform` reads buried in
+        // the layout maths and the copy stored in `Self::project` that `slide`
+        // later re-reads, then sees the effective value with no segment or time
+        // threaded through it. `None` when nothing applies, so the clone stays
+        // off the hot path for projects that use neither feature.
+        let resolved = resolve_project_for_frame(
+            project,
+            zoom_timeline,
+            frame_number as f64 / fps as f64,
+        );
+        let project = resolved.as_ref().unwrap_or(project);
+
         let options = &constants.options;
         let output_size = Self::get_output_size(options, project, resolution_base);
         let fps_f32 = fps as f32;
@@ -4154,7 +4236,7 @@ impl ProjectUniforms {
                 }
             });
 
-        let masks = project
+        let mut masks = project
             .timeline
             .as_ref()
             .map(|timeline| {
@@ -4166,7 +4248,7 @@ impl ProjectUniforms {
             })
             .unwrap_or_default();
 
-        let texts = project
+        let mut texts = project
             .timeline
             .as_ref()
             .map(|timeline| {
@@ -4178,6 +4260,39 @@ impl ProjectUniforms {
                 )
             })
             .unwrap_or_default();
+
+        // Capture-anchored annotations resolve against the displayed capture,
+        // whose bounds already carry zoom and pan — so a callout tracks what it
+        // points at without annotations knowing the camera exists.
+        let anchor_rects = annotation::AnchorRects {
+            capture: display.target_bounds,
+            canvas: [0.0, 0.0, output_size.0 as f32, output_size.1 as f32],
+        };
+        let annotations =
+            annotation::prepare_annotations(&project.annotations, anchor_rects, frame_time as f64);
+
+        // Text and mask annotations draw through the layers those types already
+        // have, rather than a second text stack and a second mask shader inside
+        // `AnnotationLayer`. The cost is paint order: they render at the mask
+        // and text stages, so a shape annotation cannot sit between a mask
+        // annotation and the footage, or above a text annotation. Splitting the
+        // annotation pass into interleaved batches is the fix if that ever
+        // matters; nothing in the product needs it today.
+        let output_xy = XY::new(output_size.0, output_size.1);
+        for prepared in &annotations {
+            if let Some(mask) = mask::mask_from_annotation(prepared, output_xy) {
+                masks.push(mask);
+            }
+            if let Some(text) = text::prepare_annotation_text(
+                prepared,
+                // Font sizes are px@1080 against the annotation's own anchor,
+                // which is the capture — not the output — whenever the
+                // composition has padding around it.
+                anchor_rects.rect_for(prepared.annotation.anchor)[3],
+            ) {
+                texts.push(text);
+            }
+        }
 
         Self {
             output_size,
@@ -4203,6 +4318,7 @@ impl ProjectUniforms {
             motion_blur_amount: cursor_motion_blur,
             masks,
             texts,
+            annotations,
         }
     }
 }
@@ -5483,6 +5599,7 @@ pub struct RendererLayers {
     camera: CameraLayer,
     camera_only: CameraLayer,
     mask: MaskLayer,
+    annotation: AnnotationLayer,
     text: TextLayer,
     captions: CaptionsLayer,
     keyboard: KeyboardLayer,
@@ -5526,6 +5643,7 @@ impl RendererLayers {
                 shared_composite_pipeline,
             ),
             mask: MaskLayer::new(device),
+            annotation: AnnotationLayer::new(device),
             text: TextLayer::new(device, queue),
             captions: CaptionsLayer::new(device, queue),
             keyboard: KeyboardLayer::new(device, queue),
@@ -5736,6 +5854,12 @@ impl RendererLayers {
             self.run_shared_camera_blur(&constants.device, &constants.queue, mode);
         }
 
+        self.annotation.prepare(
+            &constants.device,
+            &constants.queue,
+            &uniforms.annotations,
+        );
+
         self.text.prepare(
             &constants.device,
             &constants.queue,
@@ -5901,6 +6025,12 @@ impl RendererLayers {
             );
         }
         timings.camera_blur_prepare_duration = start.elapsed();
+
+        self.annotation.prepare(
+            &constants.device,
+            &constants.queue,
+            &uniforms.annotations,
+        );
 
         let start = Instant::now();
         self.text.prepare(
@@ -6071,6 +6201,14 @@ impl RendererLayers {
             for mask in &uniforms.masks {
                 self.mask.render(device, queue, session, encoder, mask);
             }
+        }
+
+        // Above the content and its masks, below chrome — a callout should sit
+        // over the footage it points at, but under the keyboard and captions
+        // overlays, which are chrome rather than part of the composition.
+        if self.annotation.has_content() {
+            let mut pass = render_pass!(session.current_texture_view(), wgpu::LoadOp::Load);
+            self.annotation.render(&mut pass);
         }
 
         if !uniforms.texts.is_empty() {

@@ -82,7 +82,7 @@ impl TextLayer {
             let layout = quiro_text::layout_text(
                 &text.content,
                 quiro_text::Constraint {
-                    anchor_height: output_size.1 as f32,
+                    anchor_height: text.anchor_height,
                     width,
                     height,
                 },
