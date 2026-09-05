@@ -153,6 +153,13 @@ fn prepare_ws_data(
             with_pooled_buffer(frame_pool, |vec| pack_nv12_planes(vec, frame)),
             frame.width(),
         ),
+        // The camera path streams raw frames only; encoding is the editor
+        // preview's concern, so treat this as RGBA rather than adding a branch
+        // that cannot be reached.
+        WSFrameFormat::H264 { .. } => (
+            with_pooled_buffer(frame_pool, |vec| pack_rgba_rows(vec, frame)),
+            frame.width() * 4,
+        ),
     }
 }
 

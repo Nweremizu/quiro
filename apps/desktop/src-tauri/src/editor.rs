@@ -124,10 +124,145 @@ impl EditorPaths {
     }
 }
 
+/// Encodes preview frames on a thread of their own and republishes them.
+///
+/// Encoding is blocking CPU work, so it must not run on the render callback
+/// (which would throttle rendering) or on a tokio worker (which is what
+/// starved the runtime before — see `frame_pipeline::YIELD_UNTIL`).
+///
+/// The queue holds one frame and drops rather than blocking, matching the
+/// `watch` channel downstream: a live preview wants the newest frame, not a
+/// backlog. All-intra encoding makes those drops harmless.
+fn spawn_preview_encoder(
+    frame_tx: watch::Sender<Option<Arc<WSFrame>>>,
+) -> (
+    std::sync::mpsc::SyncSender<Arc<WSFrame>>,
+    Arc<std::sync::atomic::AtomicU64>,
+    Arc<std::sync::atomic::AtomicU64>,
+) {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    let (raw_tx, raw_rx) = std::sync::mpsc::sync_channel::<Arc<WSFrame>>(1);
+    // Offered vs dropped at the queue, against encoded-per-second below: says
+    // whether the encoder is slow or simply not being handed frames.
+    let offered = Arc::new(AtomicU64::new(0));
+    let dropped = Arc::new(AtomicU64::new(0));
+    let (offered_thread, dropped_thread) = (offered.clone(), dropped.clone());
+
+    std::thread::Builder::new()
+        .name("preview-encoder".into())
+        .spawn(move || {
+            let mut encoder = crate::preview_encoder::PreviewEncoder::new(60);
+            let mut failed = false;
+            let mut logged_first = false;
+            let mut encoded_count = 0u64;
+            let mut empty_count = 0u64;
+            let mut encode_nanos = 0u64;
+            let mut window = std::time::Instant::now();
+
+            while let Ok(frame) = raw_rx.recv() {
+                // One failure is usually a missing encoder rather than a bad
+                // frame, so stop trying and fall back to raw for the session
+                // instead of logging once per frame forever.
+                if failed {
+                    let _ = frame_tx.send(Some(frame));
+                    continue;
+                }
+
+                let encode_start = std::time::Instant::now();
+                let encoded = match frame.format {
+                    WSFrameFormat::Rgba => encoder.encode(
+                        &frame.data,
+                        frame.stride,
+                        frame.width,
+                        frame.height,
+                        frame.frame_number,
+                    ),
+                    // Already compressed or planar; nothing to do.
+                    _ => Ok(None),
+                };
+
+                encode_nanos += encode_start.elapsed().as_nanos() as u64;
+
+                if window.elapsed() >= std::time::Duration::from_secs(2) {
+                    let secs = window.elapsed().as_secs_f64();
+                    tracing::info!(
+                        offered_per_sec =
+                            format!("{:.1}", offered_thread.swap(0, Ordering::Relaxed) as f64 / secs),
+                        dropped_per_sec =
+                            format!("{:.1}", dropped_thread.swap(0, Ordering::Relaxed) as f64 / secs),
+                        encoded_per_sec = format!("{:.1}", encoded_count as f64 / secs),
+                        empty_per_sec = format!("{:.1}", empty_count as f64 / secs),
+                        encode_avg_ms = format!(
+                            "{:.2}",
+                            encode_nanos as f64 / encoded_count.max(1) as f64 / 1_000_000.0
+                        ),
+                        "PREVIEW_ENCODER stats"
+                    );
+                    encoded_count = 0;
+                    empty_count = 0;
+                    encode_nanos = 0;
+                    window = std::time::Instant::now();
+                }
+
+                match encoded {
+                    Ok(Some(encoded)) => {
+                        encoded_count += 1;
+                        let config_len = encoded.config.as_ref().map_or(0, |c| c.len()) as u32;
+                        if !logged_first {
+                            logged_first = true;
+                            tracing::info!(
+                                bytes = encoded.data.len(),
+                                config_bytes = config_len,
+                                width = encoded.width,
+                                height = encoded.height,
+                                "Preview encoder produced its first frame"
+                            );
+                        }
+                        let mut data =
+                            Vec::with_capacity(config_len as usize + encoded.data.len());
+                        if let Some(config) = encoded.config {
+                            data.extend_from_slice(&config);
+                        }
+                        data.extend_from_slice(&encoded.data);
+
+                        let _ = frame_tx.send(Some(Arc::new(WSFrame {
+                            data: Arc::new(data),
+                            width: encoded.width,
+                            height: encoded.height,
+                            stride: config_len,
+                            frame_number: frame.frame_number,
+                            target_time_ns: frame.target_time_ns,
+                            format: WSFrameFormat::H264 { config_len },
+                            created_at: frame.created_at,
+                        })));
+                    }
+                    Ok(None) => {
+                        // The encoder buffered this frame rather than emitting
+                        // one. Publishing the raw frame instead would put an
+                        // 8MB payload on a wire that is otherwise carrying
+                        // ~60KB — the next encoded frame is along shortly, so
+                        // skipping is cheaper than falling back.
+                        empty_count += 1;
+                    }
+                    Err(error) => {
+                        tracing::warn!(%error, "Preview encoding unavailable; streaming raw frames");
+                        failed = true;
+                        let _ = frame_tx.send(Some(frame));
+                    }
+                }
+            }
+        })
+        .expect("spawning the preview encoder thread");
+
+    (raw_tx, offered, dropped)
+}
+
 fn make_frame_callback(
     app: AppHandle,
     frame_tx: watch::Sender<Option<Arc<WSFrame>>>,
 ) -> quiro_editor::EditorFrameCallback {
+    let (raw_tx, offered, dropped) = spawn_preview_encoder(frame_tx.clone());
     Box::new(move |output, layout| {
         let ws_frame = match output {
             EditorFrameOutput::Nv12(frame) => WSFrame {
@@ -159,7 +294,12 @@ fn make_frame_callback(
             },
         };
 
-        let _ = frame_tx.send(Some(Arc::new(ws_frame)));
+        // Drops when the encoder is still busy with the previous frame, which
+        // is the same "newest frame wins" rule the socket already applies.
+        offered.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if raw_tx.try_send(Arc::new(ws_frame)).is_err() {
+            dropped.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
         let _ = FrameLayoutEvent::from(layout).emit(&app);
     })
 }

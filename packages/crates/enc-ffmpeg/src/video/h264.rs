@@ -31,6 +31,7 @@ pub struct H264EncoderBuilder {
     encoder_priority_override: Option<&'static [&'static str]>,
     is_export: bool,
     crf: Option<u8>,
+    keyframe_interval_secs: Option<u32>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -77,6 +78,7 @@ impl H264EncoderBuilder {
             encoder_priority_override: None,
             is_export: false,
             crf: None,
+            keyframe_interval_secs: None,
         }
     }
 
@@ -113,6 +115,18 @@ impl H264EncoderBuilder {
 
     pub fn with_export_settings(mut self) -> Self {
         self.is_export = true;
+        self
+    }
+
+    /// Forces every frame to be a keyframe.
+    ///
+    /// For a live preview rather than a recording: the frame channel feeding it
+    /// keeps only the newest frame and drops the rest, so any inter-frame
+    /// prediction would reference frames the decoder never received. All-intra
+    /// costs bitrate but is immune to that, and to seeking and scrubbing, which
+    /// otherwise need a keyframe request round trip.
+    pub fn all_intra(mut self) -> Self {
+        self.keyframe_interval_secs = Some(0);
         self
     }
 
@@ -154,6 +168,7 @@ impl H264EncoderBuilder {
             self.encoder_priority_override,
             self.is_export,
             self.crf,
+            self.keyframe_interval_secs,
         );
         if candidates.is_empty() {
             return Err(H264EncoderError::CodecNotFound);
@@ -319,6 +334,7 @@ impl H264EncoderBuilder {
             self.encoder_priority_override,
             self.is_export,
             self.crf,
+            self.keyframe_interval_secs,
         );
         if candidates.is_empty() {
             return Err(H264EncoderError::CodecNotFound);
@@ -881,8 +897,9 @@ fn requires_software_encoder(config: &VideoInfo, preset: H264Preset, is_export: 
     }
 
     // ponytail: GPU-vendor hardware encoder selection (cap-frame-converter) not
-    // copied over yet — always software libx264 on Windows for now. Revisit
-    // once hardware encode throughput is actually a bottleneck.
+    // copied over yet — software libx264 by default on Windows. Callers that
+    // have measured the cost can pass `with_encoder_priority_override`, which
+    // now takes precedence; the editor preview does exactly that.
     #[cfg(target_os = "windows")]
     {
         let _ = config;
@@ -923,15 +940,27 @@ fn get_encoder_priority_with_override(
     override_priority: Option<&'static [&'static str]>,
     is_export: bool,
 ) -> &'static [&'static str] {
+    // The env-var escape hatch still wins over everything.
     if force_software_encoder() {
         return &["libx264"];
+    }
+
+    // An explicit override is a caller stating what it needs, so it takes
+    // precedence over the platform default — including the blanket
+    // software-only rule on Windows below. The preview encoder is the only
+    // caller today, and it measured `libx264` at ~35ms per 1080p all-intra
+    // frame, degrading to ~100ms: a 10fps ceiling no amount of transport work
+    // could lift. Every override list ends in `libx264`, so a machine whose
+    // hardware encoder fails its self-test still lands on software.
+    if let Some(priority) = override_priority {
+        return priority;
     }
 
     if requires_software_encoder(config, preset, is_export) {
         return &["libx264"];
     }
 
-    override_priority.unwrap_or_else(|| get_default_encoder_priority(config))
+    get_default_encoder_priority(config)
 }
 
 fn force_software_encoder() -> bool {
@@ -959,11 +988,15 @@ fn get_codec_and_options(
     encoder_priority_override: Option<&'static [&'static str]>,
     is_export: bool,
     crf: Option<u8>,
+    keyframe_interval_secs: Option<u32>,
 ) -> Vec<(Codec, Dictionary<'static>)> {
-    let keyframe_interval_secs = DEFAULT_KEYFRAME_INTERVAL_SECS;
+    let keyframe_interval_secs =
+        keyframe_interval_secs.unwrap_or(DEFAULT_KEYFRAME_INTERVAL_SECS);
     let denominator = config.frame_rate.denominator();
     let frames_per_sec = config.frame_rate.numerator() as f64
         / if denominator == 0 { 1 } else { denominator } as f64;
+    // `Some(0)` is the all-intra request: `max(1.0)` turns it into a GOP of one
+    // frame rather than falling back to the default interval.
     let keyframe_interval = (keyframe_interval_secs as f64 * frames_per_sec)
         .round()
         .max(1.0) as i32;

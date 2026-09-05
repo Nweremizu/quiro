@@ -8,6 +8,10 @@ use tokio_util::sync::CancellationToken;
 
 const NV12_VIDEO_FORMAT_MAGIC: u32 = 0x4e563132;
 const NV12_FULL_FORMAT_MAGIC: u32 = 0x4e563146;
+/// "H264". Payload is `[decoder config][encoded frame]`, and the trailer's
+/// stride slot carries the config length — stride is meaningless once the
+/// frame is compressed, so the layout stays identical to NV12's.
+const H264_FORMAT_MAGIC: u32 = 0x48323634;
 
 fn pack_frame_data(
     mut data: Vec<u8>,
@@ -30,6 +34,10 @@ fn pack_frame_data(
 pub enum WSFrameFormat {
     Rgba,
     Nv12 { full_range: bool },
+    /// All-intra H.264. `config_len` bytes of `avcC`/Annex-B decoder config are
+    /// prepended to the payload, and are only non-zero when the client needs to
+    /// (re)configure — on the first frame and after a resolution change.
+    H264 { config_len: u32 },
 }
 
 #[derive(Clone)]
@@ -47,7 +55,7 @@ pub struct WSFrame {
 
 fn pack_ws_frame(frame: &WSFrame) -> Vec<u8> {
     let metadata_size = match frame.format {
-        WSFrameFormat::Nv12 { .. } => 28usize,
+        WSFrameFormat::Nv12 { .. } | WSFrameFormat::H264 { .. } => 28usize,
         WSFrameFormat::Rgba => 24,
     };
     let mut buf = Vec::with_capacity(frame.data.len() + metadata_size);
@@ -73,6 +81,14 @@ fn pack_ws_frame(frame: &WSFrame) -> Vec<u8> {
             buf.extend_from_slice(&frame.width.to_le_bytes());
             buf.extend_from_slice(&frame.frame_number.to_le_bytes());
             buf.extend_from_slice(&frame.target_time_ns.to_le_bytes());
+        }
+        WSFrameFormat::H264 { config_len } => {
+            buf.extend_from_slice(&config_len.to_le_bytes());
+            buf.extend_from_slice(&frame.height.to_le_bytes());
+            buf.extend_from_slice(&frame.width.to_le_bytes());
+            buf.extend_from_slice(&frame.frame_number.to_le_bytes());
+            buf.extend_from_slice(&frame.target_time_ns.to_le_bytes());
+            buf.extend_from_slice(&H264_FORMAT_MAGIC.to_le_bytes());
         }
     }
 
@@ -294,6 +310,7 @@ async fn create_watch_frame_ws_inner(
                             WSFrameFormat::Nv12 { full_range: false } => "NV12",
                             WSFrameFormat::Nv12 { full_range: true } => "NV12-full",
                             WSFrameFormat::Rgba => "RGBA",
+                            WSFrameFormat::H264 { .. } => "H264",
                         };
 
                         let pack_start = Instant::now();

@@ -18,6 +18,7 @@ mod general_settings;
 mod gpu_context;
 mod hotkeys;
 mod import;
+mod preview_encoder;
 mod library;
 mod permissions;
 mod presets;

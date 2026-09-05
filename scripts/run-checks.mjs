@@ -21,6 +21,8 @@ const CHECKS = [
 	"src/routes/screenshot-editor/text-content.check.ts",
 	"src/routes/editor/text-content.check.ts",
 	"src/routes/editor/Timeline/handle-geometry.check.ts",
+	"src/routes/editor/clip-merge.check.ts",
+	"src/routes/screenshot-editor/codec-config.check.ts",
 	"src/utils/text/dom-roundtrip.check.ts",
 	"src/components/font-rows.check.ts",
 	"src/components/slider-value.check.ts",

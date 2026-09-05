@@ -396,9 +396,13 @@ impl RgbaToNv12Converter {
     pub fn start_readback(&mut self) {
         if let Some(ref mut pending) = self.pending {
             let (tx, rx) = oneshot::channel();
+            // NV12 is a full-height Y plane plus a half-height interleaved UV
+            // plane at the same stride. Map only that, not the whole pooled
+            // buffer, which `ensure_size` may have grown for a larger output.
+            let used = nv12_used_bytes(pending.y_stride, pending.height);
             pending
                 .buffer
-                .slice(..)
+                .slice(..used)
                 .map_async(wgpu::MapMode::Read, move |result| {
                     let _ = tx.send(result);
                 });
@@ -409,6 +413,13 @@ impl RgbaToNv12Converter {
     pub fn take_pending(&mut self) -> Option<PendingNv12Readback> {
         self.pending.take()
     }
+}
+
+/// Bytes an NV12 frame occupies: a full-height Y plane plus a half-height
+/// interleaved UV plane, both at `y_stride`. Odd heights round the chroma rows
+/// up, matching how the encoder lays them out.
+fn nv12_used_bytes(y_stride: u32, height: u32) -> u64 {
+    y_stride as u64 * (height as u64 + height.div_ceil(2) as u64)
 }
 
 pub struct PendingNv12Readback {
@@ -482,7 +493,12 @@ impl PendingNv12Readback {
             }
         }
 
-        let buffer_slice = self.buffer.slice(..);
+        // Only the two planes this frame wrote — the pooled buffer keeps the
+        // size of the largest output seen, and everything past the UV plane is
+        // stale bytes that `uv_plane()` would otherwise hand downstream.
+        let buffer_slice = self
+            .buffer
+            .slice(..nv12_used_bytes(self.y_stride, self.height));
         let data = buffer_slice.get_mapped_range();
         let data_len = data.len();
 
@@ -518,11 +534,25 @@ pub enum GpuOutputFormat {
     Rgba,
 }
 
-/// How long to keep yield-polling for a GPU readback before sleeping. Covers
-/// a healthy transfer several times over; past it, something is wrong and
-/// burning a core no longer helps.
-const YIELD_UNTIL: std::time::Duration =
-    std::time::Duration::from_millis(if cfg!(windows) { 40 } else { 8 });
+/// How long to keep yield-polling for a GPU readback before sleeping.
+///
+/// This is a spin, not a wait: `yield_now` re-queues the task immediately, so
+/// for as long as this window lasts the readback keeps a tokio worker runnable
+/// and every other task on the runtime has to contend with it.
+///
+/// It was 40ms on Windows, chosen to "cover a healthy transfer several times
+/// over" — but a 1080p RGBA readback is 8.1MB and measured 20-31ms, entirely
+/// inside that window. So the loop spun for the whole transfer, on up to three
+/// in-flight buffers at once, and starved the runtime: the preview websocket
+/// took 355ms to begin a send that itself costs 4ms, the ffmpeg decoders
+/// dropped receivers, and playback collapsed from 60fps to 23.
+///
+/// Now it covers only a genuinely quick transfer. Past that the readback is
+/// long enough that a 1ms sleep is cheap by comparison — `timeBeginPeriod(1)`
+/// in `main` makes those sleeps real — and the worker is free meanwhile.
+/// Uniform across platforms: the starvation argument does not depend on the
+/// OS, and sleep granularity off Windows is finer still.
+const YIELD_UNTIL: std::time::Duration = std::time::Duration::from_millis(2);
 
 /// Beyond this, back off harder — the frame is late regardless.
 const SHORT_SLEEP_UNTIL: std::time::Duration = std::time::Duration::from_millis(50);
@@ -585,7 +615,11 @@ impl PendingReadback {
         RenderingError::BufferMapWaitingFailed
     }
 
-    pub async fn wait(mut self, device: &wgpu::Device) -> Result<RenderedFrame, RenderingError> {
+    pub async fn wait(
+        mut self,
+        device: &wgpu::Device,
+        pool: &mut Vec<Arc<Vec<u8>>>,
+    ) -> Result<RenderedFrame, RenderingError> {
         let mut poll_count = 0u32;
         let start_time = Instant::now();
         let timeout_duration = gpu_buffer_wait_timeout();
@@ -641,10 +675,53 @@ impl PendingReadback {
             }
         }
 
-        let buffer_slice = self.buffer.slice(..);
+        // Only the region this frame actually wrote. The readback buffers are
+        // pooled and `ensure_size` grows them but never shrinks, so after the
+        // preview drops to a lower quality the buffer is still sized for the
+        // largest output seen so far. Slicing the whole thing shipped that
+        // entire buffer every frame — 8.1MB of it for a 480x270 preview, the
+        // rest stale bytes the client correctly ignores — which is why lowering
+        // preview quality did nothing for the frame rate.
+        let used = self.padded_bytes_per_row as u64 * self.height as u64;
+        let buffer_slice = self.buffer.slice(..used);
         let data = buffer_slice.get_mapped_range();
-        let mut data_vec = Vec::with_capacity(data.len() + 24);
-        data_vec.extend_from_slice(&data);
+
+        // Reuse a retired buffer rather than allocating one per frame. At
+        // 1080p that allocation is 8.1MB, 60 times a second, and the resulting
+        // churn is what made throughput start high and then settle at roughly
+        // half — the same degradation the encoder's per-frame frame allocation
+        // caused, and the same fix.
+        //
+        // A buffer is reclaimable once the socket and everything downstream
+        // have released their `Arc`, which `strong_count == 1` reports.
+        let needed = data.len() + 24;
+        let mut recycled = None;
+        for slot in pool.iter_mut() {
+            if Arc::strong_count(slot) == 1
+                && let Some(vec) = Arc::get_mut(slot)
+            {
+                vec.clear();
+                vec.reserve(needed);
+                vec.extend_from_slice(&data);
+                recycled = Some(slot.clone());
+                break;
+            }
+        }
+
+        let data_arc = match recycled {
+            Some(buf) => buf,
+            None => {
+                let mut vec = Vec::with_capacity(needed);
+                vec.extend_from_slice(&data);
+                let buf = Arc::new(vec);
+                // Three readback buffers are in flight, so a few more than that
+                // covers the frames still held downstream.
+                if pool.len() < 6 {
+                    pool.push(buf.clone());
+                }
+                buf
+            }
+        };
 
         drop(data);
         self.buffer.unmap();
@@ -653,7 +730,7 @@ impl PendingReadback {
             (self.frame_number as u64 * 1_000_000_000) / self.frame_rate.max(1) as u64;
 
         Ok(RenderedFrame {
-            data: Arc::new(data_vec),
+            data: data_arc,
             padded_bytes_per_row: self.padded_bytes_per_row,
             width: self.width,
             height: self.height,
@@ -670,6 +747,8 @@ pub struct PipelinedGpuReadback {
     pending: Option<PendingReadback>,
     needs_resize: bool,
     pending_resize_size: u64,
+    /// Retired frame buffers, reused instead of allocating one per readback.
+    frame_pool: Vec<Arc<Vec<u8>>>,
 }
 
 impl PipelinedGpuReadback {
@@ -690,6 +769,7 @@ impl PipelinedGpuReadback {
             pending: None,
             needs_resize: false,
             pending_resize_size: 0,
+            frame_pool: Vec::new(),
         }
     }
 
@@ -793,8 +873,12 @@ impl PipelinedGpuReadback {
         queue.submit(std::iter::once(render_encoder.finish()));
 
         let (tx, rx) = oneshot::channel();
+        // Map only what was copied, for the same reason the read below slices:
+        // mapping a pooled buffer that outgrew this frame makes the driver do
+        // work proportional to the largest past output rather than this one.
+        let mapped_len = output_buffer_size;
         buffer
-            .slice(..)
+            .slice(..mapped_len)
             .map_async(wgpu::MapMode::Read, move |result| {
                 if let Err(e) = tx.send(result) {
                     tracing::error!("Failed to send map_async result: {:?}", e);
@@ -1024,7 +1108,10 @@ pub async fn finish_encoder_timed(
 
     let wait_start = Instant::now();
     let previous_frame = if let Some(prev) = session.pipelined_readback.take_pending() {
-        Some(prev.wait(device).await?)
+        Some(
+            prev.wait(device, &mut session.pipelined_readback.frame_pool)
+                .await?,
+        )
     } else {
         None
     };
@@ -1111,7 +1198,11 @@ pub async fn flush_pending_readback(
     device: &wgpu::Device,
 ) -> Option<Result<RenderedFrame, RenderingError>> {
     if let Some(pending) = session.pipelined_readback.take_pending() {
-        Some(pending.wait(device).await)
+        Some(
+            pending
+                .wait(device, &mut session.pipelined_readback.frame_pool)
+                .await,
+        )
     } else {
         None
     }

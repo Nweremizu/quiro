@@ -133,7 +133,13 @@ export class ThreeCompositor {
 	}
 
 	/** Replaces the plane's texture with the newest decoded frame. */
-	uploadFrame(bitmap: ImageBitmap, width: number, height: number) {
+	/** `texImage2D` takes either — the frame socket hands back a `VideoFrame`
+	 * on its fast path and an `ImageBitmap` on the fallback. */
+	uploadFrame(
+		bitmap: ImageBitmap | VideoFrame,
+		width: number,
+		height: number,
+	) {
 		if (this.texture) this.texture.dispose();
 
 		this.texture = new THREE.Texture(bitmap);
