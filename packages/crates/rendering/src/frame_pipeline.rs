@@ -137,7 +137,15 @@ pub struct RgbaToNv12Converter {
     nv12_buffer: Option<wgpu::Buffer>,
     readback_buffers: [Option<Arc<wgpu::Buffer>>; 2],
     current_readback: usize,
-    pending: Option<PendingNv12Readback>,
+    /// Readbacks in flight, oldest first.
+    ///
+    /// This was a single slot, which meant the loop submitted a transfer and
+    /// then immediately blocked on it — the previous call ended with
+    /// `start_readback` and returned, so the GPU had no time at all to finish
+    /// before the next call waited. Holding two lets a transfer overlap the
+    /// following render instead, which is what the two alternating readback
+    /// buffers were already there for.
+    pending: std::collections::VecDeque<PendingNv12Readback>,
     cached_width: u32,
     cached_height: u32,
     cached_stride: u32,
@@ -156,6 +164,10 @@ struct Nv12Params {
 }
 
 impl RgbaToNv12Converter {
+    /// Capped by `readback_buffers`: a third in flight would reuse a buffer
+    /// still being read.
+    const MAX_READBACKS_IN_FLIGHT: usize = 2;
+
     pub fn new(device: &wgpu::Device) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("RGBA to NV12 Converter"),
@@ -229,7 +241,7 @@ impl RgbaToNv12Converter {
             nv12_buffer: None,
             readback_buffers: [None, None],
             current_readback: 0,
-            pending: None,
+            pending: std::collections::VecDeque::new(),
             cached_width: 0,
             cached_height: 0,
             cached_stride: 0,
@@ -279,6 +291,8 @@ impl RgbaToNv12Converter {
             }))
         };
 
+        // Anything in flight refers to the buffers being replaced here.
+        self.pending.clear();
         self.readback_buffers = [Some(make_readback()), Some(make_readback())];
         self.current_readback = 0;
         self.cached_width = width;
@@ -380,7 +394,7 @@ impl RgbaToNv12Converter {
         let nv12_size = Self::nv12_size(width, height);
         encoder.copy_buffer_to_buffer(nv12_buffer, 0, &readback_buffer, 0, nv12_size);
 
-        self.pending = Some(PendingNv12Readback {
+        self.pending.push_back(PendingNv12Readback {
             rx: None,
             buffer: readback_buffer,
             width,
@@ -393,8 +407,9 @@ impl RgbaToNv12Converter {
         true
     }
 
+    /// Begins the transfer for the readback just submitted.
     pub fn start_readback(&mut self) {
-        if let Some(ref mut pending) = self.pending {
+        if let Some(pending) = self.pending.back_mut() {
             let (tx, rx) = oneshot::channel();
             // NV12 is a full-height Y plane plus a half-height interleaved UV
             // plane at the same stride. Map only that, not the whole pooled
@@ -410,8 +425,21 @@ impl RgbaToNv12Converter {
         }
     }
 
+    /// The oldest readback, once another is in flight behind it.
+    ///
+    /// Returns `None` while only one is outstanding, so that transfer gets a
+    /// full render to complete rather than being waited on the instant it is
+    /// submitted. Callers that must have a frame now use [`Self::drain_pending`].
     pub fn take_pending(&mut self) -> Option<PendingNv12Readback> {
-        self.pending.take()
+        if self.pending.len() < Self::MAX_READBACKS_IN_FLIGHT {
+            return None;
+        }
+        self.pending.pop_front()
+    }
+
+    /// The oldest readback regardless of depth, for flushing the pipeline.
+    pub fn drain_pending(&mut self) -> Option<PendingNv12Readback> {
+        self.pending.pop_front()
     }
 }
 
@@ -1148,12 +1176,6 @@ pub async fn finish_encoder_nv12_pooled(
     let width = uniforms.output_size.0;
     let height = uniforms.output_size.1;
 
-    let previous_frame = if let Some(prev) = nv12_converter.take_pending() {
-        Some(prev.wait_with_pool(device, buffer_pool).await?)
-    } else {
-        None
-    };
-
     let texture = if session.current_is_left {
         &session.textures.0
     } else {
@@ -1175,10 +1197,19 @@ pub async fn finish_encoder_nv12_pooled(
         queue.submit(std::iter::once(encoder.finish()));
         nv12_converter.start_readback();
 
-        Ok(previous_frame)
-    } else if let Some(prev_frame) = previous_frame {
+        // Collected *after* submitting, so the transfer being waited on was
+        // started a render ago rather than a moment ago. `take_pending`
+        // returns nothing until a second readback is in flight behind it,
+        // which costs one frame of latency at the start of playback and buys
+        // the overlap for every frame after.
+        let ready = match nv12_converter.take_pending() {
+            Some(pending) => Some(pending.wait_with_pool(device, buffer_pool).await?),
+            None => None,
+        };
+        Ok(ready)
+    } else if let Some(prev) = nv12_converter.drain_pending() {
         queue.submit(std::iter::once(encoder.finish()));
-        Ok(Some(prev_frame))
+        Ok(Some(prev.wait_with_pool(device, buffer_pool).await?))
     } else {
         let rgba_frame = finish_encoder(session, device, queue, uniforms, encoder).await?;
         Ok(rgba_frame.map(|f| Nv12RenderedFrame {

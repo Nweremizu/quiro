@@ -5264,7 +5264,8 @@ impl<'a> FrameRenderer<'a> {
         &mut self,
     ) -> Option<Result<frame_pipeline::Nv12RenderedFrame, RenderingError>> {
         let nv12_converter = self.nv12_converter.as_mut()?;
-        let pending = nv12_converter.take_pending()?;
+        // Drains regardless of depth: the caller needs a frame now.
+        let pending = nv12_converter.drain_pending()?;
         Some(
             pending
                 .wait_with_pool(&self.constants.device, Some(&mut self.nv12_buffer_pool))
