@@ -5592,8 +5592,8 @@ impl<'a> FrameRenderer<'a> {
             );
 
             let prepare_start = Instant::now();
-            if let Err(e) = layers
-                .prepare_with_encoder(
+            let prepare_stage_timings = match layers
+                .prepare_with_encoder_timed(
                     self.constants,
                     &uniforms,
                     &segment_frames,
@@ -5603,9 +5603,12 @@ impl<'a> FrameRenderer<'a> {
                 )
                 .await
             {
-                last_error = Some(e);
-                continue;
-            }
+                Ok(t) => t,
+                Err(e) => {
+                    last_error = Some(e);
+                    continue;
+                }
+            };
             let prepare_elapsed = prepare_start.elapsed();
 
             let submit_start = Instant::now();
@@ -5640,7 +5643,7 @@ impl<'a> FrameRenderer<'a> {
                         finish_duration: readback_elapsed,
                         finish_wait_previous_duration: finish_timings.wait_previous,
                         finish_submit_readback_duration: finish_timings.submit_readback,
-                        ..Default::default()
+                        ..prepare_stage_timings
                     };
                     return Ok((opt_frame, timings));
                 }

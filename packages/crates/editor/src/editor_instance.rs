@@ -131,6 +131,15 @@ fn spawn_render_telemetry_logger(
         let mut submit_readback = std::time::Duration::ZERO;
         let mut immediate_flush = std::time::Duration::ZERO;
         let mut callback = std::time::Duration::ZERO;
+        // Per-layer split of `prepare_ms`, to find which layer's per-frame
+        // work is growing rather than treating prepare as one opaque number.
+        let mut background = std::time::Duration::ZERO;
+        let mut display_layer = std::time::Duration::ZERO;
+        let mut cursor = std::time::Duration::ZERO;
+        let mut camera = std::time::Duration::ZERO;
+        let mut text = std::time::Duration::ZERO;
+        let mut captions = std::time::Duration::ZERO;
+        let mut keyboard = std::time::Duration::ZERO;
         let mut skipped = 0u32;
         let mut window = std::time::Instant::now();
         // [DEBUG-7f21] One-shot marker for when render_ms first crosses into
@@ -179,6 +188,16 @@ fn spawn_render_telemetry_logger(
                 flush += flush_duration;
                 render += render_duration;
                 prepare += render_stage_timings.prepare_duration;
+                background += render_stage_timings.background_prepare_duration
+                    + render_stage_timings.background_blur_prepare_duration;
+                display_layer += render_stage_timings.display_prepare_duration;
+                cursor += render_stage_timings.cursor_prepare_duration;
+                camera += render_stage_timings.camera_prepare_duration
+                    + render_stage_timings.camera_only_prepare_duration
+                    + render_stage_timings.camera_blur_prepare_duration;
+                text += render_stage_timings.text_prepare_duration;
+                captions += render_stage_timings.captions_prepare_duration;
+                keyboard += render_stage_timings.keyboard_prepare_duration;
                 layers += render_stage_timings.layer_render_duration;
                 wait_prev += render_stage_timings.finish_wait_previous_duration;
                 submit_readback += render_stage_timings.finish_submit_readback_duration;
@@ -209,6 +228,17 @@ fn spawn_render_telemetry_logger(
                 // work asked for this frame; whichever grows is the one to
                 // chase.
                 prepare_ms = per_frame(prepare),
+                // `prepare_ms` broken down by layer, so a per-frame cost that
+                // grows over the course of playback (cache/atlas growth,
+                // timeline lookups getting more expensive, etc.) shows up
+                // against a specific layer instead of hiding inside the sum.
+                background_ms = per_frame(background),
+                display_ms = per_frame(display_layer),
+                cursor_ms = per_frame(cursor),
+                camera_ms = per_frame(camera),
+                text_ms = per_frame(text),
+                captions_ms = per_frame(captions),
+                keyboard_ms = per_frame(keyboard),
                 layers_ms = per_frame(layers),
                 wait_prev_ms = per_frame(wait_prev),
                 submit_readback_ms = per_frame(submit_readback),
@@ -224,6 +254,13 @@ fn spawn_render_telemetry_logger(
             flush = std::time::Duration::ZERO;
             render = std::time::Duration::ZERO;
             prepare = std::time::Duration::ZERO;
+            background = std::time::Duration::ZERO;
+            display_layer = std::time::Duration::ZERO;
+            cursor = std::time::Duration::ZERO;
+            camera = std::time::Duration::ZERO;
+            text = std::time::Duration::ZERO;
+            captions = std::time::Duration::ZERO;
+            keyboard = std::time::Duration::ZERO;
             layers = std::time::Duration::ZERO;
             wait_prev = std::time::Duration::ZERO;
             submit_readback = std::time::Duration::ZERO;
