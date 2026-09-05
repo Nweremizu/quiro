@@ -62,7 +62,10 @@ export function DropdownMenuItem({
 	return (
 		<MenuPrimitive.Item
 			className={cn(
-				"relative flex cursor-pointer select-none items-center rounded-xl px-2 py-1.5 text-sm text-gray-10 outline-none transition-colors hover:bg-gray-3 hover:text-gray-12 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+				// `data-[highlighted]` is what keyboard arrowing sets — hover alone
+				// left keyboard users with no visible position in the menu, unlike
+				// the checkbox and radio items below which already handled it.
+				"relative flex cursor-pointer select-none items-center rounded-xl px-2 py-1.5 text-sm text-gray-10 outline-none transition-colors hover:bg-gray-3 hover:text-gray-12 data-[highlighted]:bg-gray-3 data-[highlighted]:text-gray-12 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
 				inset && "pl-8",
 				className,
 			)}

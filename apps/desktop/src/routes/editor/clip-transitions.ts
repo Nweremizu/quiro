@@ -242,6 +242,26 @@ export function transitionsAfterClipDelete(
 	});
 }
 
+/** Transitions after merging the clip at `index` with the one after it.
+ *
+ * Only the boundary *between* the pair disappears, which is the transition at
+ * `index + 1`. The one at `index` sits on the merged clip's leading edge and
+ * survives — that is what separates this from
+ * [`transitionsAfterClipDelete`], which removes both of a clip's boundaries. */
+export function transitionsAfterClipMerge(
+	transitions: ClipTransition[],
+	index: number,
+) {
+	return transitions.flatMap((transition) => {
+		if (transition.segmentIndex === index + 1) return [];
+		return [
+			transition.segmentIndex > index + 1
+				? { ...transition, segmentIndex: transition.segmentIndex - 1 }
+				: transition,
+		];
+	});
+}
+
 export function transitionsAfterClipMove(
 	segmentCount: number,
 	transitions: ClipTransition[],

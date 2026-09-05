@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type AudioTrackSegment, commands } from "@/utils/tauri";
+import { mergeSpans } from "../clip-merge";
 import { useEditorContext } from "../context";
 import { useTimeline } from "./context";
 import { SegmentTrack } from "./SegmentTrack";
@@ -148,6 +149,37 @@ export function AudioTrack() {
 										audioSegments: (current.timeline.audioSegments ?? []).map(
 											(segment, i) => (i === index ? next : segment),
 										),
+									},
+								}
+							: current,
+					)
+				}
+				onMerge={(index) =>
+					setProject((current) =>
+						current.timeline
+							? {
+									...current,
+									timeline: {
+										...current.timeline,
+										audioSegments: mergeSpans(
+											current.timeline.audioSegments ?? [],
+											index,
+										),
+									},
+								}
+							: current,
+					)
+				}
+				onDelete={(index) =>
+					setProject((current) =>
+						current.timeline
+							? {
+									...current,
+									timeline: {
+										...current.timeline,
+										audioSegments: (
+											current.timeline.audioSegments ?? []
+										).filter((_, i) => i !== index),
 									},
 								}
 							: current,

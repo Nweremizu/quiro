@@ -23,11 +23,13 @@ import IconLucideVideo from "~icons/lucide/video";
 import IconLucideWand from "~icons/lucide/wand";
 import IconLucideZoomIn from "~icons/lucide/zoom-in";
 import IconLucideZoomOut from "~icons/lucide/zoom-out";
+import { type MergeableSpan, mergeClips, mergeSpans } from "../clip-merge";
 import {
 	transitionsAfterClipDelete,
+	transitionsAfterClipMerge,
 	transitionsAfterClipSplit,
 } from "../clip-transitions";
-import { useEditorContext } from "../context";
+import { type TimelineSelection, useEditorContext } from "../context";
 import { defaultTextContent, textContentString } from "../text-content";
 import { rippleDeleteAllTracks } from "../timeline-utils";
 import { EditorButton, Slider } from "../ui";
@@ -107,7 +109,8 @@ export function Timeline() {
 	// Zero means "not set yet" — fit the whole recording once its length is known.
 	const visible = visibleSeconds > 0 ? visibleSeconds : Math.max(duration, 1);
 	const trackContentWidth = Math.max(0, trackWidth - TRACK_GUTTER);
-	const pixelsPerSecond = trackContentWidth > 0 ? trackContentWidth / visible : 0;
+	const pixelsPerSecond =
+		trackContentWidth > 0 ? trackContentWidth / visible : 0;
 	const maxPosition = Math.max(0, duration - visible);
 	const clampedPosition = Math.min(position, maxPosition);
 
@@ -234,8 +237,9 @@ export function Timeline() {
 		});
 	};
 
-	const deleteSelection = () => {
-		if (!selection) return;
+	const deleteSelection = (target: TimelineSelection = selection) => {
+		if (!target) return;
+		const selection = target;
 
 		setProject((current) => {
 			if (!current.timeline) return current;
@@ -326,6 +330,54 @@ export function Timeline() {
 			}
 		});
 
+		setSelection(null);
+	};
+
+	/** Rejoins the clip at `index` with the one after it. Duration-preserving,
+	 * so unlike a delete this needs no ripple across the other tracks. */
+	const mergeClipsAt = (index: number) => {
+		setProject((current) => {
+			if (!current.timeline) return current;
+			const segments = mergeClips(current.timeline.segments, index);
+			if (segments === current.timeline.segments) return current;
+
+			return {
+				...current,
+				timeline: {
+					...current.timeline,
+					segments,
+					transitions: transitionsAfterClipMerge(
+						current.timeline.transitions ?? [],
+						index,
+					),
+				},
+			};
+		});
+		setSelection({ type: "clip", index });
+	};
+
+	/** Joins two adjacent segments on an overlay track. Unlike a clip merge this
+	 * touches nothing else: overlay segments carry no transitions and their
+	 * neighbours do not shift, because the pair already covered this span. */
+	const mergeTrackAt = (
+		key:
+			| "zoomSegments"
+			| "sceneSegments"
+			| "maskSegments"
+			| "textSegments"
+			| "audioSegments",
+		index: number,
+	) => {
+		setProject((current) => {
+			if (!current.timeline) return current;
+			// Cast at the boundary, as `SegmentConfig`'s `patchAt` does: the key is
+			// a union of tracks whose element types differ, and merging only ever
+			// reads `start`/`end`/`track`.
+			const list = (current.timeline[key] ?? []) as MergeableSpan[];
+			const merged = mergeSpans(list, index);
+			if (merged === list) return current;
+			return { ...current, timeline: { ...current.timeline, [key]: merged } };
+		});
 		setSelection(null);
 	};
 
@@ -519,7 +571,7 @@ export function Timeline() {
 					<EditorButton
 						tooltip="Delete selected segment"
 						disabled={!selection}
-						onClick={deleteSelection}
+						onClick={() => deleteSelection()}
 						leftIcon={<IconLucideTrash2 className="size-4" />}
 					/>
 
@@ -620,7 +672,11 @@ export function Timeline() {
 							label="Clips"
 							icon={<IconLucideClapperboard className="size-4" />}
 						>
-							<ClipTrack onSplit={splitAt} />
+							<ClipTrack
+								onSplit={splitAt}
+								onMerge={mergeClipsAt}
+								onDelete={(index) => deleteSelection({ type: "clip", index })}
+							/>
 							<TransitionMarkers />
 						</TrackRoot>
 
@@ -642,6 +698,10 @@ export function Timeline() {
 									segments={timeline?.sceneSegments ?? []}
 									color="var(--track-scene)"
 									selectionType="scene"
+									onMerge={(index) => mergeTrackAt("sceneSegments", index)}
+									onDelete={(index) =>
+										deleteSelection({ type: "scene", index })
+									}
 									label={(segment) => segment.mode ?? "default"}
 									onChange={(index, next) =>
 										updateTimeline((current) => ({
@@ -665,6 +725,8 @@ export function Timeline() {
 									segments={timeline?.maskSegments ?? []}
 									color="var(--track-mask)"
 									selectionType="mask"
+									onMerge={(index) => mergeTrackAt("maskSegments", index)}
+									onDelete={(index) => deleteSelection({ type: "mask", index })}
 									label={(segment) => segment.mode ?? "blur"}
 									onChange={(index, next) =>
 										updateTimeline((current) => ({
@@ -688,6 +750,8 @@ export function Timeline() {
 									segments={timeline?.textSegments ?? []}
 									color="var(--track-text)"
 									selectionType="text"
+									onMerge={(index) => mergeTrackAt("textSegments", index)}
+									onDelete={(index) => deleteSelection({ type: "text", index })}
 									label={(segment) =>
 										textContentString(segment.textContent) || "Text"
 									}
