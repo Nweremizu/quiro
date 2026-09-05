@@ -137,6 +137,8 @@ fn spawn_render_telemetry_logger(
         let mut display_layer = std::time::Duration::ZERO;
         let mut cursor = std::time::Duration::ZERO;
         let mut camera = std::time::Duration::ZERO;
+        let mut camera_only = std::time::Duration::ZERO;
+        let mut camera_blur = std::time::Duration::ZERO;
         let mut text = std::time::Duration::ZERO;
         let mut captions = std::time::Duration::ZERO;
         let mut keyboard = std::time::Duration::ZERO;
@@ -192,9 +194,9 @@ fn spawn_render_telemetry_logger(
                     + render_stage_timings.background_blur_prepare_duration;
                 display_layer += render_stage_timings.display_prepare_duration;
                 cursor += render_stage_timings.cursor_prepare_duration;
-                camera += render_stage_timings.camera_prepare_duration
-                    + render_stage_timings.camera_only_prepare_duration
-                    + render_stage_timings.camera_blur_prepare_duration;
+                camera += render_stage_timings.camera_prepare_duration;
+                camera_only += render_stage_timings.camera_only_prepare_duration;
+                camera_blur += render_stage_timings.camera_blur_prepare_duration;
                 text += render_stage_timings.text_prepare_duration;
                 captions += render_stage_timings.captions_prepare_duration;
                 keyboard += render_stage_timings.keyboard_prepare_duration;
@@ -236,6 +238,8 @@ fn spawn_render_telemetry_logger(
                 display_ms = per_frame(display_layer),
                 cursor_ms = per_frame(cursor),
                 camera_ms = per_frame(camera),
+                camera_only_ms = per_frame(camera_only),
+                camera_blur_ms = per_frame(camera_blur),
                 text_ms = per_frame(text),
                 captions_ms = per_frame(captions),
                 keyboard_ms = per_frame(keyboard),
@@ -258,6 +262,8 @@ fn spawn_render_telemetry_logger(
             display_layer = std::time::Duration::ZERO;
             cursor = std::time::Duration::ZERO;
             camera = std::time::Duration::ZERO;
+            camera_only = std::time::Duration::ZERO;
+            camera_blur = std::time::Duration::ZERO;
             text = std::time::Duration::ZERO;
             captions = std::time::Duration::ZERO;
             keyboard = std::time::Duration::ZERO;
