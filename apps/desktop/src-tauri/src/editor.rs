@@ -171,6 +171,15 @@ fn spawn_preview_encoder(
 
                 let encode_start = std::time::Instant::now();
                 let encoded = match frame.format {
+                    // The common render path; `stride` is the Y-plane stride.
+                    WSFrameFormat::Nv12 { .. } => encoder.encode_nv12(
+                        &frame.data,
+                        frame.stride,
+                        frame.width,
+                        frame.height,
+                        frame.frame_number,
+                    ),
+                    // Transitions still render RGBA.
                     WSFrameFormat::Rgba => encoder.encode(
                         &frame.data,
                         frame.stride,
@@ -178,8 +187,8 @@ fn spawn_preview_encoder(
                         frame.height,
                         frame.frame_number,
                     ),
-                    // Already compressed or planar; nothing to do.
-                    _ => Ok(None),
+                    // Already compressed.
+                    WSFrameFormat::H264 { .. } => Ok(None),
                 };
 
                 encode_nanos += encode_start.elapsed().as_nanos() as u64;

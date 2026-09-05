@@ -55,6 +55,8 @@ pub struct PreviewEncoder {
     /// its own source of the slowdown — the same allocation churn that made
     /// `pack_avg_ms` climb on the raw path.
     input: Option<ffmpeg::frame::Video>,
+    /// Pixel format the encoder was built for; a change rebuilds it.
+    format: Option<Pixel>,
     converted: Option<ffmpeg::frame::Video>,
     size: (u32, u32),
     /// Kept for the encoder's lifetime and attached to every frame, so a client
@@ -68,6 +70,7 @@ impl PreviewEncoder {
         Self {
             encoder: None,
             input: None,
+            format: None,
             converted: None,
             size: (0, 0),
             config: None,
@@ -75,14 +78,20 @@ impl PreviewEncoder {
         }
     }
 
-    fn ensure_encoder(&mut self, width: u32, height: u32) -> Result<(), String> {
-        if self.encoder.is_some() && self.size == (width, height) {
+    fn ensure_encoder(
+        &mut self,
+        input_format: Pixel,
+        width: u32,
+        height: u32,
+    ) -> Result<(), String> {
+        if self.encoder.is_some() && self.size == (width, height) && self.format == Some(input_format)
+        {
             return Ok(());
         }
 
         // Odd dimensions are rounded up by the builder; track what we asked for
         // so a repeated request does not rebuild every frame.
-        let info = VideoInfo::from_raw_ffmpeg(Pixel::RGBA, width, height, self.fps);
+        let info = VideoInfo::from_raw_ffmpeg(input_format, width, height, self.fps);
         let encoder = H264EncoderBuilder::new(info)
             .with_preset(H264Preset::Ultrafast)
             .with_encoder_priority_override(PREVIEW_ENCODER_PRIORITY)
@@ -101,12 +110,58 @@ impl PreviewEncoder {
 
         self.config = (!config.is_empty()).then_some(config);
         self.size = (width, height);
+        self.format = Some(input_format);
         self.encoder = Some(encoder);
         // Sized to the new output; the converted frame is reallocated by the
         // encoder on first use.
         self.input = None;
         self.converted = None;
         Ok(())
+    }
+
+    /// Encodes one NV12 frame — a full-height Y plane followed by a
+    /// half-height interleaved UV plane, both at `y_stride`.
+    ///
+    /// NV12 is what the GPU now hands back and what the encoder wants, so this
+    /// is a plane copy with no colour conversion on either side.
+    pub fn encode_nv12(
+        &mut self,
+        data: &[u8],
+        y_stride: u32,
+        width: u32,
+        height: u32,
+        frame_number: u32,
+    ) -> Result<Option<EncodedPreviewFrame>, String> {
+        self.ensure_encoder(Pixel::NV12, width, height)?;
+        let encoder = self
+            .encoder
+            .as_mut()
+            .expect("ensure_encoder sets it or returns Err");
+
+        let frame = self
+            .input
+            .get_or_insert_with(|| ffmpeg::frame::Video::new(Pixel::NV12, width, height));
+
+        let src_stride = y_stride as usize;
+        let row_bytes = width as usize;
+        let y_rows = height as usize;
+        let uv_rows = height.div_ceil(2) as usize;
+
+        for (plane, rows, src_offset) in [(0usize, y_rows, 0usize), (1, uv_rows, src_stride * y_rows)]
+        {
+            let dst_stride = frame.stride(plane);
+            let dst = frame.data_mut(plane);
+            for row in 0..rows {
+                let from = src_offset + row * src_stride;
+                let to = row * dst_stride;
+                if from + row_bytes > data.len() || to + row_bytes > dst.len() {
+                    break;
+                }
+                dst[to..to + row_bytes].copy_from_slice(&data[from..from + row_bytes]);
+            }
+        }
+
+        self.emit(frame_number, width, height)
     }
 
     /// Encodes one RGBA frame. `stride` is the GPU readback's padded row width,
@@ -119,7 +174,7 @@ impl PreviewEncoder {
         height: u32,
         frame_number: u32,
     ) -> Result<Option<EncodedPreviewFrame>, String> {
-        self.ensure_encoder(width, height)?;
+        self.ensure_encoder(Pixel::RGBA, width, height)?;
         let encoder = self
             .encoder
             .as_mut()
@@ -143,6 +198,22 @@ impl PreviewEncoder {
                 dst[to..to + row_bytes].copy_from_slice(&rgba[from..from + row_bytes]);
             }
         }
+
+        self.emit(frame_number, width, height)
+    }
+
+    /// Runs the encoder over whatever is currently in `self.input`.
+    fn emit(
+        &mut self,
+        frame_number: u32,
+        width: u32,
+        height: u32,
+    ) -> Result<Option<EncodedPreviewFrame>, String> {
+        let encoder = self
+            .encoder
+            .as_mut()
+            .expect("callers call ensure_encoder first");
+        let frame = self.input.as_mut().expect("callers fill the input frame");
 
         let timestamp =
             std::time::Duration::from_secs_f64(frame_number as f64 / self.fps as f64);

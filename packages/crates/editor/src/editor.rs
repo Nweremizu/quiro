@@ -47,6 +47,15 @@ pub enum EditorFrameOutput {
     Nv12(Nv12RenderedFrame),
 }
 
+impl EditorFrameOutput {
+    pub fn frame_number(&self) -> u32 {
+        match self {
+            Self::Rgba(frame) => frame.frame_number,
+            Self::Nv12(frame) => frame.frame_number,
+        }
+    }
+}
+
 pub type RendererLayersReceiver = oneshot::Receiver<RendererLayers>;
 
 pub type EditorFrameCallback = Box<dyn FnMut(EditorFrameOutput, FrameLayout) + Send>;
@@ -327,9 +336,15 @@ impl Renderer {
             let input_frame_number = current.input.uniforms().frame_number;
             let frame_layout = current.input.uniforms().frame_layout();
             let render_result = match current.input {
+                // NV12 for the common path: the GPU converts, so the readback
+                // moves 3.1MB instead of 8.1MB at 1080p — the readback being
+                // the last remaining constraint on preview throughput — and the
+                // encoder takes NV12 natively, skipping a CPU colour
+                // conversion. Transitions stay RGBA below; they are rare and
+                // have no immediate NV12 variant to call.
                 PendingRenderInput::Single(input) => {
                     frame_renderer
-                        .render_immediate_with_timings(
+                        .render_immediate_nv12(
                             input.segment_frames,
                             input.uniforms,
                             &input.cursor,
@@ -337,6 +352,12 @@ impl Renderer {
                             &mut layers,
                         )
                         .await
+                        .map(|frame| {
+                            (
+                                EditorFrameOutput::Nv12(frame),
+                                FrameRenderStageTimings::default(),
+                            )
+                        })
                 }
                 PendingRenderInput::Transition {
                     outgoing,
@@ -362,15 +383,23 @@ impl Renderer {
                         &mut layers,
                     )
                     .await
-                    .map(|frame| (frame, FrameRenderStageTimings::default())),
+                    .map(|frame| {
+                        (
+                            EditorFrameOutput::Rgba(frame),
+                            FrameRenderStageTimings::default(),
+                        )
+                    }),
             };
             match render_result {
-                Ok((frame, render_stage_timings)) => {
+                Ok((output, render_stage_timings)) => {
                     let render_duration = render_start.elapsed();
-                    let frame_number = frame.frame_number;
-                    let output_format = PlaybackRenderOutputFormat::Rgba;
+                    let frame_number = output.frame_number();
+                    let output_format = match output {
+                        EditorFrameOutput::Nv12(_) => PlaybackRenderOutputFormat::Nv12,
+                        EditorFrameOutput::Rgba(_) => PlaybackRenderOutputFormat::Rgba,
+                    };
                     let callback_start = Instant::now();
-                    (frame_cb)(EditorFrameOutput::Rgba(frame), frame_layout);
+                    (frame_cb)(output, frame_layout);
                     let callback_duration = callback_start.elapsed();
                     if let Some(telemetry) = &telemetry {
                         telemetry.emit(PlaybackTelemetryEvent::RendererFrame {
