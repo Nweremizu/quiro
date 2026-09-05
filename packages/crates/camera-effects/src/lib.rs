@@ -1,8 +1,10 @@
 mod blur_pipeline;
 mod segmentation;
 
+use anyhow::Context;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, OnceLock, mpsc};
+use std::thread;
 use std::time::{Duration, Instant};
 
 use blur_pipeline::{BlurPassInputs, BlurPipeline, CompositePipeline};
@@ -72,14 +74,144 @@ pub enum BlurMode {
 
 const SEGMENTATION_SIZE: u32 = 256;
 const DEFAULT_INFERENCE_INTERVAL: Duration = Duration::from_millis(66);
+/// Bounds the single blocking inference (the first mask, see
+/// [`BlurProcessor::start_segmentation`]) so a wedged native call cannot hang
+/// the editor the way an unbounded wait would.
+const FIRST_INFERENCE_TIMEOUT: Duration = Duration::from_secs(5);
 const MASK_GROWTH_ALPHA: f32 = 0.25;
 const MASK_SHRINK_ALPHA: f32 = 0.12;
 const MASK_STABILITY_EPSILON: f32 = 0.025;
 const MASK_EDGE_CONTRAST: f32 = 4.0;
 const INITIAL_MASK_VALUE: f32 = 1.0;
 
+/// Runs segmentation inference on its own thread, one request at a time.
+///
+/// `Session::run` is a synchronous native call whose execution provider
+/// (DirectML on Windows, CoreML on macOS) competes with the render pipeline for
+/// the same GPU, so running it inline stretched whichever frame triggered it.
+/// That fed straight back into the wall-clock throttle in
+/// [`BlurProcessor::process_into_encoder`]: a longer frame means more elapsed
+/// time, which makes the *next* frame eligible for inference too, which makes
+/// that frame longer again. The loop ratcheted camera blur from ~7ms to ~20ms
+/// per frame across a playback and never recovered, because the throttle stops
+/// throttling once the work it is meant to space out is what dictates frame
+/// time. Off-thread the render loop pays a channel send instead, and
+/// `in_flight` caps outstanding work at one regardless of how slow inference
+/// gets.
+struct InferenceWorker {
+    /// Taken in `drop` to close the channel before joining the worker.
+    input_tx: Option<mpsc::SyncSender<Vec<u8>>>,
+    output_rx: mpsc::Receiver<Vec<f32>>,
+    handle: Option<thread::JoinHandle<()>>,
+    in_flight: bool,
+}
+
+impl InferenceWorker {
+    fn spawn(mut model: SegmentationModel) -> anyhow::Result<Self> {
+        Self::spawn_with(move |frame| model.run_inference(frame))
+    }
+
+    fn spawn_with(
+        mut infer: impl FnMut(&[u8]) -> anyhow::Result<Vec<f32>> + Send + 'static,
+    ) -> anyhow::Result<Self> {
+        let (input_tx, input_rx) = mpsc::sync_channel::<Vec<u8>>(1);
+        let (output_tx, output_rx) = mpsc::channel::<Vec<f32>>();
+
+        let handle = thread::Builder::new()
+            .name("camera-blur-segmentation".into())
+            .spawn(move || {
+                while let Ok(frame) = input_rx.recv() {
+                    // A short mask is the failure sentinel: `apply_mask`
+                    // already rejects anything smaller than the mask itself,
+                    // and the reply keeps `in_flight` from latching on.
+                    let mask = match infer(&frame) {
+                        Ok(mask) => mask,
+                        Err(e) => {
+                            tracing::warn!("Segmentation inference failed: {e:#}");
+                            Vec::new()
+                        }
+                    };
+                    if output_tx.send(mask).is_err() {
+                        break;
+                    }
+                }
+            })
+            .context("Failed to spawn segmentation inference thread")?;
+
+        Ok(Self {
+            input_tx: Some(input_tx),
+            output_rx,
+            handle: Some(handle),
+            in_flight: false,
+        })
+    }
+
+    fn is_busy(&self) -> bool {
+        self.in_flight
+    }
+
+    /// Never blocks: the channel's one slot is exactly the request `in_flight`
+    /// already guards against overlapping.
+    fn submit(&mut self, frame: Vec<u8>) -> bool {
+        let Some(tx) = &self.input_tx else {
+            return false;
+        };
+
+        if tx.try_send(frame).is_err() {
+            return false;
+        }
+
+        self.in_flight = true;
+        true
+    }
+
+    fn try_take_result(&mut self) -> Option<Vec<f32>> {
+        match self.output_rx.try_recv() {
+            Ok(mask) => {
+                self.in_flight = false;
+                Some(mask)
+            }
+            Err(mpsc::TryRecvError::Empty) => None,
+            Err(mpsc::TryRecvError::Disconnected) => {
+                self.in_flight = false;
+                None
+            }
+        }
+    }
+
+    /// Waits for a request already handed to `submit`. On timeout the request
+    /// stays in flight and a later `try_take_result` collects it.
+    fn wait_for_result(&mut self, timeout: Duration) -> Option<Vec<f32>> {
+        match self.output_rx.recv_timeout(timeout) {
+            Ok(mask) => {
+                self.in_flight = false;
+                Some(mask)
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => None,
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                self.in_flight = false;
+                None
+            }
+        }
+    }
+}
+
+impl Drop for InferenceWorker {
+    fn drop(&mut self) {
+        // Closing the channel ends the worker loop; joining it means the ONNX
+        // session has finished its native teardown before `BlurSessionHandle`
+        // reports the blur session inactive, keeping crash attribution honest.
+        self.input_tx = None;
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
 pub struct BlurProcessor {
-    model: SegmentationModel,
+    // Declared before `_blur_session`: dropping this joins the worker that owns
+    // the ONNX session, which must happen before the session is disarmed.
+    inference: InferenceWorker,
     blur_pipeline: BlurPipeline,
     composite_pipeline: CompositePipeline,
     downsample_pipeline: DownsamplePipeline,
@@ -213,7 +345,7 @@ impl BlurProcessor {
         output_format: wgpu::TextureFormat,
         blur_session: BlurSessionHandle,
     ) -> anyhow::Result<Self> {
-        let model = SegmentationModel::new()?;
+        let inference = InferenceWorker::spawn(SegmentationModel::new()?)?;
         let blur_pipeline = BlurPipeline::new(device);
         let composite_pipeline = CompositePipeline::new(device, output_format);
         let downsample_pipeline = DownsamplePipeline::new(device);
@@ -246,7 +378,7 @@ impl BlurProcessor {
         });
 
         Ok(Self {
-            model,
+            inference,
             blur_pipeline,
             composite_pipeline,
             downsample_pipeline,
@@ -319,12 +451,16 @@ impl BlurProcessor {
         self.ensure_textures(device, width, height);
         let input_view = input_texture.create_view(&Default::default());
 
-        if self.last_inference.elapsed() >= self.inference_interval {
-            let mask_updated = self.run_segmentation(device, queue, input_texture);
+        // Results land on the worker's schedule rather than the render loop's,
+        // so collect them every frame instead of only when the throttle fires.
+        if self.collect_inference_result() {
+            self.mask_dirty = true;
+        }
+
+        let inference_due =
+            !self.inference.is_busy() && self.last_inference.elapsed() >= self.inference_interval;
+        if inference_due && self.start_segmentation(device, queue, input_texture) {
             self.last_inference = Instant::now();
-            if mask_updated {
-                self.mask_dirty = true;
-            }
         }
 
         if self.mask_dirty {
@@ -438,42 +574,67 @@ impl BlurProcessor {
         self.mask_dirty = true;
     }
 
-    fn run_segmentation(
+    /// Downsamples the current camera frame and hands it to the worker.
+    /// Returns whether a request was actually submitted.
+    fn start_segmentation(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         input_texture: &wgpu::Texture,
     ) -> bool {
-        let rgba_256 =
-            match self.readback_downsampled(device, queue, input_texture, !self.mask_initialized) {
-                Some(data) => data,
-                None => return false,
-            };
+        let first_mask = !self.mask_initialized;
 
-        match self.model.run_inference(&rgba_256) {
-            Ok(new_mask) => {
-                let pixel_count = (SEGMENTATION_SIZE * SEGMENTATION_SIZE) as usize;
-                if new_mask.len() >= pixel_count {
-                    for (i, &raw) in new_mask.iter().take(pixel_count).enumerate() {
-                        let v = refine_mask_value(raw);
-                        self.smoothed_mask[i] = if self.mask_initialized {
-                            smooth_mask_value(self.smoothed_mask[i], v)
-                        } else {
-                            v
-                        };
-                    }
-                    self.mask_data
-                        .copy_from_slice(&self.smoothed_mask[..pixel_count]);
-                    self.mask_initialized = true;
-                    return true;
-                }
-                false
-            }
-            Err(e) => {
-                tracing::warn!("Segmentation inference failed: {e:#}");
-                false
-            }
+        let Some(rgba_256) = self.readback_downsampled(device, queue, input_texture, first_mask)
+        else {
+            return false;
+        };
+
+        if !self.inference.submit(rgba_256) {
+            return false;
         }
+
+        // Only the first mask is waited for. Compositing against the initial
+        // all-foreground mask would otherwise show the camera unblurred until
+        // the worker replies; every later inference is collected off the hot
+        // path, which is the entire point of the worker.
+        if first_mask
+            && let Some(mask) = self.inference.wait_for_result(FIRST_INFERENCE_TIMEOUT)
+            && self.apply_mask(&mask)
+        {
+            self.mask_dirty = true;
+        }
+
+        true
+    }
+
+    /// Applies a finished inference, if one has arrived. Returns whether the
+    /// mask changed.
+    fn collect_inference_result(&mut self) -> bool {
+        let Some(mask) = self.inference.try_take_result() else {
+            return false;
+        };
+
+        self.apply_mask(&mask)
+    }
+
+    fn apply_mask(&mut self, new_mask: &[f32]) -> bool {
+        let pixel_count = (SEGMENTATION_SIZE * SEGMENTATION_SIZE) as usize;
+        if new_mask.len() < pixel_count {
+            return false;
+        }
+
+        for (i, &raw) in new_mask.iter().take(pixel_count).enumerate() {
+            let v = refine_mask_value(raw);
+            self.smoothed_mask[i] = if self.mask_initialized {
+                smooth_mask_value(self.smoothed_mask[i], v)
+            } else {
+                v
+            };
+        }
+        self.mask_data
+            .copy_from_slice(&self.smoothed_mask[..pixel_count]);
+        self.mask_initialized = true;
+        true
     }
 
     fn readback_downsampled(
@@ -730,3 +891,53 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     return textureSample(src_tex, src_sampler, in.uv);
 }
 ";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The whole point of the worker is that a slow inference costs the render
+    /// loop nothing and cannot pile up: `submit` must latch `in_flight` so the
+    /// caller stops submitting, and taking the result must clear it so
+    /// inference does not stay latched off forever (a silently frozen mask).
+    #[test]
+    fn in_flight_gates_one_request_and_clears_on_result() {
+        let (release_tx, release_rx) = mpsc::channel::<()>();
+        let mut worker = InferenceWorker::spawn_with(move |_frame| {
+            release_rx.recv().expect("test holds the sender");
+            Ok(vec![0.5; 4])
+        })
+        .expect("spawn worker");
+
+        assert!(!worker.is_busy());
+
+        assert!(worker.submit(vec![0; 8]));
+        assert!(worker.is_busy(), "a submitted request must latch in_flight");
+        assert!(
+            worker.try_take_result().is_none(),
+            "nothing to collect while inference is still running"
+        );
+
+        release_tx.send(()).expect("worker is waiting");
+
+        let mask = worker
+            .wait_for_result(Duration::from_secs(5))
+            .expect("worker replies once released");
+        assert_eq!(mask, vec![0.5; 4]);
+        assert!(
+            !worker.is_busy(),
+            "collecting a result must re-open the gate"
+        );
+
+        // A failing inference must also clear the gate, or blur silently stops
+        // updating for the rest of the session.
+        let mut failing = InferenceWorker::spawn_with(|_frame| anyhow::bail!("inference exploded"))
+            .expect("spawn worker");
+        assert!(failing.submit(vec![0; 8]));
+        assert_eq!(
+            failing.wait_for_result(Duration::from_secs(5)),
+            Some(Vec::new())
+        );
+        assert!(!failing.is_busy());
+    }
+}
