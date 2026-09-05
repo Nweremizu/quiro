@@ -230,6 +230,10 @@ pub struct BlurProcessor {
     mask_initialized: bool,
     mask_dirty: bool,
     output_generation: u64,
+    // [DEBUG-cam-blur] Temporary stage breakdown for `process_into_encoder`,
+    // to find what is expensive on the render thread now that inference
+    // itself runs off it. Remove once the remaining cost is understood.
+    stage_totals: BlurStageTotals,
     // Keep last: must drop after every other field (see BlurSessionHandle).
     _blur_session: BlurSessionHandle,
 }
@@ -312,6 +316,57 @@ impl DownsamplePipeline {
             bind_group_layout,
             sampler,
         }
+    }
+}
+
+// [DEBUG-cam-blur] See `BlurProcessor::stage_totals`.
+struct BlurStageTotals {
+    frames: u32,
+    window_start: Instant,
+    ensure_textures: Duration,
+    collect_result: Duration,
+    start_segmentation: Duration,
+    upload_mask: Duration,
+    blur_passes: Duration,
+    composite: Duration,
+}
+
+impl Default for BlurStageTotals {
+    fn default() -> Self {
+        Self {
+            frames: 0,
+            window_start: Instant::now(),
+            ensure_textures: Duration::ZERO,
+            collect_result: Duration::ZERO,
+            start_segmentation: Duration::ZERO,
+            upload_mask: Duration::ZERO,
+            blur_passes: Duration::ZERO,
+            composite: Duration::ZERO,
+        }
+    }
+}
+
+impl BlurStageTotals {
+    fn maybe_log_and_reset(&mut self) {
+        self.frames += 1;
+        if self.window_start.elapsed() < Duration::from_secs(2) {
+            return;
+        }
+
+        let frames = self.frames as f64;
+        let per_frame = |total: Duration| format!("{:.2}", total.as_secs_f64() * 1000.0 / frames);
+        tracing::info!(
+            frames = self.frames,
+            ensure_textures_ms = per_frame(self.ensure_textures),
+            collect_result_ms = per_frame(self.collect_result),
+            start_segmentation_ms = per_frame(self.start_segmentation),
+            upload_mask_ms = per_frame(self.upload_mask),
+            blur_passes_ms = per_frame(self.blur_passes),
+            composite_ms = per_frame(self.composite),
+            "CAMERA_BLUR stage stats"
+        );
+
+        *self = Self::default();
     }
 }
 
@@ -399,6 +454,7 @@ impl BlurProcessor {
             mask_initialized: false,
             mask_dirty: true,
             output_generation: 0,
+            stage_totals: BlurStageTotals::default(),
             _blur_session: blur_session,
         })
     }
@@ -448,25 +504,34 @@ impl BlurProcessor {
         let width = input_texture.width();
         let height = input_texture.height();
 
+        let start = Instant::now();
         self.ensure_textures(device, width, height);
         let input_view = input_texture.create_view(&Default::default());
+        self.stage_totals.ensure_textures += start.elapsed();
 
         // Results land on the worker's schedule rather than the render loop's,
         // so collect them every frame instead of only when the throttle fires.
-        if self.collect_inference_result() {
+        let start = Instant::now();
+        let got_result = self.collect_inference_result();
+        self.stage_totals.collect_result += start.elapsed();
+        if got_result {
             self.mask_dirty = true;
         }
 
+        let start = Instant::now();
         let inference_due =
             !self.inference.is_busy() && self.last_inference.elapsed() >= self.inference_interval;
         if inference_due && self.start_segmentation(device, queue, input_texture) {
             self.last_inference = Instant::now();
         }
+        self.stage_totals.start_segmentation += start.elapsed();
 
+        let start = Instant::now();
         if self.mask_dirty {
             self.upload_mask(queue);
             self.mask_dirty = false;
         }
+        self.stage_totals.upload_mask += start.elapsed();
 
         let textures = self.textures.as_ref().expect("textures initialized above");
 
@@ -475,6 +540,7 @@ impl BlurProcessor {
             BlurMode::Heavy => (2.0, 3),
         };
 
+        let start = Instant::now();
         for pass_index in 0..blur_passes {
             let source = if pass_index == 0 {
                 &input_view
@@ -495,7 +561,9 @@ impl BlurProcessor {
                 },
             );
         }
+        self.stage_totals.blur_passes += start.elapsed();
 
+        let start = Instant::now();
         self.composite_pipeline.composite(
             device,
             encoder,
@@ -504,6 +572,9 @@ impl BlurProcessor {
             &textures.mask_view,
             &textures.output_view,
         );
+        self.stage_totals.composite += start.elapsed();
+
+        self.stage_totals.maybe_log_and_reset();
     }
 
     pub fn process_returning_output(&mut self) -> Option<&wgpu::Texture> {
