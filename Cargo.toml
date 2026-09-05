@@ -126,6 +126,8 @@ opt-level = 3
 opt-level = 3
 [profile.dev.package.quiro-project]
 opt-level = 3
+[profile.dev.package.quiro-camera-effects]
+opt-level = 3
 
 # Optimize for smaller binary size
 [profile.release]
