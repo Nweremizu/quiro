@@ -133,11 +133,6 @@ impl PreviewEncoder {
         frame_number: u32,
     ) -> Result<Option<EncodedPreviewFrame>, String> {
         self.ensure_encoder(Pixel::NV12, width, height)?;
-        let encoder = self
-            .encoder
-            .as_mut()
-            .expect("ensure_encoder sets it or returns Err");
-
         let frame = self
             .input
             .get_or_insert_with(|| ffmpeg::frame::Video::new(Pixel::NV12, width, height));
@@ -175,11 +170,6 @@ impl PreviewEncoder {
         frame_number: u32,
     ) -> Result<Option<EncodedPreviewFrame>, String> {
         self.ensure_encoder(Pixel::RGBA, width, height)?;
-        let encoder = self
-            .encoder
-            .as_mut()
-            .expect("ensure_encoder sets it or returns Err");
-
         let frame = self
             .input
             .get_or_insert_with(|| ffmpeg::frame::Video::new(Pixel::RGBA, width, height));

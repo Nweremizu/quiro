@@ -1,4 +1,5 @@
 use crate::editor;
+use crate::telemetry::{PlaybackTelemetry, PlaybackTelemetryEvent};
 use crate::playback::{self, PlaybackHandle, PlaybackStartError};
 use quiro_audio::AudioData;
 use quiro_project::StudioRecordingMeta;
@@ -106,6 +107,79 @@ pub struct EditorInstance {
     pub export_active: AtomicBool,
     runtime_handle: tokio::runtime::Handle,
     audio_output: Arc<crate::AudioOutput>,
+}
+
+
+/// Averages the renderer's per-frame timings and logs one line every two
+/// seconds, matching the cadence of the playback and websocket stats so the
+/// three can be read side by side.
+///
+/// Per-frame logging would be 60 lines a second and would itself perturb what
+/// it measures.
+fn spawn_render_telemetry_logger(
+    mut rx: tokio::sync::mpsc::UnboundedReceiver<PlaybackTelemetryEvent>,
+) {
+    tokio::spawn(async move {
+        let mut frames = 0u32;
+        let mut queue_wait = std::time::Duration::ZERO;
+        let mut drain = std::time::Duration::ZERO;
+        let mut flush = std::time::Duration::ZERO;
+        let mut render = std::time::Duration::ZERO;
+        let mut callback = std::time::Duration::ZERO;
+        let mut skipped = 0u32;
+        let mut window = std::time::Instant::now();
+
+        while let Some(event) = rx.recv().await {
+            if let PlaybackTelemetryEvent::RendererFrame {
+                queue_wait: qw,
+                drain_duration,
+                flush_duration,
+                render_duration,
+                callback_duration,
+                drained_count,
+                ..
+            } = event
+            {
+                frames += 1;
+                queue_wait += qw;
+                drain += drain_duration;
+                flush += flush_duration;
+                render += render_duration;
+                callback += callback_duration;
+                // Anything beyond the frame actually rendered was superseded
+                // before the loop reached it.
+                skipped += drained_count.saturating_sub(1);
+            }
+
+            if window.elapsed() < std::time::Duration::from_secs(2) || frames == 0 {
+                continue;
+            }
+
+            let secs = window.elapsed().as_secs_f64();
+            let per_frame = |total: std::time::Duration| {
+                format!("{:.2}", total.as_secs_f64() * 1000.0 / frames as f64)
+            };
+            tracing::info!(
+                frames_per_sec = format!("{:.1}", frames as f64 / secs),
+                superseded_per_sec = format!("{:.1}", skipped as f64 / secs),
+                queue_wait_ms = per_frame(queue_wait),
+                drain_ms = per_frame(drain),
+                flush_ms = per_frame(flush),
+                render_ms = per_frame(render),
+                callback_ms = per_frame(callback),
+                "RENDER_LOOP stats"
+            );
+
+            frames = 0;
+            skipped = 0;
+            queue_wait = std::time::Duration::ZERO;
+            drain = std::time::Duration::ZERO;
+            flush = std::time::Duration::ZERO;
+            render = std::time::Duration::ZERO;
+            callback = std::time::Duration::ZERO;
+            window = std::time::Instant::now();
+        }
+    });
 }
 
 impl EditorInstance {
@@ -340,10 +414,20 @@ impl EditorInstance {
             .map_err(|e| format!("Segment setup task failed: {e}"))??;
         let layers_rx = editor::finish_renderer_layers_creation(layers_rx).await;
 
-        let renderer = Arc::new(editor::Renderer::spawn(
+        // Render-loop timings. The loop is the last stage of the preview
+        // pipeline without any, and the only one still short of 60fps: encode,
+        // pack and send are all measured and all under 3ms, while the loop
+        // itself offers 15-35 frames a second. This says which part of it —
+        // waiting for work, draining the queue, the GPU render, or the frame
+        // callback — accounts for the rest.
+        let (telemetry, telemetry_rx) = PlaybackTelemetry::channel();
+        spawn_render_telemetry_logger(telemetry_rx);
+
+        let renderer = Arc::new(editor::Renderer::spawn_with_telemetry(
             render_constants.clone(),
             frame_cb,
             layers_rx,
+            Some(telemetry),
         )?);
 
         let (preview_tx, preview_rx) = watch::channel(None);
