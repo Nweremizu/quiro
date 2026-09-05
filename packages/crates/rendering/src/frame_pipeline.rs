@@ -131,6 +131,8 @@ impl NV12BufferPool {
 }
 
 pub struct RgbaToNv12Converter {
+    /// [DEBUG-7f21]
+    _live: crate::live_counts::LiveCountGuard,
     pipeline: wgpu::ComputePipeline,
     bind_group_layout: wgpu::BindGroupLayout,
     params_buffer: wgpu::Buffer,
@@ -235,6 +237,9 @@ impl RgbaToNv12Converter {
         });
 
         Self {
+            _live: crate::live_counts::LiveCountGuard::new(
+                &crate::live_counts::LIVE_GPU_OBJECTS.nv12_converters,
+            ),
             pipeline,
             bind_group_layout,
             params_buffer,
@@ -936,6 +941,8 @@ impl PipelinedGpuReadback {
 }
 
 pub struct RenderSession {
+    /// [DEBUG-7f21]
+    _live: crate::live_counts::LiveCountGuard,
     pub textures: (wgpu::Texture, wgpu::Texture),
     texture_views: (wgpu::TextureView, wgpu::TextureView),
     pub current_is_left: bool,
@@ -970,6 +977,9 @@ impl RenderSession {
         let initial_buffer_size = (padded * height) as u64;
 
         Self {
+            _live: crate::live_counts::LiveCountGuard::new(
+                &crate::live_counts::LIVE_GPU_OBJECTS.render_sessions,
+            ),
             current_is_left: true,
             texture_views: (
                 textures.0.create_view(&Default::default()),
@@ -1164,7 +1174,41 @@ pub async fn finish_encoder_timed(
     Ok((previous_frame, timings))
 }
 
+/// The two halves of the NV12 finish, kept apart because they answer different
+/// questions: `submit_readback` is command recording plus queue submission (GPU
+/// work being asked for), while `wait_previous` is the await on a transfer
+/// started a render ago (a stall, not work). A frame that gets slower in the
+/// second is contending for the GPU; one that gets slower in the first is doing
+/// more work.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Nv12FinishTimings {
+    pub submit_readback: std::time::Duration,
+    pub wait_previous: std::time::Duration,
+}
+
 pub async fn finish_encoder_nv12_pooled(
+    session: &mut RenderSession,
+    nv12_converter: &mut RgbaToNv12Converter,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    uniforms: &ProjectUniforms,
+    encoder: wgpu::CommandEncoder,
+    buffer_pool: Option<&mut NV12BufferPool>,
+) -> Result<Option<Nv12RenderedFrame>, RenderingError> {
+    finish_encoder_nv12_pooled_timed(
+        session,
+        nv12_converter,
+        device,
+        queue,
+        uniforms,
+        encoder,
+        buffer_pool,
+    )
+    .await
+    .map(|(frame, _)| frame)
+}
+
+pub async fn finish_encoder_nv12_pooled_timed(
     session: &mut RenderSession,
     nv12_converter: &mut RgbaToNv12Converter,
     device: &wgpu::Device,
@@ -1172,7 +1216,9 @@ pub async fn finish_encoder_nv12_pooled(
     uniforms: &ProjectUniforms,
     mut encoder: wgpu::CommandEncoder,
     buffer_pool: Option<&mut NV12BufferPool>,
-) -> Result<Option<Nv12RenderedFrame>, RenderingError> {
+) -> Result<(Option<Nv12RenderedFrame>, Nv12FinishTimings), RenderingError> {
+    let mut timings = Nv12FinishTimings::default();
+    let submit_start = std::time::Instant::now();
     let width = uniforms.output_size.0;
     let height = uniforms.output_size.1;
 
@@ -1196,23 +1242,31 @@ pub async fn finish_encoder_nv12_pooled(
     if submitted {
         queue.submit(std::iter::once(encoder.finish()));
         nv12_converter.start_readback();
+        timings.submit_readback = submit_start.elapsed();
 
         // Collected *after* submitting, so the transfer being waited on was
         // started a render ago rather than a moment ago. `take_pending`
         // returns nothing until a second readback is in flight behind it,
         // which costs one frame of latency at the start of playback and buys
         // the overlap for every frame after.
+        let wait_start = std::time::Instant::now();
         let ready = match nv12_converter.take_pending() {
             Some(pending) => Some(pending.wait_with_pool(device, buffer_pool).await?),
             None => None,
         };
-        Ok(ready)
+        timings.wait_previous = wait_start.elapsed();
+        Ok((ready, timings))
     } else if let Some(prev) = nv12_converter.drain_pending() {
         queue.submit(std::iter::once(encoder.finish()));
-        Ok(Some(prev.wait_with_pool(device, buffer_pool).await?))
+        timings.submit_readback = submit_start.elapsed();
+        let wait_start = std::time::Instant::now();
+        let frame = prev.wait_with_pool(device, buffer_pool).await?;
+        timings.wait_previous = wait_start.elapsed();
+        Ok((Some(frame), timings))
     } else {
         let rgba_frame = finish_encoder(session, device, queue, uniforms, encoder).await?;
-        Ok(rgba_frame.map(|f| Nv12RenderedFrame {
+        timings.submit_readback = submit_start.elapsed();
+        Ok((rgba_frame.map(|f| Nv12RenderedFrame {
             data: SharedNv12Buffer::from_arc_vec(f.data),
             width: f.width,
             height: f.height,
@@ -1220,7 +1274,7 @@ pub async fn finish_encoder_nv12_pooled(
             frame_number: f.frame_number,
             target_time_ns: f.target_time_ns,
             format: GpuOutputFormat::Rgba,
-        }))
+        }), timings))
     }
 }
 

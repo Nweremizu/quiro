@@ -342,23 +342,30 @@ impl Renderer {
                 // encoder takes NV12 natively, skipping a CPU colour
                 // conversion. Transitions stay RGBA below; they are rare and
                 // have no immediate NV12 variant to call.
-                PendingRenderInput::Single(input) => {
-                    frame_renderer
-                        .render_immediate_nv12(
-                            input.segment_frames,
-                            input.uniforms,
-                            &input.cursor,
-                            true,
-                            &mut layers,
-                        )
-                        .await
-                        .map(|frame| {
-                            (
-                                EditorFrameOutput::Nv12(frame),
-                                FrameRenderStageTimings::default(),
-                            )
-                        })
-                }
+                //
+                // This calls `render_nv12` (not `render_immediate_nv12`)
+                // deliberately: the NV12 converter holds two readback buffers
+                // so a transfer can overlap the next render, but only once two
+                // are ever queued at once. `render_immediate_nv12` forces a
+                // synchronous wait the instant one isn't ready yet, which was
+                // every single frame here — the queue never got the chance to
+                // hold two, so the overlap this crate is built around never
+                // engaged and every frame paid a full GPU round-trip with zero
+                // slack to absorb a stray slow one. `render_nv12` accepts
+                // `None` (one frame of latency at the very start of playback,
+                // same trade-off the export path already makes) and the
+                // dropped-output case below skips this iteration's callback
+                // rather than force a flush.
+                PendingRenderInput::Single(input) => frame_renderer
+                    .render_nv12_with_timings(
+                        input.segment_frames,
+                        input.uniforms,
+                        &input.cursor,
+                        true,
+                        &mut layers,
+                    )
+                    .await
+                    .map(|(frame, timings)| (frame.map(EditorFrameOutput::Nv12), timings)),
                 PendingRenderInput::Transition {
                     outgoing,
                     incoming,
@@ -385,13 +392,13 @@ impl Renderer {
                     .await
                     .map(|frame| {
                         (
-                            EditorFrameOutput::Rgba(frame),
+                            Some(EditorFrameOutput::Rgba(frame)),
                             FrameRenderStageTimings::default(),
                         )
                     }),
             };
             match render_result {
-                Ok((output, render_stage_timings)) => {
+                Ok((Some(output), render_stage_timings)) => {
                     let render_duration = render_start.elapsed();
                     let frame_number = output.frame_number();
                     let output_format = match output {
@@ -415,6 +422,14 @@ impl Renderer {
                             output_format,
                         });
                     }
+                    let _ = current.finished.send(true);
+                }
+                // The readback that would have covered this submission isn't
+                // ready yet — normal for roughly the first frame after the
+                // renderer or the NV12 converter was (re)created. Nothing to
+                // hand to `frame_cb` this iteration; the frame reappears one
+                // call later via the overlap once a second is queued.
+                Ok((None, _)) => {
                     let _ = current.finished.send(true);
                 }
                 Err(e) => {

@@ -19,6 +19,8 @@ struct TransitionTextures {
 }
 
 pub struct TransitionCompositor {
+    /// [DEBUG-7f21]
+    _live: crate::live_counts::LiveCountGuard,
     bind_group_layout: wgpu::BindGroupLayout,
     pipeline: wgpu::RenderPipeline,
     sampler: wgpu::Sampler,
@@ -131,6 +133,9 @@ impl TransitionCompositor {
             pipeline,
             sampler,
             uniforms_buffer,
+            _live: crate::live_counts::LiveCountGuard::new(
+                &crate::live_counts::LIVE_GPU_OBJECTS.transition_compositors,
+            ),
             textures: None,
         }
     }

@@ -125,9 +125,23 @@ fn spawn_render_telemetry_logger(
         let mut drain = std::time::Duration::ZERO;
         let mut flush = std::time::Duration::ZERO;
         let mut render = std::time::Duration::ZERO;
+        let mut prepare = std::time::Duration::ZERO;
+        let mut layers = std::time::Duration::ZERO;
+        let mut wait_prev = std::time::Duration::ZERO;
+        let mut submit_readback = std::time::Duration::ZERO;
+        let mut immediate_flush = std::time::Duration::ZERO;
         let mut callback = std::time::Duration::ZERO;
         let mut skipped = 0u32;
         let mut window = std::time::Instant::now();
+        // [DEBUG-7f21] One-shot marker for when render_ms first crosses into
+        // "degraded" territory, so we can see whether it lines up with a
+        // cumulative frame count (a growing structure), wall-clock time since
+        // the renderer was created (a periodic/time-based effect), or a
+        // specific timeline position (something about that frame's content).
+        let session_start = std::time::Instant::now();
+        let mut total_frames_ever: u64 = 0;
+        let mut degrade_logged = false;
+        const DEGRADE_THRESHOLD_MS: f64 = 35.0;
 
         while let Some(event) = rx.recv().await {
             if let PlaybackTelemetryEvent::RendererFrame {
@@ -135,16 +149,40 @@ fn spawn_render_telemetry_logger(
                 drain_duration,
                 flush_duration,
                 render_duration,
+                render_stage_timings,
                 callback_duration,
                 drained_count,
+                input_frame_number,
                 ..
             } = event
             {
+                total_frames_ever += 1;
+                if !degrade_logged && render_duration.as_secs_f64() * 1000.0 > DEGRADE_THRESHOLD_MS
+                {
+                    degrade_logged = true;
+                    tracing::info!(
+                        total_frames_ever,
+                        input_frame_number,
+                        elapsed_since_session_start_s =
+                            format!("{:.1}", session_start.elapsed().as_secs_f64()),
+                        render_ms = format!("{:.2}", render_duration.as_secs_f64() * 1000.0),
+                        prepare_ms = format!(
+                            "{:.2}",
+                            render_stage_timings.prepare_duration.as_secs_f64() * 1000.0
+                        ),
+                        "DEGRADE_ONSET marker"
+                    );
+                }
                 frames += 1;
                 queue_wait += qw;
                 drain += drain_duration;
                 flush += flush_duration;
                 render += render_duration;
+                prepare += render_stage_timings.prepare_duration;
+                layers += render_stage_timings.layer_render_duration;
+                wait_prev += render_stage_timings.finish_wait_previous_duration;
+                submit_readback += render_stage_timings.finish_submit_readback_duration;
+                immediate_flush += render_stage_timings.immediate_flush_duration;
                 callback += callback_duration;
                 // Anything beyond the frame actually rendered was superseded
                 // before the loop reached it.
@@ -166,6 +204,15 @@ fn spawn_render_telemetry_logger(
                 drain_ms = per_frame(drain),
                 flush_ms = per_frame(flush),
                 render_ms = per_frame(render),
+                // The render broken down. `wait_prev_ms` is the stall on a
+                // readback started a frame ago, `submit_readback_ms` the GPU
+                // work asked for this frame; whichever grows is the one to
+                // chase.
+                prepare_ms = per_frame(prepare),
+                layers_ms = per_frame(layers),
+                wait_prev_ms = per_frame(wait_prev),
+                submit_readback_ms = per_frame(submit_readback),
+                immediate_flush_ms = per_frame(immediate_flush),
                 callback_ms = per_frame(callback),
                 "RENDER_LOOP stats"
             );
@@ -176,6 +223,11 @@ fn spawn_render_telemetry_logger(
             drain = std::time::Duration::ZERO;
             flush = std::time::Duration::ZERO;
             render = std::time::Duration::ZERO;
+            prepare = std::time::Duration::ZERO;
+            layers = std::time::Duration::ZERO;
+            wait_prev = std::time::Duration::ZERO;
+            submit_readback = std::time::Duration::ZERO;
+            immediate_flush = std::time::Duration::ZERO;
             callback = std::time::Duration::ZERO;
             window = std::time::Instant::now();
         }

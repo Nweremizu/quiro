@@ -6,7 +6,8 @@ use cursor_interpolation::{
 };
 use decoder::{AsyncVideoDecoderHandle, spawn_decoder};
 use frame_pipeline::{
-    NV12BufferPool, RenderSession, finish_encoder_nv12_pooled, finish_encoder_timed,
+    NV12BufferPool, RenderSession, finish_encoder_nv12_pooled, finish_encoder_nv12_pooled_timed,
+    finish_encoder_timed,
     flush_pending_readback,
 };
 use futures::future::OptionFuture;
@@ -40,6 +41,8 @@ pub mod d3d_texture;
 pub mod decoder;
 pub mod frame_chrome;
 mod frame_pipeline;
+// [DEBUG-7f21] temporary live-instance census
+pub mod live_counts;
 mod gpu_test_harness;
 #[cfg(target_os = "macos")]
 pub mod iosurface_texture;
@@ -2002,6 +2005,8 @@ pub fn get_duration(
 }
 
 pub struct RenderVideoConstants {
+    /// [DEBUG-7f21]
+    _live: crate::live_counts::LiveCountGuard,
     pub _instance: wgpu::Instance,
     pub _adapter: wgpu::Adapter,
     pub queue: wgpu::Queue,
@@ -2049,6 +2054,9 @@ impl RenderVideoConstants {
         }
 
         Ok(Self {
+            _live: crate::live_counts::LiveCountGuard::new(
+                &crate::live_counts::LIVE_GPU_OBJECTS.render_constants,
+            ),
             _instance: shared.instance,
             _adapter: shared.adapter,
             device: shared.device,
@@ -2078,6 +2086,9 @@ impl RenderVideoConstants {
             frame_pipeline::note_software_adapter_in_use();
         }
         Self {
+            _live: crate::live_counts::LiveCountGuard::new(
+                &crate::live_counts::LIVE_GPU_OBJECTS.render_constants,
+            ),
             _instance: shared.instance,
             _adapter: shared.adapter,
             device: shared.device,
@@ -2189,6 +2200,9 @@ impl RenderVideoConstants {
         }
 
         Ok(Self {
+            _live: crate::live_counts::LiveCountGuard::new(
+                &crate::live_counts::LIVE_GPU_OBJECTS.render_constants,
+            ),
             _instance: instance,
             _adapter: adapter,
             device,
@@ -4975,6 +4989,8 @@ pub struct FrameRenderStageTimings {
 }
 
 pub struct FrameRenderer<'a> {
+    /// [DEBUG-7f21]
+    _live: crate::live_counts::LiveCountGuard,
     constants: &'a RenderVideoConstants,
     session: Option<RenderSession>,
     nv12_converter: Option<frame_pipeline::RgbaToNv12Converter>,
@@ -4987,6 +5003,9 @@ impl<'a> FrameRenderer<'a> {
 
     pub fn new(constants: &'a RenderVideoConstants) -> Self {
         Self {
+            _live: crate::live_counts::LiveCountGuard::new(
+                &crate::live_counts::LIVE_GPU_OBJECTS.frame_renderers,
+            ),
             constants,
             session: None,
             nv12_converter: None,
@@ -5249,15 +5268,42 @@ impl<'a> FrameRenderer<'a> {
         render_display: bool,
         layers: &mut RendererLayers,
     ) -> Result<frame_pipeline::Nv12RenderedFrame, RenderingError> {
-        if let Some(frame) = self
-            .render_nv12(segment_frames, uniforms, cursor, render_display, layers)
-            .await?
-        {
-            return Ok(frame);
+        self.render_immediate_nv12_with_timings(
+            segment_frames,
+            uniforms,
+            cursor,
+            render_display,
+            layers,
+        )
+        .await
+        .map(|(frame, _)| frame)
+    }
+
+    /// The NV12 counterpart to `render_immediate_with_timings`. The preview
+    /// loop reports a per-stage breakdown, and without this it had nothing to
+    /// report — it passed `FrameRenderStageTimings::default()`, so every stage
+    /// read 0.00 while `render_ms` was the number that moved.
+    pub async fn render_immediate_nv12_with_timings(
+        &mut self,
+        segment_frames: DecodedSegmentFrames,
+        uniforms: ProjectUniforms,
+        cursor: &CursorEvents,
+        render_display: bool,
+        layers: &mut RendererLayers,
+    ) -> Result<(frame_pipeline::Nv12RenderedFrame, FrameRenderStageTimings), RenderingError> {
+        let (frame, mut timings) = self
+            .render_nv12_with_timings(segment_frames, uniforms, cursor, render_display, layers)
+            .await?;
+        if let Some(frame) = frame {
+            return Ok((frame, timings));
         }
-        self.flush_pipeline_nv12()
+        let flush_start = Instant::now();
+        let frame = self
+            .flush_pipeline_nv12()
             .await
-            .unwrap_or(Err(RenderingError::BufferMapWaitingFailed))
+            .unwrap_or(Err(RenderingError::BufferMapWaitingFailed))?;
+        timings.immediate_flush_duration = flush_start.elapsed();
+        Ok((frame, timings))
     }
 
     pub async fn flush_pipeline_nv12(
@@ -5281,10 +5327,25 @@ impl<'a> FrameRenderer<'a> {
         render_display: bool,
         layers: &mut RendererLayers,
     ) -> Result<Option<frame_pipeline::Nv12RenderedFrame>, RenderingError> {
+        self.render_nv12_with_timings(segment_frames, uniforms, cursor, render_display, layers)
+            .await
+            .map(|(frame, _)| frame)
+    }
+
+    pub async fn render_nv12_with_timings(
+        &mut self,
+        segment_frames: DecodedSegmentFrames,
+        uniforms: ProjectUniforms,
+        cursor: &CursorEvents,
+        render_display: bool,
+        layers: &mut RendererLayers,
+    ) -> Result<(Option<frame_pipeline::Nv12RenderedFrame>, FrameRenderStageTimings), RenderingError>
+    {
         if self.constants.is_software_adapter {
             return self
                 .render_nv12_software_path(segment_frames, uniforms, cursor, render_display, layers)
-                .await;
+                .await
+                .map(|frame| (frame, FrameRenderStageTimings::default()));
         }
 
         self.render_nv12_gpu_path(segment_frames, uniforms, cursor, render_display, layers)
@@ -5489,7 +5550,8 @@ impl<'a> FrameRenderer<'a> {
         cursor: &CursorEvents,
         render_display: bool,
         layers: &mut RendererLayers,
-    ) -> Result<Option<frame_pipeline::Nv12RenderedFrame>, RenderingError> {
+    ) -> Result<(Option<frame_pipeline::Nv12RenderedFrame>, FrameRenderStageTimings), RenderingError>
+    {
         let mut last_error = None;
 
         for attempt in 0..Self::MAX_RENDER_RETRIES {
@@ -5558,7 +5620,7 @@ impl<'a> FrameRenderer<'a> {
             let submit_elapsed = submit_start.elapsed();
 
             let readback_start = Instant::now();
-            match finish_encoder_nv12_pooled(
+            match finish_encoder_nv12_pooled_timed(
                 session,
                 nv12_converter,
                 &self.constants.device,
@@ -5569,13 +5631,18 @@ impl<'a> FrameRenderer<'a> {
             )
             .await
             {
-                Ok(opt_frame) => {
-                    NV12_RENDER_STAGES.add(
-                        prepare_elapsed,
-                        submit_elapsed,
-                        readback_start.elapsed(),
-                    );
-                    return Ok(opt_frame);
+                Ok((opt_frame, finish_timings)) => {
+                    let readback_elapsed = readback_start.elapsed();
+                    NV12_RENDER_STAGES.add(prepare_elapsed, submit_elapsed, readback_elapsed);
+                    let timings = FrameRenderStageTimings {
+                        prepare_duration: prepare_elapsed,
+                        layer_render_duration: submit_elapsed,
+                        finish_duration: readback_elapsed,
+                        finish_wait_previous_duration: finish_timings.wait_previous,
+                        finish_submit_readback_duration: finish_timings.submit_readback,
+                        ..Default::default()
+                    };
+                    return Ok((opt_frame, timings));
                 }
                 Err(RenderingError::BufferMapWaitingFailed) => {
                     last_error = Some(RenderingError::BufferMapWaitingFailed);
@@ -5592,6 +5659,8 @@ impl<'a> FrameRenderer<'a> {
 }
 
 pub struct RendererLayers {
+    /// [DEBUG-7f21]
+    _live: crate::live_counts::LiveCountGuard,
     background: BackgroundLayer,
     background_blur: BlurLayer,
     frame: FrameLayer,
@@ -5623,6 +5692,9 @@ impl RendererLayers {
             Arc::new(composite_frame::CompositeVideoFramePipeline::new(device));
 
         Self {
+            _live: crate::live_counts::LiveCountGuard::new(
+                &crate::live_counts::LIVE_GPU_OBJECTS.renderer_layers,
+            ),
             background: BackgroundLayer::new(device),
             background_blur: BlurLayer::new(device),
             frame: FrameLayer::new(device, shared_composite_pipeline.clone()),

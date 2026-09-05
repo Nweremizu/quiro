@@ -97,6 +97,13 @@ pub enum PlaybackStartError {
     InvalidFps,
 }
 
+// [DEBUG-7f21] Backing the PLAYBACK_IDLE_GAP marker: 0 means "no previous
+// stop this process", so a monotonic epoch plus a millisecond offset avoids
+// needing an `Instant` (not const-constructible) in a static.
+static PLAYBACK_EPOCH: std::sync::LazyLock<std::time::Instant> =
+    std::sync::LazyLock::new(std::time::Instant::now);
+static LAST_PLAYBACK_STOP_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 pub struct Playback {
     pub renderer: Arc<editor::RendererHandle>,
     pub render_constants: Arc<RenderVideoConstants>,
@@ -344,6 +351,30 @@ impl Playback {
         resolution_base: XY<u32>,
     ) -> Result<PlaybackHandle, PlaybackStartError> {
         let start_call = Instant::now();
+
+        // [DEBUG-7f21] Preview fps halves after the first playback and then
+        // plateaus. If any row here reads 1 -> 2 -> 2 across three plays, that
+        // is the extra live object doing it.
+        quiro_rendering::live_counts::LIVE_GPU_OBJECTS.log("playback_start");
+
+        // [DEBUG-7f21] A ~2min16s idle gap between two plays fully restored
+        // full-speed rendering where a ~15s gap didn't — nothing in our own
+        // state has a time-based reset, so that pointed outside this codebase
+        // (a GPU/driver power-state timeout). This makes the correlation
+        // explicit in the log instead of requiring manual timestamp math
+        // against a separately-captured nvidia-smi trace.
+        {
+            use std::sync::atomic::Ordering::Relaxed;
+            let last_stop_ms = LAST_PLAYBACK_STOP_MS.load(Relaxed);
+            if last_stop_ms != 0 {
+                let now_ms = PLAYBACK_EPOCH.elapsed().as_millis() as u64;
+                tracing::info!(
+                    idle_gap_s = format!("{:.1}", (now_ms.saturating_sub(last_stop_ms)) as f64 / 1000.0),
+                    "PLAYBACK_IDLE_GAP marker"
+                );
+            }
+        }
+
         let fps_f64 = fps as f64;
 
         if !(fps_f64.is_finite() && fps_f64 > 0.0) {
@@ -1355,6 +1386,17 @@ impl Playback {
             stop_tx.send(true).ok();
 
             event_tx.send(PlaybackEvent::Stop).ok();
+
+            // [DEBUG-7f21] Paired with the census at start: the difference
+            // between the two says whether the extra object appears during a
+            // playback or is left behind by the one before it.
+            quiro_rendering::live_counts::LIVE_GPU_OBJECTS.log("playback_stop");
+
+            // [DEBUG-7f21] paired with PLAYBACK_IDLE_GAP at the next start.
+            LAST_PLAYBACK_STOP_MS.store(
+                PLAYBACK_EPOCH.elapsed().as_millis() as u64,
+                std::sync::atomic::Ordering::Relaxed,
+            );
         };
 
         std::thread::Builder::new()

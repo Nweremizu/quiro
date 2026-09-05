@@ -223,6 +223,10 @@ impl FfmpegDecoder {
         use_hw_acceleration: bool,
     ) -> Result<(), String> {
         std::thread::spawn(move || {
+            // [DEBUG-7f21] counts decoder threads alive, not handles.
+            let _live_decoder = crate::live_counts::LiveCountGuard::new(
+                &crate::live_counts::LIVE_GPU_OBJECTS.decoder_threads,
+            );
             let hw_device_type = if use_hw_acceleration {
                 #[cfg(target_os = "windows")]
                 {

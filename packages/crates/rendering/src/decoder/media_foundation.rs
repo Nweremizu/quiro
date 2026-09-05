@@ -177,6 +177,10 @@ impl MFDecoder {
         ready_tx: oneshot::Sender<Result<DecoderInitResult, String>>,
     ) -> Result<(), String> {
         std::thread::spawn(move || {
+            // [DEBUG-7f21] counts decoder threads alive, not handles.
+            let _live_decoder = crate::live_counts::LiveCountGuard::new(
+                &crate::live_counts::LIVE_GPU_OBJECTS.decoder_threads,
+            );
             let mut decoder = match quiro_video_decode::MediaFoundationDecoder::new(&path) {
                 Err(e) => {
                     let _ = ready_tx.send(Err(e));

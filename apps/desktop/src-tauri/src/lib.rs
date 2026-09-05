@@ -20,6 +20,8 @@ mod hotkeys;
 mod import;
 mod preview_encoder;
 mod library;
+#[cfg(target_os = "windows")]
+mod nvapi_power_policy;
 mod permissions;
 mod presets;
 mod platform;
@@ -1224,6 +1226,12 @@ fn enable_webview_remote_debugging() {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Must happen before any GPU device is created (wgpu adapter/device,
+    // webview GPU init, anything touching the NVIDIA driver) — see
+    // nvapi_power_policy's module docs for why and what this fixes.
+    #[cfg(target_os = "windows")]
+    nvapi_power_policy::ensure_max_performance_profile();
+
     #[cfg(all(debug_assertions, windows))]
     enable_webview_remote_debugging();
 
