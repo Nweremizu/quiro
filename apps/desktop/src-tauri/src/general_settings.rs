@@ -39,8 +39,8 @@ pub enum PostDeletionBehaviour {
 #[serde(rename_all = "camelCase")]
 pub enum EditorPreviewQuality {
     Quarter,
-    #[default]
     Half,
+    #[default]
     Full,
 }
 
@@ -298,7 +298,7 @@ impl Default for GeneralSettingsStore {
             crash_recovery_recording: quiro_recording::DEFAULT_CRASH_RECOVERY_RECORDING,
             max_fps: quiro_recording::DEFAULT_STUDIO_MAX_FPS,
             transcription_hints: default_transcription_hints(),
-            editor_preview_quality: EditorPreviewQuality::Half,
+            editor_preview_quality: EditorPreviewQuality::Full,
             studio_recording_quality: default_studio_recording_quality(),
             main_window_position: None,
             camera_window_position: None,

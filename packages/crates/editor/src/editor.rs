@@ -22,6 +22,11 @@ pub enum RendererMessage {
         finished: oneshot::Sender<bool>,
         cursor: Arc<CursorEvents>,
         queued_at: Instant,
+        // Single-shot callers (a paused scrub) have no follow-up frame to
+        // flush the NV12 pipeline's one-frame-latency buffer, so they need
+        // the immediate/blocking variant. Continuous playback callers keep
+        // the pipelined path for throughput — their next frame flushes it.
+        immediate: bool,
     },
     RenderTransition {
         outgoing: RendererTransitionInput,
@@ -170,6 +175,7 @@ impl Renderer {
             input: PendingRenderInput,
             finished: oneshot::Sender<bool>,
             queued_at: Instant,
+            immediate: bool,
         }
 
         enum PendingRenderInput {
@@ -208,6 +214,7 @@ impl Renderer {
                         finished,
                         cursor,
                         queued_at,
+                        immediate,
                     }) => Some(PendingFrame {
                         input: PendingRenderInput::Single(RendererTransitionInput {
                             segment_frames,
@@ -216,6 +223,7 @@ impl Renderer {
                         }),
                         finished,
                         queued_at,
+                        immediate,
                     }),
                     Some(RendererMessage::RenderTransition {
                         outgoing,
@@ -231,6 +239,7 @@ impl Renderer {
                             kind,
                             progress,
                         },
+                        immediate: false,
                         finished,
                         queued_at,
                     }),
@@ -259,6 +268,7 @@ impl Renderer {
                         finished,
                         cursor,
                         queued_at,
+                        immediate,
                     } => {
                         let dropped_frame_number = current.input.uniforms().frame_number;
                         let replacement_frame_number = uniforms.frame_number;
@@ -277,6 +287,7 @@ impl Renderer {
                             }),
                             finished,
                             queued_at,
+                            immediate,
                         };
                         drained_count += 1;
                     }
@@ -306,6 +317,7 @@ impl Renderer {
                             },
                             finished,
                             queued_at,
+                            immediate: false,
                         };
                         drained_count += 1;
                     }
@@ -335,6 +347,7 @@ impl Renderer {
             let render_start = Instant::now();
             let input_frame_number = current.input.uniforms().frame_number;
             let frame_layout = current.input.uniforms().frame_layout();
+            let immediate = current.immediate;
             let render_result = match current.input {
                 // NV12 for the common path: the GPU converts, so the readback
                 // moves 3.1MB instead of 8.1MB at 1080p — the readback being
@@ -343,19 +356,29 @@ impl Renderer {
                 // conversion. Transitions stay RGBA below; they are rare and
                 // have no immediate NV12 variant to call.
                 //
-                // This calls `render_nv12` (not `render_immediate_nv12`)
-                // deliberately: the NV12 converter holds two readback buffers
-                // so a transfer can overlap the next render, but only once two
-                // are ever queued at once. `render_immediate_nv12` forces a
-                // synchronous wait the instant one isn't ready yet, which was
-                // every single frame here — the queue never got the chance to
-                // hold two, so the overlap this crate is built around never
-                // engaged and every frame paid a full GPU round-trip with zero
-                // slack to absorb a stray slow one. `render_nv12` accepts
-                // `None` (one frame of latency at the very start of playback,
-                // same trade-off the export path already makes) and the
-                // dropped-output case below skips this iteration's callback
-                // rather than force a flush.
+                // This calls `render_nv12` (not `render_immediate_nv12`) for
+                // continuous playback deliberately: the NV12 converter holds
+                // two readback buffers so a transfer can overlap the next
+                // render, but only once two are ever queued at once —
+                // `render_immediate_nv12` forces a synchronous wait the
+                // instant one isn't ready, which would engage every frame and
+                // remove the overlap this crate is built around. `render_nv12`
+                // accepts `None` (one frame of latency), and the next frame in
+                // the stream flushes it.
+                //
+                // A single-shot request (a paused scrub, a quality change)
+                // has no next frame to flush that buffer, so it must use the
+                // immediate variant or the frontend never sees the result.
+                PendingRenderInput::Single(input) if immediate => frame_renderer
+                    .render_immediate_nv12_with_timings(
+                        input.segment_frames,
+                        input.uniforms,
+                        &input.cursor,
+                        true,
+                        &mut layers,
+                    )
+                    .await
+                    .map(|(frame, timings)| (Some(EditorFrameOutput::Nv12(frame)), timings)),
                 PendingRenderInput::Single(input) => frame_renderer
                     .render_nv12_with_timings(
                         input.segment_frames,
@@ -481,6 +504,7 @@ impl RendererHandle {
                 finished: finished_tx,
                 cursor,
                 queued_at: Instant::now(),
+                immediate: false,
             })
             .is_err()
             && let Some(telemetry) = &self.telemetry
@@ -529,6 +553,7 @@ impl RendererHandle {
             finished: finished_tx,
             cursor,
             queued_at: Instant::now(),
+            immediate: false,
         };
         if self.tx.blocking_send(msg).is_err()
             && let Some(telemetry) = &self.telemetry
@@ -551,6 +576,9 @@ impl RendererHandle {
             finished: finished_tx,
             cursor,
             queued_at: Instant::now(),
+            // Single-shot: no follow-up frame will arrive to flush the
+            // pipelined NV12 buffer, so this must render synchronously.
+            immediate: true,
         };
         if self.tx.send(msg).await.is_err() {
             if let Some(telemetry) = &self.telemetry {
@@ -603,6 +631,7 @@ impl RendererHandle {
             finished: finished_tx,
             cursor,
             queued_at: Instant::now(),
+            immediate: false,
         };
         if self.tx.blocking_send(msg).is_err() {
             if let Some(telemetry) = &self.telemetry {

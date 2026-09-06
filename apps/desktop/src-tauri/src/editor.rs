@@ -170,7 +170,7 @@ fn spawn_preview_encoder(
                 }
 
                 let encode_start = std::time::Instant::now();
-                let encoded = match frame.format {
+                let mut encode_once = || match frame.format {
                     // The common render path; `stride` is the Y-plane stride.
                     WSFrameFormat::Nv12 { .. } => encoder.encode_nv12(
                         &frame.data,
@@ -190,6 +190,24 @@ fn spawn_preview_encoder(
                     // Already compressed.
                     WSFrameFormat::H264 { .. } => Ok(None),
                 };
+
+                let mut encoded = encode_once();
+
+                // A hardware encoder can hold a frame or two internally
+                // before emitting a packet. Continuous playback flushes that
+                // for free — the next real frame prompts it — but a paused
+                // single-shot request (a scrub, a quality change) has no
+                // follow-up, so the preview would sit black forever. Every
+                // frame here is a keyframe, so resubmitting the identical
+                // picture is harmless and forces the buffered packet out;
+                // capped so a genuinely stuck encoder still falls through to
+                // the raw fallback below instead of hanging this thread.
+                let resubmit_deadline =
+                    std::time::Instant::now() + std::time::Duration::from_millis(200);
+                while matches!(encoded, Ok(None)) && std::time::Instant::now() < resubmit_deadline
+                {
+                    encoded = encode_once();
+                }
 
                 encode_nanos += encode_start.elapsed().as_nanos() as u64;
 

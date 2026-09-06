@@ -749,12 +749,40 @@ impl EditorInstance {
                             continue;
                         }
 
-                        segment_frames_opt = segment_medias.decoders.get_frames_initial(
-                            segment_time as f32,
-                            !project.camera.hide,
-                            true,
-                            clip_offsets,
-                        ) => {
+                        segment_frames_opt = async {
+                            // A decoder that has just been opened (the very
+                            // first frame after the editor opens) can take a
+                            // moment past `get_frames_initial`'s tolerance to
+                            // produce anything — a cold seek, hardware decoder
+                            // warm-up. Retrying with the normal, more lenient
+                            // `get_frames` covers that startup window instead
+                            // of leaving the preview permanently blank until
+                            // some unrelated later request happens to land
+                            // after the decoder has caught up on its own.
+                            if let Some(frames) = segment_medias.decoders.get_frames_initial(
+                                segment_time as f32,
+                                !project.camera.hide,
+                                true,
+                                clip_offsets,
+                            ).await {
+                                return Some(frames);
+                            }
+                            for _ in 0..PREVIEW_RENDER_MAX_ATTEMPTS {
+                                tokio::time::sleep(std::time::Duration::from_millis(
+                                    PREVIEW_RENDER_RETRY_DELAY_MS,
+                                ))
+                                .await;
+                                if let Some(frames) = segment_medias.decoders.get_frames(
+                                    segment_time as f32,
+                                    !project.camera.hide,
+                                    true,
+                                    clip_offsets,
+                                ).await {
+                                    return Some(frames);
+                                }
+                            }
+                            None
+                        } => {
                             if preview_rx.has_changed().unwrap_or(false) {
                                 continue;
                             }

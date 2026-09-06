@@ -176,7 +176,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 	const playbackTime = useThrottledPlaybackTime(playback);
 
 	useEffect(() => () => playback.dispose(), [playback]);
-	const [previewQuality, setPreviewQuality] = useState<PreviewQuality>("half");
+	const [previewQuality, setPreviewQuality] = useState<PreviewQuality>("full");
 	const [selection, setSelection] = useState<TimelineSelection>(null);
 	const [splitMode, setSplitMode] = useState(false);
 	const [clipsOpen, setClipsOpen] = useState(false);

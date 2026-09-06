@@ -1045,6 +1045,14 @@ fn get_codec_and_options(
                     options.set("rc", "vbr");
                     options.set("spatial-aq", "1");
                     options.set("temporal-aq", "1");
+                    // The live preview sends one frame at a time while paused
+                    // (a scrub, a quality change) with nothing queued behind
+                    // it to flush an internal buffer. NVENC's default `delay`
+                    // holds output back by several frames for its normal
+                    // streaming case; zeroing it makes every submitted frame
+                    // come back immediately, which is what a single-shot
+                    // preview render needs.
+                    options.set("delay", "0");
                 }
                 options.set("g", &keyframe_interval_str);
             }
@@ -1055,7 +1063,10 @@ fn get_codec_and_options(
                     options.set("look_ahead_depth", "20");
                 } else {
                     options.set("preset", "faster");
-                    options.set("look_ahead", "1");
+                    // Look-ahead buffers frames before emitting output, which
+                    // starves a single paused-preview render of any packet at
+                    // all — see the NVENC `delay` comment above.
+                    options.set("look_ahead", "0");
                 }
                 options.set("g", &keyframe_interval_str);
             }
