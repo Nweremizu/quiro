@@ -29,13 +29,13 @@
 		"setup:ffmpeg": "node scripts/setup-ffmpeg.mjs"
 	},
 	"dependencies": {
-		"@biomejs/biome": "^2.5.9",
+		"@biomejs/biome": "^2.5.12",
 		"@clack/prompts": "^1.7.0",
 		"@effect/language-service": "^0.87.2",
 		"dotenv-cli": "^11.0.0",
-		"mysql2": "^3.23.4",
-		"tsdown": "^0.22.14",
-		"turbo": "^2.10.11",
+		"mysql2": "^3.24.3",
+		"tsdown": "^0.23.0",
+		"turbo": "^2.10.12",
 		"typescript": "~5.8.3"
 	},
 	"devDependencies": {
