@@ -15,7 +15,7 @@ export function EditorErrorScreen({
 	path?: string;
 }) {
 	return (
-		<div className="flex h-screen w-screen flex-col items-center justify-center gap-4 bg-gray-1 px-8">
+		<div className="flex h-full min-h-0 max-h-full w-full flex-col items-center justify-center gap-4 overflow-hidden bg-gray-1 px-8">
 			<div className="flex size-12 items-center justify-center rounded-full bg-red-3 text-red-9">
 				<IconLucideTriangleAlert className="size-6" />
 			</div>

@@ -61,10 +61,6 @@ pub fn capture_streamed_display_reason() -> Option<String> {
         return Some("remote desktop session (SM_REMOTESESSION)".to_string());
     }
 
-    if let Some(vendor) = hypervisor_guest() {
-        return Some(format!("hypervisor guest ({vendor})"));
-    }
-
     if let Some(marker) = smbios_virtual_machine_marker() {
         return Some(format!("virtual machine SMBIOS ({marker})"));
     }
@@ -79,45 +75,6 @@ pub fn capture_streamed_display_reason() -> Option<String> {
 fn remote_session_active() -> bool {
     use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_REMOTESESSION};
     unsafe { GetSystemMetrics(SM_REMOTESESSION) != 0 }
-}
-
-#[cfg(target_arch = "x86_64")]
-fn hypervisor_guest() -> Option<String> {
-    use std::arch::x86_64::__cpuid;
-
-    if unsafe { __cpuid(1) }.ecx & (1 << 31) == 0 {
-        return None;
-    }
-
-    let hv = unsafe { __cpuid(0x4000_0000) };
-    let mut vendor = [0u8; 12];
-    vendor[0..4].copy_from_slice(&hv.ebx.to_le_bytes());
-    vendor[4..8].copy_from_slice(&hv.ecx.to_le_bytes());
-    vendor[8..12].copy_from_slice(&hv.edx.to_le_bytes());
-
-    // Hyper-V hosts the desktop OS itself when VBS / WSL2 / Hyper-V is
-    // enabled. The root partition (CreatePartitions privilege, leaf
-    // 0x40000003 EBX bit 0) is the physical machine, not a guest.
-    if &vendor == b"Microsoft Hv"
-        && hv.eax >= 0x4000_0003
-        && unsafe { __cpuid(0x4000_0003) }.ebx & 1 != 0
-    {
-        return None;
-    }
-
-    let vendor = String::from_utf8_lossy(&vendor)
-        .trim_matches([char::from(0), ' '])
-        .to_string();
-    Some(if vendor.is_empty() {
-        "unknown hypervisor".to_string()
-    } else {
-        vendor
-    })
-}
-
-#[cfg(not(target_arch = "x86_64"))]
-fn hypervisor_guest() -> Option<String> {
-    None
 }
 
 fn smbios_virtual_machine_marker() -> Option<String> {

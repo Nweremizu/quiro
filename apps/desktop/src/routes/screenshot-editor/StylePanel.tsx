@@ -2,6 +2,7 @@ import { Collapsible } from "@base-ui/react/collapsible";
 import { cn, Select, Switch } from "@quiro/ui";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useRef, useState } from "react";
+import { invalidateCachedFileImage } from "@/utils/image-cache";
 import type { BackgroundConfiguration } from "@/utils/tauri";
 import IconLucideImage from "~icons/lucide/image";
 import IconLucideSquare from "~icons/lucide/square";
@@ -142,6 +143,7 @@ function BackgroundSection({
 			],
 		});
 		if (typeof picked === "string") {
+			invalidateCachedFileImage(picked);
 			selectSource({ type: "image", path: picked });
 		}
 	};

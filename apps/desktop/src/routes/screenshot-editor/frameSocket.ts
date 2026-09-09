@@ -62,6 +62,7 @@ export function codecFromConfig(config: Uint8Array): string {
 function createH264Decoder(
 	onFrame: (frame: SocketFrame) => void,
 	isClosed: () => boolean,
+	flushAfterDecode?: () => boolean,
 ) {
 	let decoder: VideoDecoder | null = null;
 	let configured = "";
@@ -110,8 +111,17 @@ function createH264Decoder(
 		const isAvcC = config.length > 0 && config[0] === 1;
 		decoder.configure(
 			isAvcC
-				? { codec, description: config, codedWidth: width, codedHeight: height }
-				: { codec, codedWidth: width, codedHeight: height },
+				? {
+						codec,
+						description: config,
+						codedWidth: width,
+						codedHeight: height,
+					}
+				: {
+						codec,
+						codedWidth: width,
+						codedHeight: height,
+					},
 		);
 		configured = key;
 		usesDescription = isAvcC;
@@ -136,7 +146,7 @@ function createH264Decoder(
 			// present.
 			const config = configLen > 0 ? payload.subarray(0, configLen) : payload;
 			ensure(config, width, height);
-			if (!decoder || decoder.state !== "configured") return;
+			if (decoder?.state !== "configured") return;
 
 			// An `avcC` description already carries the parameter sets, so the
 			// chunk is frame data alone. Annex-B has no description, so the
@@ -153,6 +163,21 @@ function createH264Decoder(
 					data,
 				}),
 			);
+			// Paused previews have no next chunk to release buffered decoder output.
+			// Every preview chunk is a keyframe, including the first after flush.
+			if (flushAfterDecode?.()) {
+				const activeDecoder = decoder;
+				void activeDecoder
+					.flush()
+					.then(() => {
+						if (isClosed() || decoder !== activeDecoder) return;
+					})
+					.catch((error: unknown) => {
+						if (!isClosed() && decoder === activeDecoder) {
+							console.error("Preview decoder flush failed:", error);
+						}
+					});
+			}
 		},
 		close() {
 			decoder?.close();
@@ -173,7 +198,10 @@ export function connectFrameSocket(
 	url: string,
 	onFrame: (frame: SocketFrame) => void,
 	onClose?: () => void,
-	options?: { unpremultiply?: boolean },
+	options?: {
+		unpremultiply?: boolean;
+		flushAfterDecode?: () => boolean;
+	},
 ): () => void {
 	let socket: WebSocket | null = new WebSocket(url);
 	socket.binaryType = "arraybuffer";
@@ -199,8 +227,12 @@ export function connectFrameSocket(
 			const height = view.getUint32(trailerAt + 4, true);
 			const width = view.getUint32(trailerAt + 8, true);
 			const frameNumber = view.getUint32(trailerAt + 12, true);
-
-			if (!h264) h264 = createH264Decoder(onFrame, () => closed);
+			if (!h264)
+				h264 = createH264Decoder(
+					onFrame,
+					() => closed,
+					options?.flushAfterDecode,
+				);
 			h264.decode(
 				new Uint8Array(buffer, 0, trailerAt),
 				configLen,

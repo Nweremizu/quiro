@@ -1097,7 +1097,7 @@ mod tests {
                     speed_audio_mode: None,
                     transform: None,
                     perspective: None,
-                    },
+                },
                 TimelineSegment {
                     recording_clip: 1,
                     timescale: 1.0,
@@ -1107,7 +1107,7 @@ mod tests {
                     speed_audio_mode: None,
                     transform: None,
                     perspective: None,
-                    },
+                },
             ],
             transitions: Vec::new(),
             zoom_segments: vec![ZoomSegment {

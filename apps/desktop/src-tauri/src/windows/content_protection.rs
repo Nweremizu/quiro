@@ -82,16 +82,6 @@ pub fn apply_content_protection(app: &AppHandle<Wry>, enabled: bool) {
             continue;
         };
 
-        // The camera window's protection depends on the recording mode (studio excludes
-        // the preview, instant keeps it) and is driven from `start_recording`. Only ever
-        // clear it here so it stays visible outside of recordings.
-        if matches!(id, WindowId::Camera) {
-            if !enabled {
-                let _ = window.set_content_protected(false);
-            }
-            continue;
-        }
-
         let title = id.title();
         let should_protect = enabled && window_capture_excluded(app, &title);
         let _ = window.set_content_protected(should_protect);

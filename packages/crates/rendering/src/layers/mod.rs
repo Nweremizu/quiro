@@ -4,6 +4,7 @@ mod blur;
 mod camera;
 mod captions;
 mod cursor;
+mod cursor_theme;
 mod display;
 mod frame;
 mod keyboard;

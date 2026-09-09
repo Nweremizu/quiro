@@ -79,6 +79,55 @@ export function startTimeDrag(
 	window.addEventListener("pointerup", up);
 }
 
+export function startPlayheadDrag(
+	event: React.PointerEvent,
+	timeline: TimelineViewport,
+	onSeek: (time: number) => void,
+	onActiveChange?: (active: boolean) => void,
+) {
+	event.preventDefault();
+	event.stopPropagation();
+
+	let pendingClientX = event.clientX;
+	let frame: number | null = null;
+	let active = true;
+
+	const flush = () => {
+		if (frame !== null) {
+			cancelAnimationFrame(frame);
+			frame = null;
+		}
+		onSeek(timeline.timeAt(pendingClientX));
+	};
+
+	const move = (moveEvent: PointerEvent) => {
+		pendingClientX = moveEvent.clientX;
+		if (frame !== null) return;
+		frame = requestAnimationFrame(() => {
+			frame = null;
+			onSeek(timeline.timeAt(pendingClientX));
+		});
+	};
+
+	const end = () => {
+		if (!active) return;
+		active = false;
+		flush();
+		window.removeEventListener("pointermove", move);
+		window.removeEventListener("pointerup", end);
+		window.removeEventListener("pointercancel", end);
+		window.removeEventListener("blur", end);
+		onActiveChange?.(false);
+	};
+
+	onActiveChange?.(true);
+	flush();
+	window.addEventListener("pointermove", move);
+	window.addEventListener("pointerup", end);
+	window.addEventListener("pointercancel", end);
+	window.addEventListener("blur", end);
+}
+
 /** Trim handles are this wide where the segment has room for two of them. */
 const HANDLE_WIDTH = 24;
 

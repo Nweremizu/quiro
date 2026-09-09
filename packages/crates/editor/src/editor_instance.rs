@@ -1,6 +1,6 @@
 use crate::editor;
-use crate::telemetry::{PlaybackTelemetry, PlaybackTelemetryEvent};
 use crate::playback::{self, PlaybackHandle, PlaybackStartError};
+use crate::telemetry::{PlaybackTelemetry, PlaybackTelemetryEvent};
 use quiro_audio::AudioData;
 use quiro_project::StudioRecordingMeta;
 use quiro_project::{
@@ -108,7 +108,6 @@ pub struct EditorInstance {
     runtime_handle: tokio::runtime::Handle,
     audio_output: Arc<crate::AudioOutput>,
 }
-
 
 /// Averages the renderer's per-frame timings and logs one line every two
 /// seconds, matching the cadence of the playback and websocket stats so the
@@ -343,7 +342,7 @@ impl EditorInstance {
                             speed_audio_mode: None,
                             transform: None,
                             perspective: None,
-                                    }],
+                        }],
                         _ => {
                             warn!(
                                 "Failed to determine display duration for {}, leaving timeline unset",
@@ -378,7 +377,7 @@ impl EditorInstance {
                             speed_audio_mode: None,
                             transform: None,
                             perspective: None,
-                                    })
+                        })
                     })
                     .collect(),
             };

@@ -1,21 +1,134 @@
+import { toast } from "@quiro/ui";
 import type { ZoomSegment } from "@/utils/tauri";
 import IconLucideArrowLeftToLine from "~icons/lucide/arrow-left-to-line";
 import IconLucideArrowRightToLine from "~icons/lucide/arrow-right-to-line";
+import IconLucideCopyPlus from "~icons/lucide/copy-plus";
 import IconLucideTrash2 from "~icons/lucide/trash-2";
+import IconPhArrowDownFill from "~icons/ph/arrow-down-fill";
+import IconPhArrowLeftFill from "~icons/ph/arrow-left-fill";
+import IconPhArrowRightFill from "~icons/ph/arrow-right-fill";
+import IconPhArrowUpFill from "~icons/ph/arrow-up-fill";
+import IconPhArrowsOutCardinalFill from "~icons/ph/arrows-out-cardinal-fill";
+import IconPhCrosshairFill from "~icons/ph/crosshair-fill";
+import IconPhCursorFill from "~icons/ph/cursor-fill";
+import IconPhLightningFill from "~icons/ph/lightning-fill";
+import IconPhMagnifyingGlassPlusFill from "~icons/ph/magnifying-glass-plus-fill";
+import IconPhPerspectiveFill from "~icons/ph/perspective-fill";
 import {
 	canMergeSpanWithNext,
 	canMergeSpanWithPrevious,
 	mergeSpans,
 } from "../clip-merge";
 import { useEditorContext } from "../context";
+import { MIN_ZOOM_DURATION, planZoomDuplicate } from "../zoom-duplicate";
 import { startTimeDrag, useTimeline } from "./context";
 import { TimelineContextMenu } from "./TimelineContextMenu";
 import { SegmentContent, SegmentHandle, SegmentRoot } from "./Track";
 
-const MIN_ZOOM_DURATION = 0.3;
+function ZoomDetails({
+	segment,
+	width,
+}: {
+	segment: ZoomSegment;
+	width: number;
+}) {
+	const followsCursor = segment.mode === "auto";
+	const motion = segment.motion ?? {};
+	const rotates = [
+		motion.rotation,
+		motion.tiltX,
+		motion.tiltY,
+		motion.spin,
+	].some((value) => Math.abs(value ?? 0) > 0.001);
+	const moves =
+		Math.abs(motion.offsetX ?? 0) > 0.001 ||
+		Math.abs(motion.offsetY ?? 0) > 0.001;
+	const motionLabel = rotates
+		? "Rotation movement"
+		: moves
+			? "Position movement"
+			: "Push-in movement";
+
+	return (
+		<div className="flex min-w-0 items-center justify-center gap-2 overflow-hidden text-gray-a12">
+			<span className="shrink-0" title={`${segment.amount.toFixed(1)}× zoom`}>
+				<IconPhMagnifyingGlassPlusFill
+					aria-hidden="true"
+					className="size-4 shrink-0"
+				/>
+			</span>
+			{width >= 48 && (
+				<span
+					className="shrink-0"
+					title={followsCursor ? "Follows cursor" : "Fixed focus"}
+				>
+					{followsCursor ? (
+						<IconPhCursorFill aria-hidden="true" className="size-4 shrink-0" />
+					) : (
+						<IconPhCrosshairFill
+							aria-hidden="true"
+							className="size-4 shrink-0"
+						/>
+					)}
+				</span>
+			)}
+			{width >= 68 && (
+				<span className="shrink-0" title={motionLabel}>
+					{rotates ? (
+						<IconPhPerspectiveFill
+							aria-hidden="true"
+							className="size-4 shrink-0"
+						/>
+					) : (
+						<IconPhArrowsOutCardinalFill
+							aria-hidden="true"
+							className="size-4 shrink-0"
+						/>
+					)}
+				</span>
+			)}
+			{width >= 88 && segment.instantAnimation && (
+				<span className="shrink-0" title="Instant zoom transition">
+					<IconPhLightningFill aria-hidden="true" className="size-4 shrink-0" />
+				</span>
+			)}
+			{width >= 108 &&
+				segment.glideDirection &&
+				segment.glideDirection !== "none" && (
+					<span className="shrink-0" title={`Glides ${segment.glideDirection}`}>
+						{segment.glideDirection === "left" && (
+							<IconPhArrowLeftFill
+								aria-hidden="true"
+								className="size-4 shrink-0"
+							/>
+						)}
+						{segment.glideDirection === "right" && (
+							<IconPhArrowRightFill
+								aria-hidden="true"
+								className="size-4 shrink-0"
+							/>
+						)}
+						{segment.glideDirection === "up" && (
+							<IconPhArrowUpFill
+								aria-hidden="true"
+								className="size-4 shrink-0"
+							/>
+						)}
+						{segment.glideDirection === "down" && (
+							<IconPhArrowDownFill
+								aria-hidden="true"
+								className="size-4 shrink-0"
+							/>
+						)}
+					</span>
+				)}
+		</div>
+	);
+}
 
 export function ZoomTrack() {
-	const { project, setProject, selection, setSelection } = useEditorContext();
+	const { project, setProject, selection, setSelection, playing, seek } =
+		useEditorContext();
 	const timeline = useTimeline();
 
 	const segments = project?.timeline?.zoomSegments ?? [];
@@ -24,9 +137,9 @@ export function ZoomTrack() {
 		setProject((current) =>
 			current.timeline
 				? {
-						...current,
-						timeline: { ...current.timeline, zoomSegments: next },
-					}
+					...current,
+					timeline: { ...current.timeline, zoomSegments: next },
+				}
 				: current,
 		);
 
@@ -43,6 +156,43 @@ export function ZoomTrack() {
 		});
 	};
 
+	const commitDuplicate = (duplicate: ZoomSegment) => {
+		const next = [...segments, duplicate].sort((a, b) => a.start - b.start);
+		const duplicateIndex = next.indexOf(duplicate);
+		patchSegments(next);
+		setSelection({ type: "zoom", index: duplicateIndex });
+		if (!playing) seek((duplicate.start + duplicate.end) / 2);
+	};
+
+	const duplicateSegment = (index: number) => {
+		const plan = planZoomDuplicate(segments, index, timeline.duration);
+		if (plan.status === "exact") {
+			commitDuplicate(plan.segment);
+			return;
+		}
+
+		if (plan.status === "blocked") {
+			toast.error("No room to duplicate this zoom", {
+				description:
+					"Move the next zoom or shorten this one to create at least 0.3 seconds of space.",
+			});
+			return;
+		}
+
+		toast.error("The duplicate would overlap another zoom", {
+			description: `${plan.availableDuration.toFixed(1)} seconds is available after this zoom. Trim the duplicate to fit?`,
+			duration: 10_000,
+			action: {
+				label: "Trim to fit",
+				onClick: () => commitDuplicate(plan.segment),
+			},
+			cancel: {
+				label: "Cancel",
+				onClick: () => undefined,
+			},
+		});
+	};
+
 	return (
 		<>
 			{segments.map((segment, index) => {
@@ -52,11 +202,19 @@ export function ZoomTrack() {
 				);
 				const selected =
 					selection?.type === "zoom" && selection.index === index;
+				const focusLabel =
+					segment.mode === "auto" ? "follows cursor" : "fixed focus";
 
 				return (
 					<TimelineContextMenu
 						key={`${segment.start}-${segment.end}`}
 						items={[
+							{
+								icon: <IconLucideCopyPlus className="size-4" />,
+								label: "Duplicate zoom",
+								onClick: () => duplicateSegment(index),
+							},
+							{ separator: true },
 							{
 								icon: <IconLucideArrowLeftToLine className="size-4" />,
 								label: "Merge with previous",
@@ -86,6 +244,9 @@ export function ZoomTrack() {
 							selected={selected}
 							left={timeline.xOf(segment.start)}
 							width={width}
+
+							role="group"
+							aria-label={`Zoom ${index + 1}: ${segment.amount.toFixed(1)} times, ${focusLabel}`}
 							handles={
 								<>
 									<SegmentHandle
@@ -129,6 +290,7 @@ export function ZoomTrack() {
 							onPointerDown={(event) => {
 								event.stopPropagation();
 								setSelection({ type: "zoom", index });
+								if (!playing) seek((segment.start + segment.end) / 2);
 
 								// Dragging the body moves the whole segment; the handles
 								// stop propagation so they resize instead.
@@ -144,9 +306,7 @@ export function ZoomTrack() {
 							}}
 						>
 							<SegmentContent width={width} className="justify-center">
-								<span className="pointer-events-none truncate text-[0.625rem] font-semibold tabular-nums text-[var(--track-label)]">
-									{segment.amount.toFixed(1)}x
-								</span>
+								<ZoomDetails segment={segment} width={width} />
 							</SegmentContent>
 						</SegmentRoot>
 					</TimelineContextMenu>

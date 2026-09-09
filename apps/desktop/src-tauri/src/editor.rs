@@ -136,13 +136,15 @@ impl EditorPaths {
 fn spawn_preview_encoder(
     frame_tx: watch::Sender<Option<Arc<WSFrame>>>,
 ) -> (
-    std::sync::mpsc::SyncSender<Arc<WSFrame>>,
+    flume::Sender<Arc<WSFrame>>,
+    flume::Receiver<Arc<WSFrame>>,
     Arc<std::sync::atomic::AtomicU64>,
     Arc<std::sync::atomic::AtomicU64>,
 ) {
     use std::sync::atomic::{AtomicU64, Ordering};
 
-    let (raw_tx, raw_rx) = std::sync::mpsc::sync_channel::<Arc<WSFrame>>(1);
+    let (raw_tx, raw_rx) = flume::bounded::<Arc<WSFrame>>(1);
+    let encoder_rx = raw_rx.clone();
     // Offered vs dropped at the queue, against encoded-per-second below: says
     // whether the encoder is slow or simply not being handed frames.
     let offered = Arc::new(AtomicU64::new(0));
@@ -160,7 +162,7 @@ fn spawn_preview_encoder(
             let mut encode_nanos = 0u64;
             let mut window = std::time::Instant::now();
 
-            while let Ok(frame) = raw_rx.recv() {
+            while let Ok(frame) = encoder_rx.recv() {
                 // One failure is usually a missing encoder rather than a bad
                 // frame, so stop trying and fall back to raw for the session
                 // instead of logging once per frame forever.
@@ -282,14 +284,28 @@ fn spawn_preview_encoder(
         })
         .expect("spawning the preview encoder thread");
 
-    (raw_tx, offered, dropped)
+    (raw_tx, raw_rx, offered, dropped)
+}
+
+fn offer_latest_preview_frame<T>(
+    sender: &flume::Sender<T>,
+    receiver: &flume::Receiver<T>,
+    frame: T,
+) -> u64 {
+    match sender.try_send(frame) {
+        Ok(()) | Err(flume::TrySendError::Disconnected(_)) => 0,
+        Err(flume::TrySendError::Full(frame)) => {
+            let dropped = u64::from(receiver.try_recv().is_ok());
+            dropped + u64::from(sender.try_send(frame).is_err())
+        }
+    }
 }
 
 fn make_frame_callback(
     app: AppHandle,
     frame_tx: watch::Sender<Option<Arc<WSFrame>>>,
 ) -> quiro_editor::EditorFrameCallback {
-    let (raw_tx, offered, dropped) = spawn_preview_encoder(frame_tx.clone());
+    let (raw_tx, raw_rx, offered, dropped) = spawn_preview_encoder(frame_tx.clone());
     Box::new(move |output, layout| {
         let ws_frame = match output {
             EditorFrameOutput::Nv12(frame) => WSFrame {
@@ -321,11 +337,10 @@ fn make_frame_callback(
             },
         };
 
-        // Drops when the encoder is still busy with the previous frame, which
-        // is the same "newest frame wins" rule the socket already applies.
         offered.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        if raw_tx.try_send(Arc::new(ws_frame)).is_err() {
-            dropped.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let dropped_count = offer_latest_preview_frame(&raw_tx, &raw_rx, Arc::new(ws_frame));
+        if dropped_count > 0 {
+            dropped.fetch_add(dropped_count, std::sync::atomic::Ordering::Relaxed);
         }
         let _ = FrameLayoutEvent::from(layout).emit(&app);
     })
@@ -744,8 +759,6 @@ pub async fn set_project_config(
     editor_instance: WindowEditorInstance,
     config: ProjectConfiguration,
 ) -> Result<(), String> {
-    editor_instance.project_config.0.send(config.clone()).ok();
-
     config
         .write(&editor_instance.project_path)
         .map_err(|error| format!("Failed to write project config: {error}"))
@@ -931,16 +944,21 @@ pub async fn generate_keyboard_segments(
         return Ok(Vec::new());
     };
 
-    let StudioRecordingMeta::MultipleSegments { inner } = studio_meta.as_ref() else {
-        return Ok(Vec::new());
-    };
-
     let mut all_events = quiro_project::KeyboardEvents { presses: vec![] };
 
-    for segment in &inner.segments {
-        all_events
-            .presses
-            .extend(segment.keyboard_events(meta).presses);
+    match studio_meta.as_ref() {
+        StudioRecordingMeta::SingleSegment { segment } => {
+            all_events
+                .presses
+                .extend(segment.keyboard_events(meta).presses);
+        }
+        StudioRecordingMeta::MultipleSegments { inner } => {
+            for segment in &inner.segments {
+                all_events
+                    .presses
+                    .extend(segment.keyboard_events(meta).presses);
+            }
+        }
     }
 
     all_events.presses.sort_by(|a, b| {
@@ -1328,4 +1346,18 @@ pub async fn start_frame_stream(
     });
 
     Ok(format!("ws://localhost:{port}/frames"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::offer_latest_preview_frame;
+
+    #[test]
+    fn preview_encoder_queue_replaces_stale_frame() {
+        let (sender, receiver) = flume::bounded(1);
+        sender.send(1).unwrap();
+
+        assert_eq!(offer_latest_preview_frame(&sender, &receiver, 2), 1);
+        assert_eq!(receiver.recv().unwrap(), 2);
+    }
 }

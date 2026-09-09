@@ -5,6 +5,7 @@ use ffmpeg::{
     software::resampling,
 };
 use std::path::Path;
+use tracing::warn;
 
 use crate::cast_bytes_to_f32_slice;
 
@@ -68,9 +69,10 @@ impl AudioData {
                     continue;
                 }
 
-                decoder
-                    .send_packet(&packet)
-                    .map_err(|e| format!("Send Packet / {e}"))?;
+                if let Err(error) = decoder.send_packet(&packet) {
+                    warn!(%error, "Skipping undecodable audio packet");
+                    continue;
+                }
 
                 while decoder.receive_frame(&mut decoded_frame).is_ok() {
                     run_resampler(&mut resampler, &decoded_frame, &mut samples)?;
@@ -84,6 +86,10 @@ impl AudioData {
             }
 
             flush_resampler(&mut resampler, &mut samples)?;
+
+            if samples.is_empty() {
+                return Err("No decodable audio samples".to_string());
+            }
 
             Ok(AudioData {
                 samples,

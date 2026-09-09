@@ -1893,7 +1893,7 @@ mod tests {
                         speed_audio_mode: None,
                         transform: None,
                         perspective: None,
-                            },
+                    },
                     TimelineSegment {
                         recording_clip: 0,
                         timescale: 4.0,
@@ -1903,7 +1903,7 @@ mod tests {
                         speed_audio_mode: None,
                         transform: None,
                         perspective: None,
-                            },
+                    },
                     TimelineSegment {
                         recording_clip: 0,
                         timescale: 1.0,
@@ -1913,7 +1913,7 @@ mod tests {
                         speed_audio_mode: None,
                         transform: None,
                         perspective: None,
-                            },
+                    },
                     TimelineSegment {
                         recording_clip: 1,
                         timescale: 1.0,
@@ -1923,7 +1923,7 @@ mod tests {
                         speed_audio_mode: None,
                         transform: None,
                         perspective: None,
-                            },
+                    },
                     TimelineSegment {
                         recording_clip: 1,
                         timescale: 2.0,
@@ -1933,7 +1933,7 @@ mod tests {
                         speed_audio_mode: None,
                         transform: None,
                         perspective: None,
-                            },
+                    },
                     TimelineSegment {
                         recording_clip: 1,
                         timescale: 1.0,
@@ -1943,7 +1943,7 @@ mod tests {
                         speed_audio_mode: None,
                         transform: None,
                         perspective: None,
-                            },
+                    },
                 ],
                 transitions: Vec::new(),
                 zoom_segments: Vec::new(),
@@ -2192,7 +2192,7 @@ mod tests {
             speed_audio_mode: None,
             transform: None,
             perspective: None,
-                    }
+        }
     }
 
     /// Mirrors the export encoder loop in `crates/export/src/mp4.rs`: seed the

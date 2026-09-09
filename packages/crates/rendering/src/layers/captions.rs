@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use glyphon::cosmic_text::LayoutRunIter;
+use glyphon::cosmic_text::{LayoutRunIter, Style};
 use glyphon::{
     Attrs, Buffer, Cache, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache,
     TextArea, TextAtlas, TextBounds, TextRenderer, Viewport, Weight,
@@ -590,10 +590,21 @@ impl CaptionsLayer {
             .unwrap_or_else(|| CaptionPosition::from_str(&caption_data.settings.position));
         let margin = width as f32 * 0.05;
 
+        let caption_color = active
+            .segment
+            .color_override
+            .as_deref()
+            .unwrap_or(&caption_data.settings.color);
+        let background_color = active
+            .segment
+            .background_color_override
+            .as_deref()
+            .unwrap_or(&caption_data.settings.background_color);
+
         let base_color = [
-            parse_color_component(&caption_data.settings.color, 0),
-            parse_color_component(&caption_data.settings.color, 1),
-            parse_color_component(&caption_data.settings.color, 2),
+            parse_color_component(caption_color, 0),
+            parse_color_component(caption_color, 1),
+            parse_color_component(caption_color, 2),
         ];
 
         let highlight_color_rgb = [
@@ -609,16 +620,20 @@ impl CaptionsLayer {
         ];
 
         let background_color_rgb = [
-            parse_color_component(&caption_data.settings.background_color, 0),
-            parse_color_component(&caption_data.settings.background_color, 1),
-            parse_color_component(&caption_data.settings.background_color, 2),
+            parse_color_component(background_color, 0),
+            parse_color_component(background_color, 1),
+            parse_color_component(background_color, 2),
         ];
 
         let background_alpha = ((caption_data.settings.background_opacity as f32 / 100.0)
             * fade_opacity)
             .clamp(0.0, 1.0);
 
-        let font_size = caption_data.settings.size as f32 * (height as f32 / 1080.0);
+        let font_size = active
+            .segment
+            .font_size_override
+            .unwrap_or(caption_data.settings.size) as f32
+            * (height as f32 / 1080.0);
         let metrics = Metrics::new(font_size, font_size * 1.2);
 
         let mut updated_buffer = Buffer::new(&mut self.font_system, metrics);
@@ -638,6 +653,11 @@ impl CaptionsLayer {
             Weight::MEDIUM
         } else {
             Weight::NORMAL
+        };
+        let font_style = if caption_data.settings.italic {
+            Style::Italic
+        } else {
+            Style::Normal
         };
 
         let base_alpha = (fade_opacity * BASE_TEXT_OPACITY).clamp(0.0, 1.0);
@@ -664,6 +684,7 @@ impl CaptionsLayer {
                             Attrs::new()
                                 .family(font_family)
                                 .weight(weight)
+                                .style(font_style)
                                 .color(Color::rgba(
                                     (base_color[0] * 255.0) as u8,
                                     (base_color[1] * 255.0) as u8,
@@ -696,6 +717,7 @@ impl CaptionsLayer {
                         Attrs::new()
                             .family(font_family)
                             .weight(weight)
+                            .style(font_style)
                             .color(Color::rgba(
                                 (blended_color[0] * 255.0) as u8,
                                 (blended_color[1] * 255.0) as u8,
@@ -713,6 +735,7 @@ impl CaptionsLayer {
                     Attrs::new()
                         .family(font_family)
                         .weight(weight)
+                        .style(font_style)
                         .color(Color::rgba(
                             (base_color[0] * 255.0) as u8,
                             (base_color[1] * 255.0) as u8,
@@ -725,7 +748,10 @@ impl CaptionsLayer {
             updated_buffer.set_rich_text(
                 &mut self.font_system,
                 rich_text,
-                &Attrs::new().family(font_family).weight(weight),
+                &Attrs::new()
+                    .family(font_family)
+                    .weight(weight)
+                    .style(font_style),
                 Shaping::Advanced,
                 None,
             );
@@ -736,7 +762,11 @@ impl CaptionsLayer {
                 (base_color[2] * 255.0) as u8,
                 (highlight_alpha * 255.0) as u8,
             );
-            let attrs = Attrs::new().family(font_family).weight(weight).color(color);
+            let attrs = Attrs::new()
+                .family(font_family)
+                .weight(weight)
+                .style(font_style)
+                .color(color);
             updated_buffer.set_text(
                 &mut self.font_system,
                 caption_text.as_str(),

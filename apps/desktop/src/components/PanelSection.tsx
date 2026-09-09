@@ -41,31 +41,56 @@ export function PanelSection({
 	const panelId = useId();
 
 	return (
-		<div className="border-b border-gray-3">
-			<div className="flex h-fit pt-2 pb-0 shrink-0 items-center gap-1.5 px-3">
-				<button
-					type="button"
-					aria-expanded={open}
-					aria-controls={panelId}
-					onClick={() => setOpen((v) => !v)}
-					className="flex flex-1 items-center gap-1.5 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-accent-focus-ring/50"
+		<div>
+			<div
+				className={cn(
+					"relative  flex min-h-8 w-full min-w-[126px] max-w-[calc(100%-1rem)] shrink-0",
+				)}
+			>
+				<div
+					className={cn(
+						"relative mx-0 mt-0 flex min-h-8 w-max min-w-[126px] contain-layout max-w-[calc(100%-1rem)] shrink-0 items-center gap-1.5 rounded-t-lg bg-gray-3 px-2.5 transition-width transition-colors duration-100 motion-reduce:transition-none",
+						open ? "bg-gray-4" : "hover:bg-gray-4 min-w-full rounded-lg",
+					)}
 				>
-					<span className="text-gray-11">{icon}</span>
-					<span className="text-sm font-semibold text-gray-12">{title}</span>
-					{/* scaleY(-1) rather than rotate-180: the path is a symmetric "v",
-					 * so a vertical flip passes through a flat line at the midpoint
-					 * instead of visibly spinning — reads like the chevron is
-					 * morphing into a caret, not turning. non-scaling-stroke on the
-					 * inner path keeps the stroke width constant through that flat
-					 * point, where a plain scaleY would otherwise pinch it thin. */}
-					<IconLucideChevronDown
+					<button
+						type="button"
+						aria-expanded={open}
+						aria-controls={panelId}
+						onClick={() => setOpen((v) => !v)}
 						className={cn(
-							"size-3.5 origin-center text-gray-9 transition-transform duration-200 ease-[var(--ease-snappy)] [&_path]:[vector-effect:non-scaling-stroke] motion-reduce:transition-none",
-							open && "scale-y-[-1]",
+							"flex min-h-8 min-w-0 flex-1 items-center gap-1.5 rounded-t-md text-left outline-none focus-visible:ring-2 focus-visible:ring-accent-focus-ring/50",
+							!open && "w-full",
 						)}
-					/>
-				</button>
-				{trailing}
+					>
+						<span className="grid size-4 shrink-0 place-items-center text-gray-10">
+							{icon}
+						</span>
+						<span className="min-w-0 truncate text-[11px] font-semibold text-gray-12">
+							{title}
+						</span>
+						{/* scaleY(-1) rather than rotate-180: the path is a symmetric "v",
+						 * so a vertical flip passes through a flat line at the midpoint
+						 * instead of visibly spinning — reads like the chevron is
+						 * morphing into a caret, not turning. non-scaling-stroke on the
+						 * inner path keeps the stroke width constant through that flat
+						 * point, where a plain scaleY would otherwise pinch it thin. */}
+						<IconLucideChevronDown
+							className={cn(
+								"size-3 origin-center text-gray-9 transition-transform duration-200 ease-[var(--ease-snappy)] [&_path]:[vector-effect:non-scaling-stroke] motion-reduce:transition-none",
+								open ? "scale-y-[-1] ml-auto" : "ml-auto",
+							)}
+						/>
+					</button>
+					{trailing}
+				</div>
+				<span
+					aria-hidden="true"
+					className={cn(
+						"pointer-events-none absolute inset-x-0  bottom-0 h-px origin-left bg-gray-6 transition-transform duration-300 ease-[var(--ease-snappy)] motion-reduce:transition-none",
+						open ? "scale-x-100" : "scale-x-0",
+					)}
+				/>
 			</div>
 
 			{/* grid-template-rows 0fr -> 1fr, not a JS-measured height: the
@@ -83,18 +108,18 @@ export function PanelSection({
 				id={panelId}
 				inert={!open}
 				className={cn(
-					"grid overflow-hidden contain-[layout] transition-[grid-template-rows, margin-top] duration-200 ease-[var(--ease-snappy)] motion-reduce:transition-none",
-					open ? "grid-rows-[1fr] mt-2" : "grid-rows-[0fr] -mt-2",
+					"mx-1 grid overflow-hidden contain-[layout] transition-[grid-template-rows] duration-200 ease-[var(--ease-snappy)] motion-reduce:transition-none",
+					open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
 				)}
 			>
 				{/* Fades and un-blurs in on top of the height reveal, so the content
 				 * settles into place rather than just growing into view. */}
 				<div
 					className={cn(
-						"flex min-h-0 flex-col gap-4 overflow-hidden px-3 pb-4 transition-[transform,opacity,filter] duration-200 ease-[var(--ease-snappy)] motion-reduce:transition-none",
+						"flex min-h-0 flex-col gap-4 overflow-hidden px-2 transition-[transform,opacity,filter,padding] duration-200 ease-[var(--ease-snappy)] motion-reduce:transition-none",
 						open
-							? "translate-y-0 scale-100 opacity-100 blur-none"
-							: "-translate-y-2 scale-[0.985] opacity-0 blur-[2px]",
+							? "translate-y-0 scale-100 pt-3 pb-3 opacity-100 blur-none"
+							: "-translate-y-2 scale-[0.985] py-0 opacity-0 blur-[2px]",
 					)}
 				>
 					{children}

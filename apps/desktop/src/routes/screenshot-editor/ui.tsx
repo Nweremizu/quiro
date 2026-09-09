@@ -1,12 +1,13 @@
 import { cn } from "@quiro/ui";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { resolveResource } from "@tauri-apps/api/path";
 import { type ReactNode, useEffect, useState } from "react";
 import { PanelSection } from "@/components/PanelSection";
 import { Slider, type SliderSize } from "@/components/Scrubber";
 import { Tooltip } from "@/components/Tooltip";
+import { cachedFileImageUrl } from "@/utils/image-cache";
 import IconLucideImage from "~icons/lucide/image";
 import IconLucideX from "~icons/lucide/x";
+import { ColorPickerPopover } from "./ColorPicker";
 import { WALLPAPER_FILENAMES } from "./constants";
 
 // React ports of Cap's screenshot-editor `ui.tsx` primitives. Kept as their
@@ -106,10 +107,8 @@ export function hexToRgb(hex: string): [number, number, number] | null {
 }
 
 /**
- * Cap's `RgbInput`: a swatch that opens the native colour picker, paired with
- * an editable hex field. The hex field commits on Enter/blur and reverts to
- * the last good value if what was typed isn't a colour, so a half-typed hex
- * never propagates into the project as garbage.
+ * Compact RGB input used by annotation controls. The shared picker handles
+ * colour selection while the hex field commits on Enter/blur.
  */
 export function RgbInput({
 	value,
@@ -133,21 +132,12 @@ export function RgbInput({
 
 	return (
 		<div className="flex flex-row items-center gap-2">
-			<label className="relative size-8 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-gray-5">
-				<span
-					className="block size-full"
-					style={{ backgroundColor: rgbToHex(value) }}
-				/>
-				<input
-					type="color"
-					value={rgbToHex(value)}
-					onChange={(e) => {
-						const parsed = hexToRgb(e.target.value);
-						if (parsed) onChange(parsed);
-					}}
-					className="absolute inset-0 cursor-pointer opacity-0"
-				/>
-			</label>
+			<ColorPickerPopover
+				value={value}
+				showAlpha={false}
+				label="Choose colour"
+				onChange={({ value: next }) => onChange(next)}
+			/>
 			<input
 				type="text"
 				value={displayed}
@@ -294,7 +284,7 @@ export function WallpaperThumbnail({
 		>
 			{resolved && !broken && (
 				<img
-					src={convertFileSrc(resolved)}
+					src={cachedFileImageUrl(resolved)}
 					alt=""
 					loading="lazy"
 					draggable={false}
@@ -364,7 +354,7 @@ export function ImageTab({
 	return (
 		<div className="relative h-32 w-full overflow-hidden rounded-lg border border-gray-3">
 			<img
-				src={convertFileSrc(path)}
+				src={cachedFileImageUrl(path)}
 				alt=""
 				className="size-full object-cover"
 			/>

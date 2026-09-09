@@ -1499,7 +1499,7 @@ impl RecoveryManager {
                     speed_audio_mode: None,
                     transform: None,
                     perspective: None,
-                    })
+                })
             })
             .collect();
 

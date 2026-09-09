@@ -34,6 +34,8 @@ pub enum ShowQuiroWindow {
         capture_target: Option<ScreenCaptureTarget>,
     },
     ModeSelect,
+    Onboarding,
+    Debug,
     ScreenshotEditor {
         path: PathBuf,
     },
@@ -53,6 +55,10 @@ pub async fn show_window(app: AppHandle<Wry>, window: ShowQuiroWindow) {
 
 impl ShowQuiroWindow {
     pub async fn show(&self, app: &AppHandle<Wry>) -> tauri::Result<WebviewWindow> {
+        if matches!(self, Self::Main { .. }) && crate::should_show_onboarding(app) {
+            return Box::pin(Self::Onboarding.show(app)).await;
+        }
+
         let camera_window_label = if matches!(self, Self::Camera { .. }) {
             Some(camera_window_label_for_session(bump_camera_window_session(
                 app,
@@ -112,6 +118,51 @@ impl ShowQuiroWindow {
             }
             Self::ModeSelect => {
                 variants::main_window::show_mode_select(self, app, cursor_monitor).await?
+            }
+            Self::Onboarding => {
+                if let Some(main) = WindowId::Main.get(app) {
+                    let _ = main.hide();
+                }
+
+                let width = (cursor_monitor.width * 0.58).clamp(860.0, 1080.0);
+                let height = (width * 0.72).clamp(690.0, 780.0);
+                let window = self
+                    .window_builder(app, "/onboarding")
+                    .inner_size(width, height)
+                    .min_inner_size(860.0, 690.0)
+                    .resizable(false)
+                    .maximized(false)
+                    .maximizable(false)
+                    .transparent(true)
+                    .focused(true)
+                    .shadow(true)
+                    .build()?;
+                lock_window_text_scale(&window);
+
+                let (pos_x, pos_y) = cursor_monitor.center_position(width, height);
+                let _ = window.set_position(cursor_monitor.position(pos_x, pos_y));
+                window.show().ok();
+                window.set_focus().ok();
+                window
+            }
+            Self::Debug => {
+                let width = 900.0;
+                let height = 700.0;
+                let window = self
+                    .window_builder(app, "/debug")
+                    .inner_size(width, height)
+                    .min_inner_size(720.0, 520.0)
+                    .resizable(true)
+                    .maximized(false)
+                    .focused(true)
+                    .build()?;
+                lock_window_text_scale(&window);
+
+                let (pos_x, pos_y) = cursor_monitor.center_position(width, height);
+                let _ = window.set_position(cursor_monitor.position(pos_x, pos_y));
+                window.show().ok();
+                window.set_focus().ok();
+                window
             }
             // Both editors restore the main window if their own window fails
             // to appear — it was hidden above on the assumption one would.
@@ -312,6 +363,8 @@ impl ShowQuiroWindow {
             ShowQuiroWindow::Camera { .. } => WindowId::Camera,
             ShowQuiroWindow::InProgressRecording { .. } => WindowId::RecordingControls,
             ShowQuiroWindow::ModeSelect => WindowId::ModeSelect,
+            ShowQuiroWindow::Onboarding => WindowId::Onboarding,
+            ShowQuiroWindow::Debug => WindowId::Debug,
             ShowQuiroWindow::ScreenshotEditor { .. } => WindowId::ScreenshotEditor,
             ShowQuiroWindow::Editor { .. } => WindowId::Editor,
         }

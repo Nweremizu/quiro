@@ -183,7 +183,7 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
         // soft edge or a partial opacity.
         // Deliberately ignores `opacity`: a translucent redaction is not a
         // redaction. This is the one branch that must not blend.
-        let fill = vec4<f32>(0.0, 0.0, 0.0, base.a);
+        let fill = vec4<f32>(vec3<f32>(32.0, 34.0, 38.0) / 255.0, base.a);
         return select(base, fill, mask >= 0.5);
     }
 

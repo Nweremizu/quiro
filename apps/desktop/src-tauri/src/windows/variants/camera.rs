@@ -271,9 +271,7 @@ pub(crate) async fn show_camera(
             warn!("Detected existing camera preview, will reuse it");
         }
 
-        // Camera protection is applied per recording mode in `start_recording`;
-        // protecting at creation hides the live preview on virtual/mirrored displays.
-        let should_protect = false;
+        let should_protect = should_protect_window(app, &WindowId::Camera.title());
 
         #[cfg(target_os = "macos")]
         let panel_activation_guard = permissions::prepare_macos_panel_window(app);

@@ -15,6 +15,7 @@ pub enum WindowId {
     Camera,
     RecordingControls,
     ModeSelect,
+    Onboarding,
     Debug,
     Teleprompter,
     /// Multi-instance, one per open screenshot — see `is_screenshot_editor_
@@ -42,6 +43,7 @@ impl FromStr for WindowId {
             "in-progress-recording" => Self::RecordingControls,
             "recordings-overlay" => Self::RecordingsOverlay,
             "mode-select" => Self::ModeSelect,
+            "onboarding" => Self::Onboarding,
             "debug" => Self::Debug,
             "teleprompter" => Self::Teleprompter,
             s if s.starts_with("window-capture-occluder-") => Self::WindowCaptureOccluder {
@@ -77,6 +79,7 @@ impl std::fmt::Display for WindowId {
             Self::RecordingControls => write!(f, "in-progress-recording"), // legacy identifier
             Self::RecordingsOverlay => write!(f, "recordings-overlay"),
             Self::ModeSelect => write!(f, "mode-select"),
+            Self::Onboarding => write!(f, "onboarding"),
             Self::Debug => write!(f, "debug"),
             Self::Teleprompter => write!(f, "teleprompter"),
             // Never an actual window's label (see `screenshot_editor_label_
@@ -100,6 +103,7 @@ impl WindowId {
             Self::CaptureArea => "Quiro Capture Area".to_string(),
             Self::RecordingControls => "Quiro Recording Controls".to_string(),
             Self::ModeSelect => "Quiro Mode Selection".to_string(),
+            Self::Onboarding => "Welcome to Quiro".to_string(),
             Self::Camera => "Quiro Camera".to_string(),
             Self::RecordingsOverlay => "Quiro Recordings Overlay".to_string(),
             Self::TargetSelectOverlay { .. } => "Quiro Target Select".to_string(),
@@ -126,6 +130,7 @@ impl WindowId {
         matches!(
             self,
             Self::Main
+                | Self::Onboarding
                 | Self::Camera
                 | Self::WindowCaptureOccluder { .. }
                 | Self::CaptureArea
@@ -166,6 +171,7 @@ impl WindowId {
             Self::Settings => (780.0, 560.0),
             Self::Camera => (200.0, 200.0),
             Self::ModeSelect => (580.0, 340.0),
+            Self::Onboarding => (860.0, 690.0),
             _ => return None,
         })
     }

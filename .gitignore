@@ -1,5 +1,6 @@
 /target
 node_modules
+.pnpm-store
 .turbo
 apps/desktop/dist
 

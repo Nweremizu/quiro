@@ -62,13 +62,6 @@ const LIQUID_GLASS_SURFACE_CLASS =
  * (GeneralSettingsStore.recordingCountdown is stored but nothing reads it
  * yet — both takeScreenshot and startRecording fire immediately, so a
  * countdown menu here would set a value with no effect).
- *
- * Instant mode is deliberately not wired here: Cap's Instant is a
- * cloud-upload feature (sign-in, live S3 segments) baked into its own
- * `start_recording`, not something the local `studio_recording` actor does
- * — faking it as a local recording under the "Instant" label would be
- * misleading, so this shows it as unavailable instead of silently running
- * a Studio recording.
  */
 function ConfirmPanel({
 	mode,
@@ -79,20 +72,9 @@ function ConfirmPanel({
 	onSelect: () => void;
 	onCancel: () => void;
 }) {
-	const available = mode !== "instant";
 	const Icon = mode === "screenshot" ? IconQuiroCamera : IconLucideVideo;
-	const title =
-		mode === "screenshot"
-			? "Take Screenshot"
-			: mode === "instant"
-				? "Instant Recording"
-				: "Start Recording";
-	const subtitle =
-		mode === "screenshot"
-			? "Screenshot Mode"
-			: mode === "instant"
-				? "Not available yet — use Studio mode"
-				: "Studio Mode";
+	const title = mode === "screenshot" ? "Take Screenshot" : "Start Recording";
+	const subtitle = mode === "screenshot" ? "Screenshot Mode" : "Studio Mode";
 
 	return (
 		<div
@@ -109,22 +91,15 @@ function ConfirmPanel({
 				</button>
 				<button
 					type="button"
-					disabled={!available}
-					onClick={available ? onSelect : undefined}
-					className={`flex h-11 min-w-0 flex-1 items-center gap-3 rounded-full pl-4 pr-5 text-white transition-[filter] ${
-						available
-							? "bg-linear-60 from-accent-solid via-accent-solid-hover to-accent-solid-active hover:brightness-110"
-							: "cursor-not-allowed bg-gray-7 text-gray-12"
-					}`}
+					onClick={onSelect}
+					className="flex h-11 min-w-0 flex-1 items-center gap-3 rounded-full bg-linear-60 from-accent-solid via-accent-solid-hover to-accent-solid-active pl-4 pr-5 text-white transition-[filter] hover:brightness-110"
 				>
 					<Icon className="size-4 shrink-0" />
 					<span className="flex min-w-0 flex-col items-start text-left">
 						<span className="text-[0.95rem] font-medium leading-tight text-nowrap">
 							{title}
 						</span>
-						<span
-							className={`text-[11px] font-light leading-tight text-nowrap ${available ? "text-white/90" : "text-gray-10"}`}
-						>
+						<span className="text-[11px] font-light leading-tight text-nowrap text-white/90">
 							{subtitle}
 						</span>
 					</span>
@@ -216,7 +191,7 @@ function Inner() {
 						console.error("Screenshot failed:", result.error);
 					}
 				});
-			} else if (rawOptions.mode === "studio") {
+			} else {
 				setOptions({ targetModeDismissal: "recordingStudio" });
 				commands.startRecording(captureTarget).then((result) => {
 					if (result.status === "error") {
@@ -224,9 +199,6 @@ function Inner() {
 					}
 				});
 			}
-			// Instant mode has no backend to call yet — the confirm panel
-			// disables its button for that mode instead of reaching here.
-
 			dismiss();
 		},
 		[setOptions, dismiss, rawOptions.mode],
@@ -726,15 +698,8 @@ function AreaSelectOverlay({
 	}, [isBusy]);
 
 	const isValid = isValidAreaBounds(bounds);
-	// See ConfirmPanel's doc comment — Instant mode has no local backend to
-	// call into yet, so its button here stays disabled the same way.
-	const confirmAvailable = mode !== "instant";
 	const confirmLabel =
-		mode === "screenshot"
-			? "Take Screenshot"
-			: mode === "instant"
-				? "Not available yet"
-				: "Start Recording";
+		mode === "screenshot" ? "Take Screenshot" : "Start Recording";
 
 	const applyRatio = (next: Ratio | null) => {
 		setRatio(next);
@@ -893,7 +858,7 @@ function AreaSelectOverlay({
 									</button>
 									<button
 										type="button"
-										disabled={!isValid || !confirmAvailable}
+										disabled={!isValid}
 										onPointerDown={(event) => event.stopPropagation()}
 										onClick={confirm}
 										className="rounded-lg bg-accent-solid px-3 py-1.5 text-xs font-medium text-accent-on-solid transition-colors hover:bg-accent-solid-hover disabled:cursor-not-allowed disabled:opacity-40"

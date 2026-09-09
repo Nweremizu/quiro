@@ -12,7 +12,6 @@ import {
 	SliderTrack,
 } from "react-aria-components";
 import IconLucidePipette from "~icons/lucide/pipette";
-import { rgbToHex } from "./ui";
 
 // The Color-tab picker in StylePanel. Built on react-aria-components' colour
 // primitives — an accessible 2-D area, hue/alpha sliders, hex parsing — styled
@@ -22,6 +21,9 @@ import { rgbToHex } from "./ui";
 // 0–255 alpha.
 
 type RGB = [number, number, number];
+
+const rgbToHex = (rgb: RGB) =>
+	`#${rgb.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`.toUpperCase();
 
 export interface ColorPickerValue {
 	value: RGB;

@@ -13,7 +13,7 @@ import {
 	canMergeSpanWithPrevious,
 	canMergeWithNext,
 	canMergeWithPrevious,
-	clipsAreContiguous,
+	clipsCanMerge,
 	type MergeableClip,
 	mergeClips,
 	mergeSpans,
@@ -49,7 +49,7 @@ const clip = (
 // --- split/merge round-trip -------------------------------------------------
 // Exactly what `splitAt` produces: one segment replaced by two sharing the cut.
 const split = [clip(0, 4), clip(4, 10)];
-check(clipsAreContiguous(split[0], split[1]), "split halves are contiguous");
+check(clipsCanMerge(split[0], split[1]), "split halves are mergeable");
 
 const rejoined = mergeClips(split, 0);
 check(rejoined.length === 1, "merging a split pair yields one clip");
@@ -65,25 +65,37 @@ check(before === after, "merging preserves total duration");
 
 // --- refusals ---------------------------------------------------------------
 check(
-	!clipsAreContiguous(clip(0, 4), clip(5, 10)),
+	clipsCanMerge(clip(0, 4.13), clip(4, 10)),
+	"overlapping split halves are mergeable",
+);
+const overlapRejoined = mergeClips([clip(0, 4.13), clip(4, 10)], 0);
+check(
+	overlapRejoined.length === 1 && overlapRejoined[0].end === 10,
+	"overlapping split halves rejoin as their source union",
+);
+const overlappingPair = [clip(0, 4.13), clip(4, 10)];
+check(
+	canMergeWithNext(overlappingPair, 0),
+	"overlapping left half can merge with next",
+);
+check(
+	canMergeWithPrevious(overlappingPair, 1),
+	"overlapping right half can merge with previous",
+);
+check(
+	!clipsCanMerge(clip(0, 4), clip(5, 10)),
 	"a trimmed gap is not contiguous — merging would restore cut footage",
 );
 check(
-	!clipsAreContiguous(clip(0, 4), clip(4, 10, { recordingSegment: 1 })),
+	!clipsCanMerge(clip(0, 4), clip(4, 10, { recordingSegment: 1 })),
 	"clips from different recordings never merge",
 );
 check(
-	!clipsAreContiguous(clip(0, 4), clip(4, 10, { timescale: 2 })),
+	!clipsCanMerge(clip(0, 4), clip(4, 10, { timescale: 2 })),
 	"differing speeds never merge — one half would be silently retimed",
 );
-check(
-	!clipsAreContiguous(undefined, clip(0, 4)),
-	"a missing left clip is safe",
-);
-check(
-	!clipsAreContiguous(clip(0, 4), undefined),
-	"a missing right clip is safe",
-);
+check(!clipsCanMerge(undefined, clip(0, 4)), "a missing left clip is safe");
+check(!clipsCanMerge(clip(0, 4), undefined), "a missing right clip is safe");
 
 const refused = mergeClips([clip(0, 4), clip(5, 10)], 0);
 check(refused.length === 2, "a refused merge leaves the list untouched");

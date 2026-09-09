@@ -184,7 +184,9 @@ impl RecordingMeta {
         let captions_path = self.project_path.join("captions.json");
         debug!("Checking for captions at: {:?}", captions_path);
 
-        if let Ok(captions_str) = std::fs::read_to_string(&captions_path) {
+        if config.captions.is_none()
+            && let Ok(captions_str) = std::fs::read_to_string(&captions_path)
+        {
             debug!("Found captions.json, attempting to parse");
             if let Ok(captions_data) = serde_json::from_str::<CaptionsData>(&captions_str) {
                 info!(
@@ -402,6 +404,12 @@ pub struct SingleSegment {
     pub cursor: Option<RelativePathBuf>,
 }
 
+impl SingleSegment {
+    pub fn keyboard_events(&self, meta: &RecordingMeta) -> KeyboardEvents {
+        load_keyboard_events(meta, None, &self.display)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MultipleSegments {
@@ -540,32 +548,7 @@ impl MultipleSegment {
     }
 
     pub fn keyboard_events(&self, meta: &RecordingMeta) -> KeyboardEvents {
-        let keyboard_path = self.keyboard.clone().or_else(|| {
-            let display_dir = self.display.path.parent()?;
-            let binary = display_dir.join(crate::KEYBOARD_EVENTS_FILE_NAME);
-            let binary_full = meta.path(&binary);
-            if binary_full.exists() {
-                return Some(binary);
-            }
-
-            let legacy = display_dir.join(crate::LEGACY_KEYBOARD_EVENTS_FILE_NAME);
-            let legacy_full = meta.path(&legacy);
-            legacy_full.exists().then_some(legacy)
-        });
-
-        let Some(keyboard_path) = keyboard_path else {
-            return KeyboardEvents::default();
-        };
-
-        let full_path = meta.path(&keyboard_path);
-
-        match KeyboardEvents::load_from_file(&full_path) {
-            Ok(data) => data,
-            Err(e) => {
-                eprintln!("Failed to load keyboard data: {e}");
-                KeyboardEvents::default()
-            }
-        }
+        load_keyboard_events(meta, self.keyboard.as_ref(), &self.display)
     }
 
     pub fn latest_start_time(&self) -> Option<f64> {
@@ -635,6 +618,35 @@ impl MultipleSegment {
 
     pub fn mic_device_id(&self) -> Option<&str> {
         self.mic.as_ref().and_then(|m| m.device_id.as_deref())
+    }
+}
+
+fn load_keyboard_events(
+    meta: &RecordingMeta,
+    keyboard_path: Option<&RelativePathBuf>,
+    display: &VideoMeta,
+) -> KeyboardEvents {
+    let keyboard_path = keyboard_path.cloned().or_else(|| {
+        let display_dir = display.path.parent()?;
+        let binary = display_dir.join(crate::KEYBOARD_EVENTS_FILE_NAME);
+        if meta.path(&binary).exists() {
+            return Some(binary);
+        }
+
+        let legacy = display_dir.join(crate::LEGACY_KEYBOARD_EVENTS_FILE_NAME);
+        meta.path(&legacy).exists().then_some(legacy)
+    });
+
+    let Some(keyboard_path) = keyboard_path else {
+        return KeyboardEvents::default();
+    };
+
+    match KeyboardEvents::load_from_file(&meta.path(&keyboard_path)) {
+        Ok(data) => data,
+        Err(e) => {
+            eprintln!("Failed to load keyboard data: {e}");
+            KeyboardEvents::default()
+        }
     }
 }
 

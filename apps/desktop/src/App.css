@@ -3,6 +3,18 @@
 
 @tailwind utilities;
 
+.startup-grain {
+    position: absolute;
+    inset: -150% -50%;
+    width: 200%;
+    height: 400%;
+    pointer-events: none;
+    opacity: 0.22;
+    z-index: 2;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.5' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
 .dark .dark-button-shadow {
     box-shadow: 0 1.5px 0 0 oklch(0% 0 0 / 0.1) inset;
 }
@@ -193,7 +205,81 @@
 
 .timeline-scissors-cursor,
 .timeline-scissors-cursor * {
-    cursor: crosshair;
+    cursor: none;
+}
+
+.timeline-merge-overlay {
+    width: 1px;
+}
+
+.timeline-merge-overlay::before {
+    position: absolute;
+    inset: 2px -32px;
+    z-index: -1000;
+    content: "";
+    /* Soft accent mesh gradient */
+    background: linear-gradient(90deg, var(--accent-300), var(--accent-200));
+    border-top: 1px solid var(--accent-400);
+    border-bottom: 1px solid var(--accent-400);
+    opacity: 0;
+    animation: timeline-merge-glow 400ms ease-out both;
+}
+
+.timeline-merge-pill {
+    animation: timeline-merge-pill 400ms ease-out both;
+}
+
+.timeline-merge-overlay-frozen::before {
+    animation: none;
+    opacity: 1;
+    transform: scaleY(1);
+}
+
+.timeline-merge-overlay-frozen .timeline-merge-pill {
+    animation: none;
+    opacity: 1;
+}
+
+.timeline-merge-preview-left {
+    translate: -24px 0;
+    z-index: 1000;
+}
+
+.timeline-merge-preview-right {
+    translate: 24px 0;
+    z-index: 1000;
+}
+
+.timeline-merge-nudge-left {
+    animation: timeline-merge-left 400ms ease-out both;
+    z-index: 1000;
+}
+
+.timeline-merge-nudge-right {
+    animation: timeline-merge-right 400ms ease-out both;
+    z-index: 1000;
+}
+
+@keyframes timeline-merge-left {
+    0%, 100% { translate: 0 0; }
+    45% { translate: -24px 0; }
+}
+
+@keyframes timeline-merge-right {
+    0%, 100% { translate: 0 0; }
+    45% { translate: 24px 0; }
+}
+
+@keyframes timeline-merge-glow {
+    0% { opacity: 0; transform: scaleY(.35); }
+    35% { opacity: 1; transform: scaleY(1); }
+    100% { opacity: 0; transform: scaleY(.7); }
+}
+
+@keyframes timeline-merge-pill {
+    0% { opacity: 0; scale: .65; }
+    30% { opacity: 1; scale: 1.08; }
+    100% { opacity: 0; scale: 1; }
 }
 
 :root {

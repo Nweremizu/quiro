@@ -1,3 +1,7 @@
+import { cn } from "@quiro/ui";
+import { useState } from "react";
+import { VideoIcon } from "@/components/custom-quiro-cam";
+import { GaugeIcon } from "@/components/custom-quiro-clock";
 import type { TimelineSegment } from "@/utils/tauri";
 import IconLucideArrowLeftToLine from "~icons/lucide/arrow-left-to-line";
 import IconLucideArrowRightToLine from "~icons/lucide/arrow-right-to-line";
@@ -6,6 +10,7 @@ import IconLucideTrash2 from "~icons/lucide/trash-2";
 import { canMergeWithNext, canMergeWithPrevious } from "../clip-merge";
 import { useEditorContext } from "../context";
 import { useTimeline } from "./context";
+import { MergeOverlay, SplitCursor } from "./TimelineActionOverlay";
 import { TimelineContextMenu } from "./TimelineContextMenu";
 import { SegmentContent, SegmentHandle, SegmentRoot } from "./Track";
 
@@ -30,11 +35,15 @@ export function ClipTrack({
 	onSplit,
 	onMerge,
 	onDelete,
+	mergeTime,
+	mergePreviewFrozen = false,
 }: {
 	onSplit: (time: number) => void;
 	/** Joins the clip at `index` with the one after it. */
 	onMerge: (index: number) => void;
 	onDelete: (index: number) => void;
+	mergeTime?: number | null;
+	mergePreviewFrozen?: boolean;
 }) {
 	const { project, setProject, selection, setSelection, splitMode, playback } =
 		useEditorContext();
@@ -42,6 +51,10 @@ export function ClipTrack({
 
 	const segments = project?.timeline?.segments ?? [];
 	const offsets = segmentOffsets(segments);
+	const [splitCursor, setSplitCursor] = useState<{
+		x: number;
+		y: number;
+	} | null>(null);
 
 	const updateSegment = (
 		index: number,
@@ -58,6 +71,13 @@ export function ClipTrack({
 
 	return (
 		<>
+			{splitMode && splitCursor ? <SplitCursor position={splitCursor} /> : null}
+			{mergeTime != null ? (
+				<MergeOverlay
+					left={timeline.xOf(mergeTime)}
+					frozen={mergePreviewFrozen}
+				/>
+			) : null}
 			{segments.map((segment, index) => {
 				const width = Math.max(
 					segmentDuration(segment) * timeline.pixelsPerSecond,
@@ -65,6 +85,12 @@ export function ClipTrack({
 				);
 				const selected =
 					selection?.type === "clip" && selection.index === index;
+				const segmentStart = offsets[index];
+				const segmentEnd = segmentStart + segmentDuration(segment);
+				const mergeLeft =
+					mergeTime != null && Math.abs(segmentEnd - mergeTime) < 0.001;
+				const mergeRight =
+					mergeTime != null && Math.abs(segmentStart - mergeTime) < 0.001;
 
 				return (
 					<TimelineContextMenu
@@ -144,7 +170,22 @@ export function ClipTrack({
 									/>
 								</>
 							}
-							className={splitMode ? "timeline-scissors-cursor" : undefined}
+							className={cn(
+								splitMode && "timeline-scissors-cursor",
+								mergeLeft &&
+									(mergePreviewFrozen
+										? "timeline-merge-preview-left"
+										: "timeline-merge-nudge-left"),
+								mergeRight &&
+									(mergePreviewFrozen
+										? "timeline-merge-preview-right"
+										: "timeline-merge-nudge-right"),
+							)}
+							onPointerMove={(event) =>
+								splitMode &&
+								setSplitCursor({ x: event.clientX, y: event.clientY })
+							}
+							onPointerLeave={() => setSplitCursor(null)}
 							onPointerDown={(event) => {
 								// Selecting or splitting a clip must not also scrub the
 								// playhead, which is what the timeline background does.
@@ -157,10 +198,24 @@ export function ClipTrack({
 							}}
 						>
 							<SegmentContent width={width} className="justify-center">
-								<span className="pointer-events-none truncate text-[0.625rem] font-semibold tabular-nums text-[var(--track-label)]">
-									{segmentDuration(segment).toFixed(1)}s
-									{segment.timescale !== 1 ? ` · ${segment.timescale}x` : ""}
-								</span>
+								<div className="flex gap-2.5 pointer-events-none truncate text-xs font-semibold tabular-nums text-gray-11 dark:text-gray-a11">
+									<span className="flex items-center gap-1 font-sans text-gray-a12">
+										<VideoIcon
+											fillColor="var(--gray-a12)"
+											strokeColor="var(--gray-a10)"
+											strokeWidth={1.5}
+											className="size-4 shrink-0"
+										/>
+										{segmentDuration(segment).toFixed(1)}s
+									</span>
+									<span className="flex items-center gap-1 font-sans text-gray-a12">
+										<GaugeIcon
+											className="size-3.5 shrink-0 text-[var(--track-clip)]"
+											fill="var(--gray-a12)"
+										/>
+										{`${segment.timescale}x`}
+									</span>
+								</div>
 							</SegmentContent>
 						</SegmentRoot>
 					</TimelineContextMenu>

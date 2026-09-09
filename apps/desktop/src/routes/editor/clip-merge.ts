@@ -1,8 +1,7 @@
 import type { TimelineSegment } from "@/utils/tauri";
 
-// Rejoining clips that a split separated — the exact inverse of `splitAt` in
-// `Timeline/index.tsx`, which replaces one segment with `{...segment, end: cut}`
-// and `{...segment, start: cut}`.
+// Rejoining clips that a split separated, including split boundaries adjusted
+// into a small source overlap by later trimming.
 //
 // Merging is duration-preserving: the joined clip spans the same timeline time
 // the two halves did, so no other track has to ripple. The one exception is a
@@ -10,11 +9,6 @@ import type { TimelineSegment } from "@/utils/tauri";
 // subtracts from the total — `transitionsAfterClipMerge` drops it, and the
 // timeline lengthens by that much.
 
-/** Two halves of a split share a source instant *exactly*: `splitAt` writes the
- * same number to one clip's `end` and the next clip's `start`. So the tolerance
- * here is for float rounding only, never for closing a gap. Anything wider is a
- * trim the user made deliberately, and rejoining across it would silently
- * restore footage they cut. */
 const CONTIGUOUS_EPSILON = 1e-6;
 
 /** The fields merging actually reads. Narrower than `TimelineSegment` so the
@@ -24,8 +18,8 @@ export type MergeableClip = Pick<
 	"start" | "end" | "timescale" | "recordingSegment"
 >;
 
-/** Whether `right` continues `left` with no cut between them. */
-export function clipsAreContiguous(
+/** Whether the clips form one forward-moving source range without a gap. */
+export function clipsCanMerge(
 	left: MergeableClip | undefined,
 	right: MergeableClip | undefined,
 ): boolean {
@@ -35,15 +29,19 @@ export function clipsAreContiguous(
 		return false;
 	// Differing speeds would have to pick one, silently retiming half the
 	// footage. Leave it to the user to match them first.
-	if (left.timescale !== right.timescale) return false;
-	return Math.abs(left.end - right.start) <= CONTIGUOUS_EPSILON;
+	if ((left.timescale || 1) !== (right.timescale || 1)) return false;
+	return (
+		right.start <= left.end + CONTIGUOUS_EPSILON &&
+		right.start >= left.start - CONTIGUOUS_EPSILON &&
+		right.end > left.end + CONTIGUOUS_EPSILON
+	);
 }
 
 export function canMergeWithPrevious(
 	segments: MergeableClip[],
 	index: number,
 ): boolean {
-	return index > 0 && clipsAreContiguous(segments[index - 1], segments[index]);
+	return index > 0 && clipsCanMerge(segments[index - 1], segments[index]);
 }
 
 export function canMergeWithNext(
@@ -53,7 +51,7 @@ export function canMergeWithNext(
 	return (
 		index >= 0 &&
 		index < segments.length - 1 &&
-		clipsAreContiguous(segments[index], segments[index + 1])
+		clipsCanMerge(segments[index], segments[index + 1])
 	);
 }
 
@@ -70,7 +68,7 @@ export function mergeClips<T extends MergeableClip>(
 ): T[] {
 	const left = segments[index];
 	const right = segments[index + 1];
-	if (!clipsAreContiguous(left, right)) return segments;
+	if (!clipsCanMerge(left, right)) return segments;
 
 	return [
 		...segments.slice(0, index),

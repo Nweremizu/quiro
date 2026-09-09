@@ -1,10 +1,7 @@
 import { cn, Select } from "@quiro/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
-import IconLucideChevronFirst from "~icons/lucide/chevron-first";
-import IconLucideChevronLast from "~icons/lucide/chevron-last";
+import { MediaControlIcon } from "@/components/media-controls-icon";
 import IconLucideCrop from "~icons/lucide/crop";
-import IconLucidePause from "~icons/lucide/pause";
-import IconLucidePlay from "~icons/lucide/play";
 import IconLucideScissors from "~icons/lucide/scissors";
 import { ASPECT_RATIO_OPTIONS } from "../screenshot-editor/constants";
 import { CanvasElementsOverlay } from "./CanvasElementsOverlay";
@@ -251,19 +248,29 @@ export function Player() {
 						className="transition-opacity will-change-[opacity] hover:opacity-70"
 						onClick={() => seek(0)}
 					>
-						<IconLucideChevronFirst className="size-4 text-gray-12" />
+						<MediaControlIcon
+							variant="previous"
+							className="size-5 text-gray-12 dark-button-shadow"
+						/>
 					</button>
 
 					<button
 						type="button"
 						aria-label={playing ? "Pause" : "Play"}
 						onClick={togglePlay}
-						className="flex size-9 items-center justify-center rounded-full border border-gray-6 bg-gray-3 transition-colors hover:bg-gray-4"
+						className="flex size-9 items-center justify-center rounded-full dark-button-shadow border-gray-6 bg-gray-3 transition-colors hover:bg-gray-4 gray-button-shadow"
 					>
 						{playing ? (
-							<IconLucidePause className="size-3 text-gray-12" />
+							<MediaControlIcon
+								variant="pause"
+								className="size-5 text-gray-12 dark-button-shadow"
+							/>
 						) : (
-							<IconLucidePlay className="size-3 text-gray-12" />
+							// <IconLucidePlay className="size-3 text-gray-12" />
+							<MediaControlIcon
+								variant="play"
+								className="size-5 text-gray-12 dark-button-shadow"
+							/>
 						)}
 					</button>
 
@@ -273,7 +280,10 @@ export function Player() {
 						className="transition-opacity will-change-[opacity] hover:opacity-70"
 						onClick={() => seek(duration)}
 					>
-						<IconLucideChevronLast className="size-4 text-gray-12" />
+						<MediaControlIcon
+							variant="next"
+							className="size-5 text-gray-12 dark-button-shadow"
+						/>
 					</button>
 				</div>
 

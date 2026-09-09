@@ -1266,15 +1266,18 @@ pub async fn finish_encoder_nv12_pooled_timed(
     } else {
         let rgba_frame = finish_encoder(session, device, queue, uniforms, encoder).await?;
         timings.submit_readback = submit_start.elapsed();
-        Ok((rgba_frame.map(|f| Nv12RenderedFrame {
-            data: SharedNv12Buffer::from_arc_vec(f.data),
-            width: f.width,
-            height: f.height,
-            y_stride: f.padded_bytes_per_row,
-            frame_number: f.frame_number,
-            target_time_ns: f.target_time_ns,
-            format: GpuOutputFormat::Rgba,
-        }), timings))
+        Ok((
+            rgba_frame.map(|f| Nv12RenderedFrame {
+                data: SharedNv12Buffer::from_arc_vec(f.data),
+                width: f.width,
+                height: f.height,
+                y_stride: f.padded_bytes_per_row,
+                frame_number: f.frame_number,
+                target_time_ns: f.target_time_ns,
+                format: GpuOutputFormat::Rgba,
+            }),
+            timings,
+        ))
     }
 }
 

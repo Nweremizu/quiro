@@ -97,6 +97,7 @@ export const blurRegion = (
 /** Mask amounts are expressed relative to this height, matching
  * `MASK_EFFECT_BASE_HEIGHT` in the renderer. */
 const MASK_AMOUNT_BASE_HEIGHT = 1080;
+const REDACTION_FILL = "#202226";
 
 /** Fraction of the region's shorter axis used as the corner radius, matching
  * the renderer's `corner_radius` for `roundedRect`. */
@@ -276,7 +277,7 @@ export const paintMasks = (
 			ctx.save();
 			ctx.filter = "none";
 			ctx.globalAlpha = 1;
-			ctx.fillStyle = "#000";
+			ctx.fillStyle = REDACTION_FILL;
 			maskRegionPath(ctx, shape, startX, startY, regionWidth, regionHeight);
 			ctx.fill();
 			ctx.restore();

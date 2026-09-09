@@ -808,7 +808,9 @@ impl ZoomTransformTimeline {
         state
             .motion_offset_sim
             .set_target_position(targets.motion_offset);
-        state.motion_tilt_sim.set_target_position(targets.motion_tilt);
+        state
+            .motion_tilt_sim
+            .set_target_position(targets.motion_tilt);
         state.motion_rot_sim.set_target_position(targets.motion_rot);
 
         if targets.snap {
@@ -2162,7 +2164,7 @@ mod tests {
                     speed_audio_mode: None,
                     transform: None,
                     perspective: None,
-                    },
+                },
                 TimelineSegment {
                     recording_clip: 0,
                     timescale: 1.0,
@@ -2172,7 +2174,7 @@ mod tests {
                     speed_audio_mode: None,
                     transform: None,
                     perspective: None,
-                    },
+                },
             ],
             transitions: vec![ClipTransition {
                 segment_index: 1,

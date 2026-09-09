@@ -105,16 +105,16 @@ function Editor() {
 	if (!instance) return <EditorSkeleton />;
 
 	return (
-		<div className="flex h-screen w-screen flex-col bg-gray-1 dark:bg-gray-1">
+		<div className="flex h-full min-h-0 max-h-full w-full flex-col overflow-hidden bg-gray-1 dark:bg-gray-1">
 			<Header />
 
 			<div
 				data-tauri-drag-region
 				className="flex min-h-0 w-full flex-1 flex-col gap-2 overflow-y-hidden leading-5"
 			>
-				<div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-					<div className="flex min-h-0 flex-1 flex-row overflow-hidden px-2">
-						<div className="mr-2 flex min-h-0  w-104 min-w-104 flex-none overflow-hidden">
+				<div className="flex min-h-0 basis-0 flex-1 flex-col overflow-hidden">
+					<div className="flex min-h-0 basis-0 flex-1 flex-row overflow-hidden px-2">
+						<div className="mr-2 flex h-full min-h-0 max-h-full w-104 min-w-104 flex-none overflow-hidden">
 							{clipsOpen ? (
 								<ClipsSidebar onClose={() => setClipsOpen(false)} />
 							) : (
@@ -152,7 +152,10 @@ function Editor() {
 
 					<div
 						className="relative min-h-0 flex-none overflow-hidden px-2 pb-2"
-						style={{ height: `${timelineHeight}px` }}
+						style={{
+							height: `${timelineHeight}px`,
+							flexBasis: `${timelineHeight}px`,
+						}}
 					>
 						<Timeline />
 					</div>

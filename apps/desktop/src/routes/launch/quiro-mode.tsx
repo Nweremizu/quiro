@@ -40,51 +40,46 @@ const QUIRO_MODE_BUTTONS: QuiroModeButtonConfig[] = [
 	},
 ];
 
-export function QuiroMode({ onInfoClick }: QuiroModeProps) {
-	const { rawOptions, setOptions } = useRecordingOptions();
+type QuiroModeControlProps = {
+	mode: RecordingMode;
+	onModeChange: (mode: RecordingMode) => void;
+	onInfoClick?: () => void;
+};
 
-	const handleInfoClick = () => {
-		if (onInfoClick) {
-			onInfoClick();
-		} else {
-			commands.showWindow("ModeSelect");
-		}
-	};
-
+export function QuiroModeControl({
+	mode,
+	onModeChange,
+	onInfoClick,
+}: QuiroModeControlProps) {
 	return (
-		<div className="flex relative gap-2 items-center p-1.5 rounded-full border border-gray-5 bg-gray-3 w-fit">
-			{/* <button
-				type="button"
-				onClick={handleInfoClick}
-				className="absolute -left-1.5 -top-2 p-1 rounded-full w-fit bg-gray-5 group focus:outline-none"
-				aria-label="Recording mode info"
-			>
-				<IconLucideInfo className="invert transition-opacity duration-200 size-2.5 dark:invert-0 group-hover:opacity-50" />
-			</button> */}
+		<div className="relative flex w-fit items-center gap-2 rounded-full border border-gray-5 bg-gray-3 p-1.5">
+			{onInfoClick ? (
+				<button
+					type="button"
+					onClick={onInfoClick}
+					className="group absolute -left-1.5 -top-2 grid size-5 place-items-center rounded-full bg-gray-5 transition-transform duration-150 focus:outline-none active:scale-[0.96]"
+					aria-label="Recording mode info"
+				>
+					<IconLucideInfo className="size-2.5 text-gray-11 transition-opacity duration-150 group-hover:opacity-60" />
+				</button>
+			) : null}
 			{QUIRO_MODE_BUTTONS.map((buttonConfig) => {
-				const isSelected = rawOptions.mode === buttonConfig.mode;
+				const isSelected = mode === buttonConfig.mode;
 				const Icon = buttonConfig.icon;
 				const settingsSection = buttonConfig.settingsSection;
 
 				return (
 					<HoverCard.Root key={buttonConfig.mode}>
-						<HoverCard.Trigger
-							delay={20}
-							closeDelay={50}
-							// render={() => (
-
-							// )}
-						>
+						<HoverCard.Trigger delay={20} closeDelay={50}>
 							<button
 								type="button"
-								onClick={() => {
-									setOptions({ mode: buttonConfig.mode });
-									commands.setRecordingMode(buttonConfig.mode);
-								}}
+								onClick={() => onModeChange(buttonConfig.mode)}
+								aria-label={buttonConfig.label}
+								aria-pressed={isSelected}
 								className={cn(
-									"relative flex justify-center items-center rounded-full transition-all duration-200 size-7 focus:outline-none",
+									"relative flex size-7 items-center justify-center rounded-full transition-[background-color,box-shadow,transform] duration-150 focus:outline-none active:scale-[0.96]",
 									isSelected
-										? "ring-2 ring-offset-1 ring-offset-gray-1 bg-gray-7 hover:bg-gray-7 ring-accent-border-selected"
+										? "bg-gray-7 ring-2 ring-accent-border-selected ring-offset-1 ring-offset-gray-1 hover:bg-gray-7"
 										: "bg-gray-3 hover:bg-gray-7",
 								)}
 							>
@@ -97,37 +92,27 @@ export function QuiroMode({ onInfoClick }: QuiroModeProps) {
 								align="center"
 								alignOffset={4}
 								sideOffset={4}
-								className="isolate z-50 "
+								className="isolate z-50"
 							>
 								<HoverCard.Popup
 									data-slot="hover-card-content"
-									className={cn(
-										"z-50 outline-none animate-in fade-in slide-in-from-top-1 duration-100",
-									)}
+									className="z-50 animate-in fade-in slide-in-from-top-1 outline-none duration-100"
 								>
-									<div className="flex flex-col gap-2 px-3 py-2.5 rounded-lg border shadow-lg bg-gray-12 text-gray-1 border-gray-3 min-w-[12rem] max-w-[15rem]">
+									<div className="flex min-w-[12rem] max-w-[15rem] flex-col gap-2 rounded-lg border border-gray-3 bg-gray-12 px-3 py-2.5 text-gray-1 shadow-lg">
 										<div className="flex flex-col gap-0.5">
 											<span className="text-xs font-medium">
 												{buttonConfig.label}
 											</span>
-											<span className="text-[10px] text-gray-4 leading-snug">
+											<span className="text-[10px] leading-snug text-gray-4">
 												{buttonConfig.description}
 											</span>
 										</div>
-										{settingsSection && (
-											<button
-												type="button"
-												onClick={(e) => {
-													e.stopPropagation();
-													// void openQualitySettings(settingsSection);
-												}}
-												className="flex gap-1.5 items-center px-2 py-1 -mx-1 text-[11px] rounded-md transition-colors text-gray-4 hover:bg-gray-11 hover:text-gray-1"
-											>
-												{/* <IconCapSettings className="size-3" /> */}
+										{settingsSection ? (
+											<div className="-mx-1 flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-gray-4">
 												<IconHeroiconsCog6Tooth className="size-3" />
 												<span>Quality settings</span>
-											</button>
-										)}
+											</div>
+										) : null}
 									</div>
 								</HoverCard.Popup>
 							</HoverCard.Positioner>
@@ -136,5 +121,20 @@ export function QuiroMode({ onInfoClick }: QuiroModeProps) {
 				);
 			})}
 		</div>
+	);
+}
+
+export function QuiroMode({ onInfoClick }: QuiroModeProps) {
+	const { rawOptions, setOptions } = useRecordingOptions();
+
+	return (
+		<QuiroModeControl
+			mode={rawOptions.mode ?? "studio"}
+			onInfoClick={onInfoClick ?? (() => commands.showWindow("ModeSelect"))}
+			onModeChange={(mode) => {
+				setOptions({ mode });
+				commands.setRecordingMode(mode);
+			}}
+		/>
 	);
 }

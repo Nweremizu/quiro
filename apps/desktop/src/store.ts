@@ -65,7 +65,6 @@ export type Hotkey = {
 
 export type HotkeyAction =
 	| "startStudioRecording"
-	| "startInstantRecording"
 	| "stopRecording"
 	| "restartRecording"
 	| "togglePauseRecording"

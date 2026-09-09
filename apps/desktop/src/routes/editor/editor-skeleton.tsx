@@ -162,14 +162,14 @@ function TimelineSkeleton() {
 
 export function EditorSkeleton() {
 	return (
-		<div className="flex h-screen w-screen flex-col bg-gray-1">
+		<div className="flex h-full min-h-0 max-h-full w-full flex-col overflow-hidden bg-gray-1">
 			<HeaderSkeleton />
 
 			<div
 				data-tauri-drag-region
 				className="flex min-h-0 w-full flex-1 flex-col gap-2 overflow-y-hidden leading-5"
 			>
-				<div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+				<div className="flex min-h-0 basis-0 flex-1 flex-col overflow-hidden">
 					<div className="flex min-h-0 flex-1 flex-row gap-2 overflow-hidden px-2">
 						<PlayerSkeleton />
 						<SidebarSkeleton />

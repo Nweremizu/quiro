@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use bytemuck::{Pod, Zeroable};
 use image::GenericImageView;
@@ -10,6 +10,8 @@ use crate::{
     Coord, DecodedSegmentFrames, FrameSpace, ProjectUniforms, RenderVideoConstants,
     STANDARD_CURSOR_HEIGHT, zoom::InterpolatedZoom,
 };
+
+use super::cursor_theme::{self, CursorMode};
 
 const CURSOR_CLICK_DURATION: f64 = 0.13;
 const CURSOR_CLICK_DURATION_MS: f64 = CURSOR_CLICK_DURATION * 1000.0;
@@ -39,7 +41,7 @@ pub struct CursorLayer {
     statics: Statics,
     bind_group: Option<BindGroup>,
     cursors: HashMap<String, CursorTexture>,
-    circle_cursor: Option<CursorTexture>,
+    fixed_cursors: HashMap<CursorMode, CursorTexture>,
     prev_is_svg_assets_enabled: Option<bool>,
     prev_cursor_type: Option<CursorType>,
     cursor_assets_preloaded: bool,
@@ -199,7 +201,7 @@ impl CursorLayer {
             statics,
             bind_group: None,
             cursors: Default::default(),
-            circle_cursor: None,
+            fixed_cursors: Default::default(),
             prev_is_svg_assets_enabled: None,
             prev_cursor_type: None,
             cursor_assets_preloaded: false,
@@ -266,6 +268,92 @@ impl CursorLayer {
         }
 
         CursorTexture::prepare(constants, &rgba, (size, size), XY::new(0.5, 0.5))
+    }
+
+    fn create_fixed_cursor(
+        constants: &RenderVideoConstants,
+        cursor_type: &CursorType,
+        mode: CursorMode,
+    ) -> Option<CursorTexture> {
+        if cursor_type == &CursorType::Circle {
+            return Some(Self::create_circle_cursor(constants));
+        }
+
+        let artwork = cursor_theme::artwork(cursor_type, mode)?;
+
+        CursorTexture::prepare_svg(constants, &artwork.svg, artwork.hotspot.into())
+            .map_err(|err| error!("Failed to prepare {cursor_type:?} cursor: {err}"))
+            .ok()
+    }
+
+    fn uses_fixed_cursor(cursor_type: &CursorType) -> bool {
+        !matches!(cursor_type, CursorType::Auto | CursorType::Pointer)
+    }
+
+    fn cursor_shape(
+        constants: &RenderVideoConstants,
+        cursor_id: &str,
+    ) -> Option<quiro_cursor_info::CursorShape> {
+        match &constants.recording_meta.inner {
+            RecordingMetaInner::Studio(studio) => match studio.as_ref() {
+                StudioRecordingMeta::MultipleSegments {
+                    inner:
+                        MultipleSegments {
+                            cursors: Cursors::Correct(cursors),
+                            ..
+                        },
+                } => cursors.get(cursor_id).and_then(|cursor| cursor.shape),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    fn ensure_fixed_cursor(
+        &mut self,
+        constants: &RenderVideoConstants,
+        cursor_type: &CursorType,
+        mode: CursorMode,
+    ) {
+        if self.fixed_cursors.contains_key(&mode) {
+            return;
+        }
+
+        if let Some(texture) = Self::create_fixed_cursor(constants, cursor_type, mode) {
+            self.fixed_cursors.insert(mode, texture);
+        }
+    }
+
+    fn preload_fixed_cursor_textures(
+        &mut self,
+        constants: &RenderVideoConstants,
+        cursor_type: &CursorType,
+    ) {
+        if cursor_type == &CursorType::Circle {
+            self.ensure_fixed_cursor(constants, cursor_type, CursorMode::Arrow);
+            return;
+        }
+
+        let mut modes = HashSet::from([CursorMode::Arrow]);
+        if let RecordingMetaInner::Studio(studio) = &constants.recording_meta.inner
+            && let StudioRecordingMeta::MultipleSegments {
+                inner:
+                    MultipleSegments {
+                        cursors: Cursors::Correct(cursors),
+                        ..
+                    },
+            } = studio.as_ref()
+        {
+            modes.extend(
+                cursors
+                    .values()
+                    .map(|cursor| cursor_theme::mode_for_shape(cursor.shape)),
+            );
+        }
+
+        for mode in modes {
+            self.ensure_fixed_cursor(constants, cursor_type, mode);
+        }
     }
 
     fn load_cursor_texture(
@@ -341,10 +429,8 @@ impl CursorLayer {
     ) {
         self.prev_cursor_type = Some(cursor_type.clone());
 
-        if cursor_type == &CursorType::Circle {
-            if self.circle_cursor.is_none() {
-                self.circle_cursor = Some(Self::create_circle_cursor(constants));
-            }
+        if Self::uses_fixed_cursor(cursor_type) {
+            self.preload_fixed_cursor_textures(constants, cursor_type);
             return;
         }
 
@@ -442,7 +528,7 @@ impl CursorLayer {
 
         if self.prev_cursor_type.as_ref() != Some(&cursor_type) {
             self.prev_cursor_type = Some(cursor_type.clone());
-            self.circle_cursor = None;
+            self.fixed_cursors.clear();
         }
 
         if self.prev_is_svg_assets_enabled != Some(uniforms.project.cursor.use_svg) {
@@ -451,11 +537,20 @@ impl CursorLayer {
             self.cursor_assets_preloaded = false;
         }
 
-        let cursor_texture = if cursor_type == CursorType::Circle {
-            if self.circle_cursor.is_none() {
-                self.circle_cursor = Some(Self::create_circle_cursor(constants));
-            }
-            self.circle_cursor.as_ref().unwrap()
+        let cursor_texture = if Self::uses_fixed_cursor(&cursor_type) {
+            let mode = if cursor_type == CursorType::Circle {
+                CursorMode::Arrow
+            } else {
+                cursor_theme::mode_for_shape(Self::cursor_shape(
+                    constants,
+                    &interpolated_cursor.cursor_id,
+                ))
+            };
+            self.ensure_fixed_cursor(constants, &cursor_type, mode);
+            let Some(texture) = self.fixed_cursors.get(&mode) else {
+                return;
+            };
+            texture
         } else {
             if !self.cursor_assets_preloaded {
                 self.preload_cursor_textures(constants, uniforms.project.cursor.use_svg);
@@ -593,6 +688,13 @@ impl CursorLayer {
                 zoomed_size.y as f32,
             ],
         };
+        let position_size = crate::perspective::project_rect_for_display(
+            uniforms.project.background.perspective.as_ref(),
+            quiro_project::frame_layout::display_transform(&uniforms.project)
+                .map_or(0.0, |transform| transform.rotation as f32),
+            uniforms.display.target_bounds,
+            position_size,
+        );
 
         let cursor_uniforms = CursorUniforms {
             position_size,

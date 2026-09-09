@@ -15,16 +15,20 @@ use tauri_specta::Event;
 use tracing::{error, instrument};
 
 use crate::NewScreenshotAdded;
-use crate::windows::{WindowId, hide_overlay};
+use crate::windows::{
+    WindowId, apply_content_protection, content_protection_enabled, hide_overlay,
+};
 
 /// Quiro's own picker/overlay windows are on screen at the moment a
 /// screenshot is triggered from the target picker, and they would otherwise
 /// be captured along with the content behind them.
 async fn hide_own_overlays(app: &AppHandle) {
-    let had_target_overlay = app
-        .webview_windows()
-        .keys()
-        .any(|label| matches!(WindowId::from_str(label), Ok(WindowId::TargetSelectOverlay { .. })));
+    let had_target_overlay = app.webview_windows().keys().any(|label| {
+        matches!(
+            WindowId::from_str(label),
+            Ok(WindowId::TargetSelectOverlay { .. })
+        )
+    });
 
     // TargetSelectOverlay windows get the same Windows-specific treatment as
     // target_select_overlay::close_target_select_overlay_windows uses (see
@@ -78,9 +82,14 @@ pub async fn take_screenshot(
 
     hide_own_overlays(&app).await;
 
-    let image = quiro_recording::screenshot::capture_screenshot(target)
-        .await
-        .map_err(|e| format!("Failed to capture screenshot: {e}"))?;
+    let restore_content_protection = content_protection_enabled(&app);
+    apply_content_protection(&app, true);
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    let image_result = quiro_recording::screenshot::capture_screenshot(target).await;
+    apply_content_protection(&app, restore_content_protection);
+
+    let image = image_result.map_err(|e| format!("Failed to capture screenshot: {e}"))?;
 
     let dir = app
         .path()

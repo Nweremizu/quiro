@@ -92,6 +92,29 @@ fn has_playback_audio(audio_segments: &[crate::audio::AudioSegment], has_music: 
             .any(|segment| !segment.tracks.is_empty())
 }
 
+fn cursor_timeline_inputs_changed(
+    previous: &ProjectConfiguration,
+    next: &ProjectConfiguration,
+) -> bool {
+    let previous = &previous.cursor;
+    let next = &next.cursor;
+    let click_spring = |config: &quiro_project::CursorConfiguration| {
+        config.click_spring.map(|spring| {
+            (
+                spring.tension.to_bits(),
+                spring.mass.to_bits(),
+                spring.friction.to_bits(),
+            )
+        })
+    };
+
+    previous.raw != next.raw
+        || previous.tension.to_bits() != next.tension.to_bits()
+        || previous.mass.to_bits() != next.mass.to_bits()
+        || previous.friction.to_bits() != next.friction.to_bits()
+        || click_spring(previous) != click_spring(next)
+}
+
 #[derive(Debug)]
 pub enum PlaybackStartError {
     InvalidFps,
@@ -369,7 +392,10 @@ impl Playback {
             if last_stop_ms != 0 {
                 let now_ms = PLAYBACK_EPOCH.elapsed().as_millis() as u64;
                 tracing::info!(
-                    idle_gap_s = format!("{:.1}", (now_ms.saturating_sub(last_stop_ms)) as f64 / 1000.0),
+                    idle_gap_s = format!(
+                        "{:.1}",
+                        (now_ms.saturating_sub(last_stop_ms)) as f64 / 1000.0
+                    ),
                     "PLAYBACK_IDLE_GAP marker"
                 );
             }
@@ -926,8 +952,11 @@ impl Playback {
 
             'playback: loop {
                 if self.project.has_changed().unwrap_or(false) {
-                    cached_project = self.project.borrow_and_update().clone();
-                    cursor_timelines = build_cursor_timelines(&cached_project);
+                    let next_project = self.project.borrow_and_update().clone();
+                    if cursor_timeline_inputs_changed(&cached_project, &next_project) {
+                        cursor_timelines = build_cursor_timelines(&next_project);
+                    }
+                    cached_project = next_project;
                     zoom_timelines = build_zoom_timelines(&cached_project);
                     outgoing_zoom_timelines = build_outgoing_zoom_timelines(&cached_project);
                 }
@@ -1416,6 +1445,18 @@ mod tests {
     fn timeline_music_enables_audio_playback_without_recorded_audio() {
         assert!(has_playback_audio(&[], true));
         assert!(!has_playback_audio(&[], false));
+    }
+
+    #[test]
+    fn cursor_timeline_ignores_unrelated_live_project_edits() {
+        let previous = ProjectConfiguration::default();
+        let mut next = previous.clone();
+        next.cursor.size += 1;
+
+        assert!(!cursor_timeline_inputs_changed(&previous, &next));
+
+        next.cursor.tension += 1.0;
+        assert!(cursor_timeline_inputs_changed(&previous, &next));
     }
 }
 

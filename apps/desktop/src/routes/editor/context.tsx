@@ -18,6 +18,8 @@ import {
 	type XY,
 } from "@/utils/tauri";
 import { connectFrameSocket } from "../screenshot-editor/frameSocket";
+import { cancelActiveCaptionGenerations } from "./caption-generation";
+import { normalizeCaptionProject } from "./captions";
 import { clipTimelineDuration } from "./clip-transitions";
 import { PlaybackStore, useThrottledPlaybackTime } from "./playback-store";
 
@@ -29,6 +31,8 @@ export const FPS = 60;
 export const OUTPUT_SIZE = { x: 1920, y: 1080 };
 
 const PREVIEW_QUALITY_SCALE = { full: 1, half: 0.5, quarter: 0.25 } as const;
+const PROJECT_SAVE_DEBOUNCE_MS = 250;
+const INTERACTIVE_PREVIEW_INTERVAL_MS = 1000 / 30;
 
 export type PreviewQuality = keyof typeof PREVIEW_QUALITY_SCALE;
 
@@ -47,7 +51,7 @@ export function getPreviewResolution(quality: PreviewQuality): XY<number> {
 export type TimelineSelection =
 	| { type: "clip"; index: number }
 	| { type: "zoom"; index: number }
-	| { type: "caption"; index: number }
+	| { type: "caption"; index: number; id?: string }
 	| { type: "scene"; index: number }
 	| { type: "mask"; index: number }
 	| { type: "text"; index: number }
@@ -62,6 +66,14 @@ type EditorContextValue = {
 	/** Applies an edit, pushes it onto the undo stack, and pushes it to the
 	 * renderer + disk. */
 	setProject: (
+		update: (project: ProjectConfiguration) => ProjectConfiguration,
+	) => void;
+	/** Applies the final interaction value without creating another undo entry. */
+	setProjectTransient: (
+		update: (project: ProjectConfiguration) => ProjectConfiguration,
+	) => void;
+	/** Sends an interaction sample to the renderer without re-rendering or saving. */
+	previewProject: (
 		update: (project: ProjectConfiguration) => ProjectConfiguration,
 	) => void;
 	undo: () => void;
@@ -166,6 +178,8 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 	const [project, setProjectState] = useState<ProjectConfiguration | null>(
 		null,
 	);
+	const projectRef = useRef<ProjectConfiguration | null>(null);
+	projectRef.current = project;
 	const [history, setHistory] = useState<ProjectConfiguration[]>([]);
 	const [future, setFuture] = useState<ProjectConfiguration[]>([]);
 	const [playing, setPlaying] = useState(false);
@@ -175,7 +189,13 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 	// moves (overlays for segments under the playhead, the export preview).
 	const playbackTime = useThrottledPlaybackTime(playback);
 
-	useEffect(() => () => playback.dispose(), [playback]);
+	useEffect(
+		() => () => {
+			playback.dispose();
+			void cancelActiveCaptionGenerations();
+		},
+		[playback],
+	);
 	const [previewQuality, setPreviewQuality] = useState<PreviewQuality>("full");
 	const [selection, setSelection] = useState<TimelineSelection>(null);
 	const [splitMode, setSplitMode] = useState(false);
@@ -186,6 +206,16 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 	playingRef.current = playing;
 	const previewQualityRef = useRef(previewQuality);
 	previewQualityRef.current = previewQuality;
+	const pendingLiveProjectRef = useRef<ProjectConfiguration | null>(null);
+	const liveProjectSyncPromiseRef = useRef<Promise<void> | null>(null);
+	const pendingInteractivePreviewRef = useRef<ProjectConfiguration | null>(
+		null,
+	);
+	const interactivePreviewTimerRef = useRef<number | undefined>(undefined);
+	const lastInteractivePreviewAtRef = useRef(0);
+	const pendingProjectSaveRef = useRef<ProjectConfiguration | null>(null);
+	const projectSaveActiveRef = useRef(false);
+	const projectSaveTimerRef = useRef<number | undefined>(undefined);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -201,11 +231,12 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 			const data = result.data;
 			setInstance(data);
 			setPrettyName(data.prettyName);
+			const normalized = normalizeTimeline(
+				data.savedProjectConfig,
+				data.recordings.segments.map((segment) => segment.display.duration),
+			);
 			setProjectState(
-				normalizeTimeline(
-					data.savedProjectConfig,
-					data.recordings.segments.map((segment) => segment.display.duration),
-				),
+				normalizeCaptionProject(normalized, data.recordings.segments),
 			);
 		})();
 
@@ -217,8 +248,11 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 	useEffect(() => {
 		if (!instance) return;
 
-		const disconnect = connectFrameSocket(instance.framesSocketUrl, (frame) =>
-			playback.setFrame(frame),
+		const disconnect = connectFrameSocket(
+			instance.framesSocketUrl,
+			(frame) => playback.setFrame(frame),
+			undefined,
+			{ flushAfterDecode: () => !playback.isPlaying() },
 		);
 
 		// The renderer only produces a frame when asked to; without this the
@@ -266,40 +300,13 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 	const duration = useMemo(() => {
 		const timeline = project?.timeline;
 		if (timeline && timeline.segments.length > 0) {
-			return clipTimelineDuration(timeline.segments, timeline.transitions ?? []);
+			return clipTimelineDuration(
+				timeline.segments,
+				timeline.transitions ?? [],
+			);
 		}
 		return instance?.recordingDuration ?? 0;
 	}, [project, instance]);
-
-	const togglePlay = useCallback(() => {
-		void (async () => {
-			try {
-				if (playingRef.current) {
-					await commands.stopPlayback();
-					setPlaying(false);
-					playback.setPlaying(false);
-					return;
-				}
-
-				// Restart from the top rather than sitting stuck at the end.
-				const atEnd = duration > 0 && duration - playback.getTime() <= 0.1;
-				const from = atEnd ? 0 : playback.getTime();
-				if (atEnd) playback.setTime(0);
-
-				await commands.setPlayheadPosition(Math.floor(from * FPS));
-				await commands.startPlayback(
-					FPS,
-					getPreviewResolution(previewQualityRef.current),
-				);
-				setPlaying(true);
-				playback.setPlaying(true);
-			} catch (error) {
-				console.error("Failed to toggle playback:", error);
-				setPlaying(false);
-				playback.setPlaying(false);
-			}
-		})();
-	}, [duration, playback]);
 
 	useEffect(() => {
 		if (!playing || duration <= 0) return;
@@ -313,42 +320,210 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 		playback.setTime(duration);
 	}, [playing, playbackTime, duration, playback]);
 
+	const flushLiveProject = useCallback(() => {
+		if (liveProjectSyncPromiseRef.current) {
+			return liveProjectSyncPromiseRef.current;
+		}
+		const promise = (async () => {
+			while (pendingLiveProjectRef.current) {
+				const next = pendingLiveProjectRef.current;
+				pendingLiveProjectRef.current = null;
+				try {
+					const result = await commands.updateProjectConfigInMemory(
+						next,
+						Math.max(Math.floor(playback.getTime() * FPS), 0),
+						FPS,
+						getPreviewResolution(previewQualityRef.current),
+					);
+					if (result.status === "error") {
+						console.error(
+							"Failed to update the live editor preview:",
+							result.error,
+						);
+					}
+				} catch (error) {
+					console.error("Failed to update the live editor preview:", error);
+				}
+			}
+			liveProjectSyncPromiseRef.current = null;
+		})();
+		liveProjectSyncPromiseRef.current = promise;
+		return promise;
+	}, [playback]);
+
+	const syncLatestProject = useCallback(async () => {
+		const latest = projectRef.current;
+		if (!latest) return;
+
+		pendingLiveProjectRef.current = latest;
+		await flushLiveProject();
+	}, [flushLiveProject]);
+
+	const togglePlay = useCallback(() => {
+		void (async () => {
+			try {
+				if (playingRef.current) {
+					await commands.stopPlayback();
+					setPlaying(false);
+					playback.setPlaying(false);
+					return;
+				}
+
+				const atEnd = duration > 0 && duration - playback.getTime() <= 0.1;
+				const from = atEnd ? 0 : playback.getTime();
+				if (atEnd) playback.setTime(0);
+
+				await syncLatestProject();
+				await commands.setPlayheadPosition(Math.floor(from * FPS));
+				await commands.startPlayback(
+					FPS,
+					getPreviewResolution(previewQualityRef.current),
+				);
+				setPlaying(true);
+				playback.setPlaying(true);
+			} catch (error) {
+				console.error("Failed to toggle playback:", error);
+				setPlaying(false);
+				playback.setPlaying(false);
+			}
+		})();
+	}, [duration, playback, syncLatestProject]);
+
+	const flushProjectSave = useCallback(() => {
+		if (projectSaveActiveRef.current) return;
+		projectSaveActiveRef.current = true;
+
+		void (async () => {
+			while (pendingProjectSaveRef.current) {
+				const next = pendingProjectSaveRef.current;
+				pendingProjectSaveRef.current = null;
+				try {
+					const result = await commands.setProjectConfig(next);
+					if (result.status === "error") {
+						console.error("Failed to save the editor project:", result.error);
+					}
+				} catch (error) {
+					console.error("Failed to save the editor project:", error);
+				}
+			}
+			projectSaveActiveRef.current = false;
+		})();
+	}, []);
+
+	const flushInteractivePreview = useCallback(() => {
+		interactivePreviewTimerRef.current = undefined;
+		const next = pendingInteractivePreviewRef.current;
+		pendingInteractivePreviewRef.current = null;
+		if (!next) return;
+
+		lastInteractivePreviewAtRef.current = performance.now();
+		pendingLiveProjectRef.current = next;
+		flushLiveProject();
+	}, [flushLiveProject]);
+
+	const queueProjectUpdate = useCallback(
+		(next: ProjectConfiguration) => {
+			pendingInteractivePreviewRef.current = null;
+			window.clearTimeout(interactivePreviewTimerRef.current);
+			interactivePreviewTimerRef.current = undefined;
+			lastInteractivePreviewAtRef.current = performance.now();
+			pendingLiveProjectRef.current = next;
+			flushLiveProject();
+
+			pendingProjectSaveRef.current = next;
+			window.clearTimeout(projectSaveTimerRef.current);
+			projectSaveTimerRef.current = window.setTimeout(
+				flushProjectSave,
+				PROJECT_SAVE_DEBOUNCE_MS,
+			);
+		},
+		[flushLiveProject, flushProjectSave],
+	);
+
+	const previewProject = useCallback(
+		(update: (project: ProjectConfiguration) => ProjectConfiguration) => {
+			const current = projectRef.current;
+			if (!current) return;
+			const updated = update(current);
+			const next = instance
+				? normalizeCaptionProject(updated, instance.recordings.segments)
+				: updated;
+			if (next === current) return;
+
+			pendingInteractivePreviewRef.current = next;
+			const elapsed = performance.now() - lastInteractivePreviewAtRef.current;
+			if (elapsed >= INTERACTIVE_PREVIEW_INTERVAL_MS) {
+				window.clearTimeout(interactivePreviewTimerRef.current);
+				flushInteractivePreview();
+				return;
+			}
+
+			if (interactivePreviewTimerRef.current !== undefined) return;
+			interactivePreviewTimerRef.current = window.setTimeout(
+				flushInteractivePreview,
+				INTERACTIVE_PREVIEW_INTERVAL_MS - elapsed,
+			);
+		},
+		[flushInteractivePreview, instance],
+	);
+
+	useEffect(
+		() => () => {
+			pendingInteractivePreviewRef.current = null;
+			window.clearTimeout(interactivePreviewTimerRef.current);
+			window.clearTimeout(projectSaveTimerRef.current);
+			flushProjectSave();
+		},
+		[flushProjectSave],
+	);
+
 	const pushProject = useCallback(
 		(next: ProjectConfiguration) => {
+			if (instance) {
+				next = normalizeCaptionProject(next, instance.recordings.segments);
+			}
 			setProjectState(next);
-			void commands.updateProjectConfigInMemory(
-				next,
-				Math.max(Math.floor(playback.getTime() * FPS), 0),
-				FPS,
-				getPreviewResolution(previewQualityRef.current),
-			);
-			void commands.setProjectConfig(next);
+			queueProjectUpdate(next);
 		},
-		[playback],
+		[instance, queueProjectUpdate],
 	);
 
 	const setProject = useCallback(
 		(update: (project: ProjectConfiguration) => ProjectConfiguration) => {
 			setProjectState((current) => {
 				if (!current) return current;
-				const next = update(current);
+				const updated = update(current);
+				const next = instance
+					? normalizeCaptionProject(updated, instance.recordings.segments)
+					: updated;
 				if (next === current) return current;
 
 				setHistory((entries) => [...entries.slice(-49), current]);
 				setFuture([]);
 
-				void commands.updateProjectConfigInMemory(
-					next,
-					Math.max(Math.floor(playback.getTime() * FPS), 0),
-					FPS,
-					getPreviewResolution(previewQualityRef.current),
-				);
-				void commands.setProjectConfig(next);
+				queueProjectUpdate(next);
 
 				return next;
 			});
 		},
-		[playback],
+		[instance, queueProjectUpdate],
+	);
+
+	const setProjectTransient = useCallback(
+		(update: (project: ProjectConfiguration) => ProjectConfiguration) => {
+			setProjectState((current) => {
+				if (!current) return current;
+				const updated = update(current);
+				const next = instance
+					? normalizeCaptionProject(updated, instance.recordings.segments)
+					: updated;
+				if (next === current) return current;
+
+				queueProjectUpdate(next);
+				return next;
+			});
+		},
+		[instance, queueProjectUpdate],
 	);
 
 	const undo = useCallback(() => {
@@ -396,13 +571,14 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 				}
 
 				await commands.stopPlayback();
+				await syncLatestProject();
 				await commands.setPlayheadPosition(
 					Math.floor(playback.getTime() * FPS),
 				);
 				await commands.startPlayback(FPS, getPreviewResolution(quality));
 			})();
 		},
-		[requestFrame, playback],
+		[requestFrame, playback, syncLatestProject],
 	);
 
 	const rename = useCallback(async (name: string) => {
@@ -420,6 +596,8 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 			loadError,
 			project,
 			setProject,
+			setProjectTransient,
+			previewProject,
 			undo,
 			redo,
 			canUndo: history.length > 0,
@@ -446,6 +624,8 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 			loadError,
 			project,
 			setProject,
+			setProjectTransient,
+			previewProject,
 			undo,
 			redo,
 			history.length,

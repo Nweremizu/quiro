@@ -16,7 +16,6 @@ const ACTIONS: { action: HotkeyAction; label: string; description?: string }[] =
 			label: "Start studio recording",
 			description: "Uses whichever target is currently selected.",
 		},
-		{ action: "startInstantRecording", label: "Start instant recording" },
 		{ action: "stopRecording", label: "Stop recording" },
 		{
 			action: "togglePauseRecording",

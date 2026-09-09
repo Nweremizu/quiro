@@ -71,7 +71,6 @@ impl Hotkey {
 #[allow(clippy::enum_variant_names)]
 pub enum HotkeyAction {
     StartStudioRecording,
-    StartInstantRecording,
     StopRecording,
     RestartRecording,
     TogglePauseRecording,
@@ -194,13 +193,6 @@ async fn handle_hotkey(app: AppHandle, action: HotkeyAction) -> Result<(), Strin
             .emit(&app);
             Ok(())
         }
-        HotkeyAction::StartInstantRecording => {
-            let _ = RequestStartRecording {
-                mode: RecordingMode::Instant,
-            }
-            .emit(&app);
-            Ok(())
-        }
         HotkeyAction::StopRecording => recording::stop_recording(app.clone(), app.state())
             .await
             .map(|_| ()),
@@ -218,8 +210,7 @@ async fn handle_hotkey(app: AppHandle, action: HotkeyAction) -> Result<(), Strin
                 .unwrap_or_default();
 
             let next = match current {
-                RecordingMode::Studio => RecordingMode::Instant,
-                RecordingMode::Instant => RecordingMode::Screenshot,
+                RecordingMode::Studio => RecordingMode::Screenshot,
                 RecordingMode::Screenshot => RecordingMode::Studio,
             };
 
@@ -239,7 +230,9 @@ async fn handle_hotkey(app: AppHandle, action: HotkeyAction) -> Result<(), Strin
         HotkeyAction::ScreenshotDisplay => {
             // `None` already means "the display under the cursor" — see the
             // comment on take_screenshot, which was written for exactly this.
-            capture::take_screenshot(app.clone(), None).await.map(|_| ())
+            capture::take_screenshot(app.clone(), None)
+                .await
+                .map(|_| ())
         }
         HotkeyAction::ScreenshotWindow => {
             use scap_targets::Window;

@@ -8,8 +8,13 @@ import { message } from "@tauri-apps/plugin-dialog";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import Camera from "./routes/camera";
 import Debug from "./routes/debug";
+import CameraSettingsBreak from "./routes/dev/camera-settings-break";
+import CameraSettingsVariants from "./routes/dev/camera-settings-variants";
+import ZoomSegmentSettingsBreak from "./routes/dev/zoom-segment-settings-break";
+import ZoomSegmentSettingsVariants from "./routes/dev/zoom-segment-settings-variants";
 import Editor from "./routes/editor";
 import MainWindow from "./routes/launch";
+import Onboarding from "./routes/onboarding";
 import ScreenshotEditor from "./routes/screenshot-editor";
 import Settings from "./routes/settings";
 import ChangelogSettings from "./routes/settings/changelog";
@@ -72,10 +77,27 @@ function Inner() {
 				path="/window-capture-occluder"
 				element={<WindowCaptureOccluder />}
 			/>
+			<Route path="/onboarding" element={<Onboarding />} />
 			<Route path="/" element={<WindowLayout />}>
 				<Route index element={<MainWindow />} />
 
 				<Route path="/debug" element={<Debug />} />
+				<Route
+					path="/debug/camera-settings-break"
+					element={<CameraSettingsBreak />}
+				/>
+				<Route
+					path="/debug/camera-settings-variants"
+					element={<CameraSettingsVariants />}
+				/>
+				<Route
+					path="/debug/zoom-segment-settings-break"
+					element={<ZoomSegmentSettingsBreak />}
+				/>
+				<Route
+					path="/debug/zoom-segment-settings-variants"
+					element={<ZoomSegmentSettingsVariants />}
+				/>
 				<Route path="/screenshot-editor" element={<ScreenshotEditor />} />
 				<Route path="/editor" element={<Editor />} />
 				{/* Rust's show_settings builds the URL as `/settings/{page}`,

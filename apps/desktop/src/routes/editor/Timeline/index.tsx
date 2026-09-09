@@ -1,9 +1,11 @@
-import { Popover, PopoverContent, PopoverTrigger } from "@quiro/ui";
+import { Popover, PopoverContent, PopoverTrigger, toast } from "@quiro/ui";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FEATURES } from "@/features";
 import {
 	commands,
+	type KeyboardSettings,
 	type MaskSegment,
 	type SceneSegment,
 	type TextSegment,
@@ -13,6 +15,7 @@ import {
 import IconLucideBoxSelect from "~icons/lucide/box-select";
 import IconLucideCaptions from "~icons/lucide/captions";
 import IconLucideClapperboard from "~icons/lucide/clapperboard";
+import IconLucideGitMerge from "~icons/lucide/git-merge";
 import IconLucideKeyboard from "~icons/lucide/keyboard";
 import IconLucideMusic from "~icons/lucide/music";
 import IconLucidePlus from "~icons/lucide/plus";
@@ -38,6 +41,7 @@ import { CaptionsTrack } from "./CaptionsTrack";
 import { ClipTrack, segmentDuration, segmentOffsets } from "./ClipTrack";
 import { TimelineProvider, type TimelineViewport } from "./context";
 import { KeyboardTrack } from "./KeyboardTrack";
+import { MaskSegmentContent } from "./MaskSegmentContent";
 import { Playhead } from "./Playhead";
 import { SegmentTrack } from "./SegmentTrack";
 import { TrackRoot } from "./Track";
@@ -54,6 +58,24 @@ const TICK_LABEL_WIDTH = 40;
  * latter pushed everything a gutter's worth past the right edge at the end of
  * the timeline, which is what clipped the last tick label. */
 const TRACK_GUTTER = 40;
+const MERGE_ANIMATION_DURATION_MS = 400;
+
+const DEFAULT_KEYBOARD_SETTINGS: KeyboardSettings = {
+	enabled: true,
+	font: "System Sans-Serif",
+	size: 50,
+	color: "#FFFFFF",
+	backgroundColor: "#000000",
+	backgroundOpacity: 95,
+	position: "bottom-center",
+	fontWeight: 400,
+	fadeDuration: 0.15,
+	lingerDuration: 0.8,
+	groupingThresholdMs: 500,
+	showModifiers: true,
+	showSpecialKeys: true,
+	uppercase: false,
+};
 
 function formatTime(seconds: number) {
 	const total = Math.max(0, seconds);
@@ -94,6 +116,11 @@ export function Timeline() {
 	const [visibleSeconds, setVisibleSeconds] = useState(0);
 	const [position, setPosition] = useState(0);
 	const [shownTracks, setShownTracks] = useState<OptionalTrack[]>([]);
+	const [mergePreview, setMergePreview] = useState<{
+		time: number;
+		frozen: boolean;
+	} | null>(null);
+	const mergePreviewTimeoutRef = useRef<number | null>(null);
 
 	useEffect(() => {
 		const element = trackAreaRef.current;
@@ -106,8 +133,21 @@ export function Timeline() {
 		return () => observer.disconnect();
 	}, []);
 
+	useEffect(
+		() => () => {
+			if (mergePreviewTimeoutRef.current !== null) {
+				window.clearTimeout(mergePreviewTimeoutRef.current);
+			}
+		},
+		[],
+	);
+
 	// Zero means "not set yet" — fit the whole recording once its length is known.
-	const visible = visibleSeconds > 0 ? visibleSeconds : Math.max(duration, 1);
+	const maximumVisible = Math.max(duration, MIN_VISIBLE_SECONDS);
+	const visible = Math.min(
+		visibleSeconds > 0 ? visibleSeconds : maximumVisible,
+		maximumVisible,
+	);
 	const trackContentWidth = Math.max(0, trackWidth - TRACK_GUTTER);
 	const pixelsPerSecond =
 		trackContentWidth > 0 ? trackContentWidth / visible : 0;
@@ -298,11 +338,18 @@ export function Timeline() {
 					};
 				case "caption": {
 					if (!current.captions) return current;
+					const selectedTrackId =
+						selection.id ??
+						timeline.captionSegments?.[selection.index]?.id ??
+						"";
+					const sourceId = selectedTrackId.split("::edl", 1)[0];
 					return {
 						...current,
 						captions: {
 							...current.captions,
-							segments: without(current.captions.segments),
+							segments: current.captions.segments.filter(
+								(segment) => segment.id !== sourceId,
+							),
 						},
 					};
 				}
@@ -333,26 +380,75 @@ export function Timeline() {
 		setSelection(null);
 	};
 
+	const showTransientMergePreview = (time: number) => {
+		if (mergePreviewTimeoutRef.current !== null) {
+			window.clearTimeout(mergePreviewTimeoutRef.current);
+		}
+		setMergePreview({ time, frozen: false });
+		mergePreviewTimeoutRef.current = window.setTimeout(() => {
+			setMergePreview(null);
+			mergePreviewTimeoutRef.current = null;
+		}, 700);
+	};
+
+	const mergePreviewBoundaries = useMemo(() => {
+		const segments = project?.timeline?.segments ?? [];
+		const offsets = segmentOffsets(segments);
+		return segments
+			.slice(0, -1)
+			.map((segment, index) => offsets[index] + segmentDuration(segment));
+	}, [project?.timeline?.segments]);
+
+	const toggleFrozenMergePreview = () => {
+		if (mergePreviewTimeoutRef.current !== null) {
+			window.clearTimeout(mergePreviewTimeoutRef.current);
+			mergePreviewTimeoutRef.current = null;
+		}
+		if (mergePreview?.frozen) {
+			setMergePreview(null);
+			return;
+		}
+		const playhead = playback.getTime();
+		const boundary = mergePreviewBoundaries.reduce<number | null>(
+			(nearest, candidate) =>
+				nearest === null ||
+				Math.abs(candidate - playhead) < Math.abs(nearest - playhead)
+					? candidate
+					: nearest,
+			null,
+		);
+		if (boundary !== null) setMergePreview({ time: boundary, frozen: true });
+	};
+
 	/** Rejoins the clip at `index` with the one after it. Duration-preserving,
 	 * so unlike a delete this needs no ripple across the other tracks. */
 	const mergeClipsAt = (index: number) => {
-		setProject((current) => {
-			if (!current.timeline) return current;
-			const segments = mergeClips(current.timeline.segments, index);
-			if (segments === current.timeline.segments) return current;
+		const segments = project?.timeline?.segments ?? [];
+		const left = segments[index];
+		if (!left) return;
+		const boundary = segmentOffsets(segments)[index] + segmentDuration(left);
+		showTransientMergePreview(boundary);
+		window.setTimeout(
+			() =>
+				setProject((current) => {
+					if (!current.timeline) return current;
+					const segments = mergeClips(current.timeline.segments, index);
+					if (segments === current.timeline.segments) return current;
 
-			return {
-				...current,
-				timeline: {
-					...current.timeline,
-					segments,
-					transitions: transitionsAfterClipMerge(
-						current.timeline.transitions ?? [],
-						index,
-					),
-				},
-			};
-		});
+					return {
+						...current,
+						timeline: {
+							...current.timeline,
+							segments,
+							transitions: transitionsAfterClipMerge(
+								current.timeline.transitions ?? [],
+								index,
+							),
+						},
+					};
+				}),
+			MERGE_ANIMATION_DURATION_MS,
+		);
 		setSelection({ type: "clip", index });
 	};
 
@@ -443,6 +539,12 @@ export function Timeline() {
 					mode: "blur" as const,
 					center: { x: 0.5, y: 0.5 },
 					size: { x: 0.25, y: 0.15 },
+					shape: "roundedRect" as const,
+					amount: 16,
+					feather: 0.12,
+					darkness: 0.55,
+					fadeDuration: 0.2,
+					enabled: true,
 				},
 			].sort((a, b) => a.start - b.start),
 		}));
@@ -496,6 +598,13 @@ export function Timeline() {
 
 		const length = await audioDuration(picked);
 		const name = picked.split(/[\\/]/).pop() ?? "Audio";
+		const start = playback.getTime();
+		const end =
+			duration > 0 ? Math.min(start + length, duration) : start + length;
+		if (end - start < 0.05) {
+			toast.error("Move the playhead earlier to add this audio");
+			return;
+		}
 
 		show("audio");
 		updateTimeline((timeline) => ({
@@ -503,11 +612,17 @@ export function Timeline() {
 			audioSegments: [
 				...(timeline.audioSegments ?? []),
 				{
-					start: playback.getTime(),
-					end: playback.getTime() + length,
+					start,
+					end,
+					track: 0,
 					path: picked,
 					name,
 					enabled: true,
+					trimStart: 0,
+					volumeDb: 0,
+					fadeIn: 0,
+					fadeOut: 0,
+					duration: length,
 				},
 			].sort((a, b) => a.start - b.start),
 		}));
@@ -521,19 +636,40 @@ export function Timeline() {
 	};
 
 	const generateKeyboard = async () => {
+		const settings = project?.keyboard?.settings ?? DEFAULT_KEYBOARD_SETTINGS;
 		const result = await commands.generateKeyboardSegments(
-			400,
-			1200,
-			true,
-			true,
+			settings.groupingThresholdMs,
+			settings.lingerDuration * 1000,
+			settings.showModifiers,
+			settings.showSpecialKeys,
 		);
-		if (result.status === "error") return;
+		if (result.status === "error") {
+			toast.error(result.error);
+			return;
+		}
+		if (result.data.length === 0) {
+			toast.error("No recorded keystrokes were found");
+			return;
+		}
 
 		show("keyboard");
-		updateTimeline((timeline) => ({
-			...timeline,
-			keyboardSegments: result.data,
-		}));
+		setProject((current) =>
+			current.timeline
+				? {
+						...current,
+						keyboard: {
+							settings: {
+								...(current.keyboard?.settings ?? DEFAULT_KEYBOARD_SETTINGS),
+								enabled: true,
+							},
+						},
+						timeline: {
+							...current.timeline,
+							keyboardSegments: result.data,
+						},
+					}
+				: current,
+		);
 	};
 
 	// Ruler ticks land on whole seconds, thinned out as the timeline zooms out
@@ -592,6 +728,26 @@ export function Timeline() {
 						Auto zoom
 					</EditorButton>
 
+					{import.meta.env.DEV && (
+						<EditorButton
+							aria-label={
+								mergePreview?.frozen
+									? "Hide frozen merge preview"
+									: "Freeze merge preview at the nearest clip boundary"
+							}
+							aria-pressed={mergePreview?.frozen ?? false}
+							tooltip={
+								mergePreview?.frozen
+									? "Hide frozen merge preview"
+									: "Freeze merge preview at the nearest clip boundary"
+							}
+							pressed={mergePreview?.frozen ?? false}
+							disabled={mergePreviewBoundaries.length === 0}
+							onClick={toggleFrozenMergePreview}
+							leftIcon={<IconLucideGitMerge className="size-4" />}
+						/>
+					)}
+
 					<div className="ml-auto flex items-center gap-2">
 						<EditorButton
 							tooltip="Zoom timeline out"
@@ -629,7 +785,7 @@ export function Timeline() {
 
 				<div
 					ref={trackAreaRef}
-					className="custom-scroll relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto pr-1 "
+					className="custom-scroll relative min-h-0 w-full flex-1 overflow-x-hidden overflow-y-auto pr-1"
 					onPointerDown={(event) => {
 						// Clicking empty timeline scrubs; segments stop propagation so
 						// they select or split instead.
@@ -655,7 +811,7 @@ export function Timeline() {
 						);
 					}}
 				>
-					<div className="relative flex min-h-full flex-col gap-2">
+					<div className="relative flex min-h-full w-full flex-col gap-2">
 						<div className="relative h-4 text-xs text-gray-9 ml-10">
 							{ticks.map((time) => (
 								<span
@@ -676,6 +832,8 @@ export function Timeline() {
 								onSplit={splitAt}
 								onMerge={mergeClipsAt}
 								onDelete={(index) => deleteSelection({ type: "clip", index })}
+								mergeTime={mergePreview?.time}
+								mergePreviewFrozen={mergePreview?.frozen ?? false}
 							/>
 							<TransitionMarkers />
 						</TrackRoot>
@@ -728,6 +886,9 @@ export function Timeline() {
 									onMerge={(index) => mergeTrackAt("maskSegments", index)}
 									onDelete={(index) => deleteSelection({ type: "mask", index })}
 									label={(segment) => segment.mode ?? "blur"}
+									renderContent={(segment, _index, width) => (
+										<MaskSegmentContent segment={segment} width={width} />
+									)}
 									onChange={(index, next) =>
 										updateTimeline((current) => ({
 											...current,
@@ -790,15 +951,16 @@ export function Timeline() {
 							</TrackRoot>
 						)}
 
-						{(project?.captions?.segments.length ?? 0) > 0 && (
-							<TrackRoot
-								label="Captions"
-								icon={<IconLucideCaptions className="size-4" />}
-								height="2rem"
-							>
-								<CaptionsTrack />
-							</TrackRoot>
-						)}
+						{FEATURES.captions &&
+							(project?.captions?.segments.length ?? 0) > 0 && (
+								<TrackRoot
+									label="Captions"
+									icon={<IconLucideCaptions className="size-4" />}
+									height="2rem"
+								>
+									<CaptionsTrack />
+								</TrackRoot>
+							)}
 
 						{pixelsPerSecond > 0 && <Playhead />}
 					</div>

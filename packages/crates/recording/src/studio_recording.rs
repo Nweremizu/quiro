@@ -13,7 +13,7 @@ use crate::{
     },
     cursor::{CursorActor, Cursors, IncrementalCaptureOutputs, spawn_cursor_recorder},
     feeds::{camera::CameraFeedLock, microphone::MicrophoneFeedLock},
-    ffmpeg::{FragmentedAudioMuxer, FragmentedAudioMuxerConfig, OggMuxer},
+    ffmpeg::{FragmentedAudioMuxer, FragmentedAudioMuxerConfig},
     output_pipeline::{
         AudioAnchor, AudioGapSummary, DoneFut, FinishedOutputPipeline, OutputPipeline,
         PipelineDoneError,
@@ -1642,24 +1642,14 @@ async fn create_segment_pipeline(
     };
 
     let microphone = if let Some(mic_feed) = base_inputs.mic_feed {
-        let pipeline = if segment_fragmented {
-            let output_path = dir.join("audio-input.m4a");
-            OutputPipeline::builder(output_path)
-                .with_audio_source::<sources::Microphone>(mic_feed)
-                .with_timestamps(start_time)
-                .build::<FragmentedAudioMuxer>(FragmentedAudioMuxerConfig {
-                    shared_pause_state: shared_pause_state.clone(),
-                })
-                .instrument(error_span!("mic-out"))
-                .await
-        } else {
-            OutputPipeline::builder(dir.join("audio-input.ogg"))
-                .with_audio_source::<sources::Microphone>(mic_feed)
-                .with_timestamps(start_time)
-                .build::<OggMuxer>(())
-                .instrument(error_span!("mic-out"))
-                .await
-        };
+        let pipeline = OutputPipeline::builder(dir.join("audio-input.m4a"))
+            .with_audio_source::<sources::Microphone>(mic_feed)
+            .with_timestamps(start_time)
+            .build::<FragmentedAudioMuxer>(FragmentedAudioMuxerConfig {
+                shared_pause_state: shared_pause_state.clone(),
+            })
+            .instrument(error_span!("mic-out"))
+            .await;
         Some(pipeline.context("microphone pipeline setup")?)
     } else {
         None
@@ -1671,26 +1661,15 @@ async fn create_segment_pipeline(
         // anchor the track at the recording epoch. This keeps a late first
         // sound from becoming the latest start_time and cutting the head off
         // the display/mic/camera tracks at playback.
-        let pipeline = if segment_fragmented {
-            let output_path = dir.join("system_audio.m4a");
-            OutputPipeline::builder(output_path)
-                .with_audio_source::<screen_capture::SystemAudioSource>(system_audio_source)
-                .with_timestamps(start_time)
-                .with_audio_anchor(AudioAnchor::PipelineEpoch)
-                .build::<FragmentedAudioMuxer>(FragmentedAudioMuxerConfig {
-                    shared_pause_state: shared_pause_state.clone(),
-                })
-                .instrument(error_span!("system-audio-out"))
-                .await
-        } else {
-            OutputPipeline::builder(dir.join("system_audio.ogg"))
-                .with_audio_source::<screen_capture::SystemAudioSource>(system_audio_source)
-                .with_timestamps(start_time)
-                .with_audio_anchor(AudioAnchor::PipelineEpoch)
-                .build::<OggMuxer>(())
-                .instrument(error_span!("system-audio-out"))
-                .await
-        };
+        let pipeline = OutputPipeline::builder(dir.join("system_audio.m4a"))
+            .with_audio_source::<screen_capture::SystemAudioSource>(system_audio_source)
+            .with_timestamps(start_time)
+            .with_audio_anchor(AudioAnchor::PipelineEpoch)
+            .build::<FragmentedAudioMuxer>(FragmentedAudioMuxerConfig {
+                shared_pause_state: shared_pause_state.clone(),
+            })
+            .instrument(error_span!("system-audio-out"))
+            .await;
         Some(pipeline.context("system audio pipeline setup")?)
     } else {
         None

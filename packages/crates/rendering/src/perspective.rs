@@ -327,6 +327,60 @@ pub fn inv_perspective_for_display(
     inverse_matrix(&perspective, center)
 }
 
+pub fn project_rect_for_display(
+    config: Option<&quiro_project::PerspectiveConfiguration>,
+    layer_rotation_deg: f32,
+    target_bounds: [f32; 4],
+    rect: [f32; 4],
+) -> [f32; 4] {
+    let mut perspective = config.map(Perspective::from).unwrap_or_default();
+    perspective.rotate_deg += layer_rotation_deg;
+    if perspective.is_identity() {
+        return rect;
+    }
+
+    let center = [
+        (target_bounds[0] + target_bounds[2]) * 0.5,
+        (target_bounds[1] + target_bounds[3]) * 0.5,
+    ];
+    let matrix = forward(&perspective);
+    let project = |point: [f32; 2]| {
+        let x = point[0] - center[0];
+        let y = point[1] - center[1];
+        let w = matrix[2][0] * x + matrix[2][1] * y + matrix[2][2];
+        if w <= f32::EPSILON {
+            return point;
+        }
+        [
+            (matrix[0][0] * x + matrix[0][1] * y) / w + center[0],
+            (matrix[1][0] * x + matrix[1][1] * y) / w + center[1],
+        ]
+    };
+    let corners = [
+        project([rect[0], rect[1]]),
+        project([rect[0] + rect[2], rect[1]]),
+        project([rect[0], rect[1] + rect[3]]),
+        project([rect[0] + rect[2], rect[1] + rect[3]]),
+    ];
+    let min_x = corners
+        .iter()
+        .map(|point| point[0])
+        .fold(f32::INFINITY, f32::min);
+    let min_y = corners
+        .iter()
+        .map(|point| point[1])
+        .fold(f32::INFINITY, f32::min);
+    let max_x = corners
+        .iter()
+        .map(|point| point[0])
+        .fold(f32::NEG_INFINITY, f32::max);
+    let max_y = corners
+        .iter()
+        .map(|point| point[1])
+        .fold(f32::NEG_INFINITY, f32::max);
+    [min_x, min_y, max_x - min_x, max_y - min_y]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

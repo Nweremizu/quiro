@@ -68,6 +68,11 @@ fn interpolate_scalar(base: f64, keys: &[MaskScalarKeyframe], time: f64) -> f64 
     sorted.last().map(|k| k.value).unwrap_or(base)
 }
 
+fn smoothstep(value: f64) -> f64 {
+    let progress = value.clamp(0.0, 1.0);
+    progress * progress * (3.0 - 2.0 * progress)
+}
+
 pub fn interpolate_masks(
     output_size: XY<u32>,
     frame_time: f64,
@@ -107,13 +112,14 @@ pub fn interpolate_masks(
                     &segment.keyframes.intensity,
                     relative_time,
                 );
-                let fade_duration = segment.fade_duration.max(0.0);
+                let segment_duration = (segment.end - segment.start).max(0.0);
+                let fade_duration = segment.fade_duration.clamp(0.0, segment_duration * 0.5);
                 if fade_duration > 0.0 {
                     let time_since_start = (frame_time - segment.start).max(0.0);
                     let time_until_end = (segment.end - frame_time).max(0.0);
-                    let fade_in = (time_since_start / fade_duration).min(1.0);
-                    let fade_out = (time_until_end / fade_duration).min(1.0);
-                    intensity *= fade_in * fade_out;
+                    let fade_in = smoothstep(time_since_start / fade_duration);
+                    let fade_out = smoothstep(time_until_end / fade_duration);
+                    intensity *= fade_in.min(fade_out);
                 }
                 (MaskRenderMode::Highlight, intensity.clamp(0.0, 1.0), 0.0)
             }
@@ -215,7 +221,10 @@ pub fn mask_from_annotation(
             ((x + width / 2.0) / out_w).clamp(0.0, 1.0),
             ((y + height / 2.0) / out_h).clamp(0.0, 1.0),
         ),
-        size: XY::new((width / out_w).clamp(0.0, 2.0), (height / out_h).clamp(0.0, 2.0)),
+        size: XY::new(
+            (width / out_w).clamp(0.0, 2.0),
+            (height / out_h).clamp(0.0, 2.0),
+        ),
         // Feather is suppressed for the same two reasons as a mask segment:
         // it would smear a spotlight's boundary, and it would leave partially
         // original pixels inside a redaction, breaking the one mode that
@@ -368,7 +377,9 @@ mod annotation_conversion_tests {
 
         assert_eq!(convert(&rounded).unwrap().corner_radius, 0.25);
         assert_eq!(
-            convert(&mask_annotation(MaskMode::Blur)).unwrap().corner_radius,
+            convert(&mask_annotation(MaskMode::Blur))
+                .unwrap()
+                .corner_radius,
             0.0
         );
     }
@@ -442,6 +453,36 @@ mod tests {
 
         assert_eq!(masks[0].opacity, 1.0);
         assert_eq!(masks[0].mode, MaskRenderMode::Pixelate);
+    }
+
+    #[test]
+    fn spotlight_eases_symmetrically_at_both_segment_edges() {
+        let mut segment = sample_segment();
+        segment.mode = MaskMode::Spotlight;
+        segment.opacity = 0.8;
+        segment.fade_duration = 0.4;
+
+        let opacity_at = |time| {
+            interpolate_masks(XY::new(1920, 1080), time, std::slice::from_ref(&segment))[0].opacity
+        };
+
+        assert_eq!(opacity_at(0.0), 0.0);
+        assert!((opacity_at(0.2) - 0.4).abs() < 1e-6);
+        assert!((opacity_at(0.4) - 0.8).abs() < 1e-6);
+        assert!((opacity_at(9.8) - 0.4).abs() < 1e-6);
+        assert_eq!(opacity_at(10.0), 0.0);
+    }
+
+    #[test]
+    fn spotlight_fade_is_clamped_to_half_of_a_short_segment() {
+        let mut segment = sample_segment();
+        segment.mode = MaskMode::Spotlight;
+        segment.end = 0.2;
+        segment.fade_duration = 1.0;
+
+        let masks = interpolate_masks(XY::new(1920, 1080), 0.1, &[segment]);
+
+        assert_eq!(masks[0].opacity, 1.0);
     }
 
     #[test]
@@ -697,8 +738,8 @@ mod gpu_pixel_tests {
         );
         assert_eq!(
             *distinct.iter().next().unwrap(),
-            [0, 0, 0],
-            "redaction must be opaque black"
+            [32, 34, 38],
+            "redaction must be opaque graphite"
         );
     }
 

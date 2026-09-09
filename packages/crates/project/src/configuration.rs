@@ -666,6 +666,9 @@ pub enum CursorType {
     Auto,
     Pointer,
     Circle,
+    MacosDark,
+    Rounded,
+    Capsule,
 }
 
 #[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -1096,7 +1099,7 @@ pub struct MaskSegment {
     pub feather: f64,
     #[serde(default = "MaskSegment::default_opacity")]
     pub opacity: f64,
-    #[serde(default)]
+    #[serde(default = "MaskSegment::default_darkness")]
     pub darkness: f64,
     #[serde(default = "MaskSegment::default_fade_duration")]
     pub fade_duration: f64,
@@ -1117,8 +1120,12 @@ impl MaskSegment {
         mask_effect_contract().default_amount
     }
 
+    fn default_darkness() -> f64 {
+        0.55
+    }
+
     fn default_fade_duration() -> f64 {
-        0.15
+        0.2
     }
 }
 
@@ -3048,7 +3055,7 @@ mod tests {
                     speed_audio_mode: None,
                     transform: None,
                     perspective: None,
-                    },
+                },
                 TimelineSegment {
                     recording_clip: 1,
                     timescale: 1.0,
@@ -3058,7 +3065,7 @@ mod tests {
                     speed_audio_mode: None,
                     transform: None,
                     perspective: None,
-                    },
+                },
             ],
             transitions,
             zoom_segments: Vec::new(),
@@ -3254,6 +3261,8 @@ mod tests {
         .unwrap();
 
         assert_eq!(segment.amount, 16.0);
+        assert_eq!(segment.darkness, 0.55);
+        assert_eq!(segment.fade_duration, 0.2);
     }
 
     #[test]

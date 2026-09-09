@@ -27,17 +27,22 @@ function toNormRect(
 	return {
 		x: rect[0] / outputWidth,
 		y: rect[1] / outputHeight,
-		w: rect[2] / outputWidth,
-		h: rect[3] / outputHeight,
+		w: (rect[2] - rect[0]) / outputWidth,
+		h: (rect[3] - rect[1]) / outputHeight,
 	};
 }
 
 export function CanvasElementsOverlay({ size }: { size: OverlaySize }) {
-	const { project, setProject, playback } = useEditorContext();
+	const { project, previewProject, setProject, playback } = useEditorContext();
 	const frameLayout = useFrameLayout(playback);
 	const [guides, setGuides] = useState<SnapGuide[]>([]);
 	const [dragging, setDragging] = useState<"display" | "camera" | null>(null);
-	const draggingRef = useRef<{ startX: number; startY: number } | null>(null);
+	const draggingRef = useRef<{
+		startX: number;
+		startY: number;
+		center: XY<number>;
+		moved: boolean;
+	} | null>(null);
 
 	if (!project || !frameLayout || size.width === 0) return null;
 
@@ -57,7 +62,12 @@ export function CanvasElementsOverlay({ size }: { size: OverlaySize }) {
 		event.stopPropagation();
 
 		setDragging(which);
-		draggingRef.current = { startX: event.clientX, startY: event.clientY };
+		draggingRef.current = {
+			startX: event.clientX,
+			startY: event.clientY,
+			center: { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 },
+			moved: false,
+		};
 
 		const others = which === "display" ? (camera ? [camera] : []) : [display];
 		const targets = buildSnapTargets(others, {
@@ -76,8 +86,8 @@ export function CanvasElementsOverlay({ size }: { size: OverlaySize }) {
 
 			const moved: NormRect = {
 				...rect,
-				x: Math.min(Math.max(rect.x + dx, -rect.w / 2), 1 - rect.w / 2),
-				y: Math.min(Math.max(rect.y + dy, -rect.h / 2), 1 - rect.h / 2),
+				x: Math.min(Math.max(rect.x + dx, 0), 1 - rect.w),
+				y: Math.min(Math.max(rect.y + dy, 0), 1 - rect.h),
 			};
 
 			const {
@@ -96,8 +106,10 @@ export function CanvasElementsOverlay({ size }: { size: OverlaySize }) {
 				x: moved.x + snapX + moved.w / 2,
 				y: moved.y + snapY + moved.h / 2,
 			};
+			origin.center = center;
+			origin.moved = true;
 
-			setProject((current) =>
+			previewProject((current) =>
 				which === "camera"
 					? {
 							...current,
@@ -111,6 +123,26 @@ export function CanvasElementsOverlay({ size }: { size: OverlaySize }) {
 		};
 
 		const up = () => {
+			const completed = draggingRef.current;
+			if (completed?.moved) {
+				setProject((current) =>
+					which === "camera"
+						? {
+								...current,
+								camera: {
+									...current.camera,
+									manualPosition: completed.center,
+								},
+							}
+						: {
+								...current,
+								background: {
+									...current.background,
+									displayPosition: completed.center,
+								},
+							},
+				);
+			}
 			window.removeEventListener("pointermove", move);
 			window.removeEventListener("pointerup", up);
 			draggingRef.current = null;
@@ -148,10 +180,16 @@ export function CanvasElementsOverlay({ size }: { size: OverlaySize }) {
 				<button
 					type="button"
 					aria-label="Move camera"
-					style={box(camera)}
+					style={{
+						...box(camera),
+						borderRadius: `${
+							(project.camera.rounding / 200) *
+							Math.min(camera.w * size.width, camera.h * size.height)
+						}px`,
+					}}
 					onPointerDown={(event) => startDrag("camera", camera, event)}
 					className={cn(
-						"absolute cursor-move rounded-full border-2 border-transparent transition-colors",
+						"absolute cursor-move border-2 border-transparent transition-colors",
 						dragging === "camera"
 							? "border-accent-border-selected"
 							: "hover:border-accent-border-selected/60",

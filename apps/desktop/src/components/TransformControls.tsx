@@ -1,10 +1,10 @@
 import { type ReactNode, useCallback, useRef } from "react";
 import { PanelSection } from "@/components/PanelSection";
+import { Slider } from "@/routes/screenshot-editor/ui";
 import type { LayerTransform, PerspectiveConfiguration } from "@/utils/tauri";
 import IconLucideMove from "~icons/lucide/move";
 import IconLucideRotate3d from "~icons/lucide/rotate-3d";
 import IconLucideSearch from "~icons/lucide/search";
-import { Slider } from "@/routes/screenshot-editor/ui";
 
 // Zoom / Position / Rotation for the capture — the three things you can do to
 // it once the background around it is settled.
@@ -120,7 +120,7 @@ function useNormalisedDrag(onMove: (x: number, y: number) => void) {
 function Handle({ x, y }: { x: number; y: number }) {
 	return (
 		<div
-			className="pointer-events-none absolute size-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-white bg-accent-solid shadow-md"
+			className="pointer-events-none absolute size-6 -translate-x-1/2 dark-button-shadow -translate-y-1/2 rounded-full border-4 border-white bg-accent-solid shadow-md"
 			style={{ left: `${x * 100}%`, top: `${y * 100}%` }}
 		/>
 	);
@@ -132,6 +132,7 @@ export function TransformControls({
 	canvas,
 	laidOutCentre,
 	focusBackdrop,
+	positionPadStyle = "classic",
 	onTransformChange,
 	onPerspectiveChange,
 	onDragEnd,
@@ -150,6 +151,7 @@ export function TransformControls({
 	 * `null` and gets the Scale slider without the pad, since a focal point
 	 * picked against a blank square is a worse control than none. */
 	focusBackdrop?: ReactNode;
+	positionPadStyle?: "classic" | "zoom";
 	onTransformChange: (patch: Partial<LayerTransform>) => void;
 	onPerspectiveChange: (patch: Partial<PerspectiveConfiguration>) => void;
 	/** Called when a drag begins, returning nothing — callers use it to open a
@@ -157,6 +159,15 @@ export function TransformControls({
 	onDragEnd?: () => void;
 }) {
 	const hasCanvas = canvas.width > 0 && canvas.height > 0;
+	const zoomPositionPad = positionPadStyle === "zoom";
+	const positionInset = zoomPositionPad ? 0.08 : 0;
+	const positionPercent = (value: number) =>
+		(positionInset + value * (1 - 2 * positionInset)) * 100;
+	const positionPoints = zoomPositionPad
+		? SNAP_POINTS.filter(
+				(point) => point.x === 0 || point.x === 0.5 || point.x === 1,
+			)
+		: SNAP_POINTS;
 
 	// Position is expressed as the card's own centre inside the canvas — the
 	// question "where is the capture in the frame" — rather than as the raw
@@ -183,7 +194,12 @@ export function TransformControls({
 	// The pad *is* the canvas: its box maps 1:1 onto the output frame, so the
 	// handle sits where the capture actually sits.
 	const position = useNormalisedDrag((x, y) => {
-		const snapped = { x: snap(x, SNAP_COLUMNS), y: snap(y, SNAP_ROWS) };
+		const normalise = (value: number) =>
+			clamp01((value - positionInset) / (1 - 2 * positionInset));
+		const snapped = {
+			x: snap(normalise(x), zoomPositionPad ? 3 : SNAP_COLUMNS),
+			y: snap(normalise(y), SNAP_ROWS),
+		};
 		setCentrePx(snapped.x * canvas.width, snapped.y * canvas.height);
 	});
 
@@ -242,27 +258,64 @@ export function TransformControls({
 						ref={position.ref}
 						onPointerDown={position.onPointerDown}
 						onPointerMove={position.onPointerMove}
-						className="relative cursor-crosshair rounded-lg bg-gray-3 touch-none p-3 flex items-center justify-center"
+						className={
+							zoomPositionPad
+								? "relative aspect-video cursor-crosshair touch-none select-none overflow-hidden rounded-xl bg-gray-3"
+								: "relative cursor-crosshair rounded-lg bg-gray-3 touch-none p-3 flex items-center justify-center"
+						}
 						style={{
 							aspectRatio: hasCanvas
 								? `${canvas.width} / ${canvas.height}`
 								: "16 / 9",
 						}}
 					>
-						{/* Snap targets, drawn where `snap` actually pulls to. */}
-						<div className="pointer-events-none absolute inset-3">
-							{SNAP_POINTS.map((point) => (
+						{zoomPositionPad && (
+							<>
+								<span
+									aria-hidden="true"
+									className="pointer-events-none absolute inset-x-[8%] top-1/2 h-px bg-gray-5"
+								/>
+								<span
+									aria-hidden="true"
+									className="pointer-events-none absolute inset-y-[8%] left-1/2 w-px bg-gray-5"
+								/>
+							</>
+						)}
+						<div
+							aria-hidden="true"
+							className={
+								zoomPositionPad
+									? "pointer-events-none absolute inset-0"
+									: "pointer-events-none absolute inset-3"
+							}
+						>
+							{positionPoints.map((point) => (
 								<div
 									key={`${point.x}x${point.y}`}
-									className="pointer-events-none absolute size-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gray-8"
+									className={
+										zoomPositionPad
+											? "pointer-events-none absolute size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gray-8"
+											: "pointer-events-none absolute size-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gray-8"
+									}
 									style={{
-										left: `${point.x * 100}%`,
-										top: `${point.y * 100}%`,
+										left: `${positionPercent(point.x)}%`,
+										top: `${positionPercent(point.y)}%`,
 									}}
 								/>
 							))}
 						</div>
-						<Handle x={positionHandle.x} y={positionHandle.y} />
+						{zoomPositionPad ? (
+							<span
+								aria-hidden="true"
+								className="pointer-events-none absolute z-20 size-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-gray-5 bg-accent-solid"
+								style={{
+									left: `${positionPercent(positionHandle.x)}%`,
+									top: `${positionPercent(positionHandle.y)}%`,
+								}}
+							/>
+						) : (
+							<Handle x={positionHandle.x} y={positionHandle.y} />
+						)}
 					</div>
 
 					<Slider

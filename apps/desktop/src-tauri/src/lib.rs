@@ -2,30 +2,32 @@ mod audio_meter;
 mod camera;
 mod camera_commands;
 mod camera_legacy;
-mod clip_thumbnails;
+mod captions;
 mod capture;
 mod capture_targets;
+mod clip_thumbnails;
 mod crash_sentinel;
 mod devices;
 mod diagnostics;
 mod editor;
-mod export;
 mod exit_shutdown;
+mod export;
 mod fake_window;
 mod fonts;
 pub mod frame_ws;
 mod general_settings;
 mod gpu_context;
 mod hotkeys;
+mod http_client;
 mod import;
-mod preview_encoder;
 mod library;
 #[cfg(target_os = "windows")]
 mod nvapi_power_policy;
 mod permissions;
-mod presets;
 mod platform;
 mod power_observer;
+mod presets;
+mod preview_encoder;
 mod recording;
 mod recording_settings;
 mod screenshot_editor;
@@ -97,6 +99,17 @@ impl CameraWindowCloseGate {
 }
 
 pub struct AppExitState(AtomicBool);
+
+pub(crate) fn should_show_onboarding(app: &AppHandle) -> bool {
+    let settings = general_settings::GeneralSettingsStore::get(app)
+        .ok()
+        .flatten();
+    settings
+        .as_ref()
+        .map(|value| !value.has_completed_onboarding)
+        .unwrap_or(true)
+        || !permissions::do_permissions_check(false).necessary_granted()
+}
 
 impl Default for AppExitState {
     fn default() -> Self {
@@ -612,218 +625,219 @@ impl App {
 pub mod input_commands {
     use super::*;
 
-#[tauri::command]
-#[specta::specta]
-pub async fn set_mic_input(
-    state: MutableState<'_, App>,
-    label: Option<String>,
-) -> Result<(), String> {
-    let desired_label = label;
+    #[tauri::command]
+    #[specta::specta]
+    pub async fn set_mic_input(
+        state: MutableState<'_, App>,
+        label: Option<String>,
+    ) -> Result<(), String> {
+        let desired_label = label;
 
-    let (mic_feed, previous_label, app_handle) = {
-        let mut app = state.write().await;
-        app.ensure_mic_feed_alive().await?;
+        let (mic_feed, previous_label, app_handle) = {
+            let mut app = state.write().await;
+            app.ensure_mic_feed_alive().await?;
 
-        if desired_label == app.selected_mic_label {
-            if desired_label.is_some() && !matches!(app.recording_state, RecordingState::Active { .. })
-            {
-                app.ensure_selected_mic_ready().await?;
+            if desired_label == app.selected_mic_label {
+                if desired_label.is_some()
+                    && !matches!(app.recording_state, RecordingState::Active { .. })
+                {
+                    app.ensure_selected_mic_ready().await?;
+                }
+                return Ok(());
             }
+
+            let previous_label = app.selected_mic_label.clone();
+            app.selected_mic_label = desired_label.clone();
+
+            (app.mic_feed.clone(), previous_label, app.handle.clone())
+        };
+
+        let apply_result = async {
+            match desired_label.as_ref() {
+                None => {
+                    mic_feed
+                        .ask(microphone::RemoveInput)
+                        .await
+                        .map_err(|e| e.to_string())?;
+                }
+                Some(label) => {
+                    let settings =
+                        recording_settings::RecordingSettingsStore::microphone_settings_for(
+                            &app_handle,
+                            label,
+                        );
+                    mic_feed
+                        .ask(microphone::SetInput {
+                            label: label.clone(),
+                            settings,
+                        })
+                        .await
+                        .map_err(|e| e.to_string())?
+                        .await
+                        .map_err(|e| e.to_string())?;
+                }
+            }
+
+            Ok::<(), String>(())
+        }
+        .await;
+
+        match apply_result {
+            Ok(()) => {
+                let mut app = state.write().await;
+                let cleared = app
+                    .disconnected_inputs
+                    .remove(&RecordingInputKind::Microphone);
+
+                if cleared {
+                    let _ = RecordingEvent::InputRestored {
+                        input: RecordingInputKind::Microphone,
+                    }
+                    .emit(&app.handle);
+                }
+
+                Ok(())
+            }
+            Err(err) => {
+                let mut app = state.write().await;
+                if app.selected_mic_label == desired_label {
+                    app.selected_mic_label = previous_label;
+                }
+                Err(err)
+            }
+        }
+    }
+
+    #[tauri::command]
+    #[specta::specta]
+    pub async fn set_camera_input(
+        app_handle: AppHandle,
+        state: MutableState<'_, App>,
+        id: Option<DeviceOrModelID>,
+        skip_camera_window: Option<bool>,
+    ) -> Result<(), String> {
+        let operation_lock = app_handle.state::<CameraWindowOperationLock>();
+        let _operation_guard = operation_lock.lock().await;
+
+        let (camera_feed, current_id, camera_in_use) = {
+            let app = state.read().await;
+            (
+                app.camera_feed.clone(),
+                app.selected_camera_id.clone(),
+                app.camera_in_use,
+            )
+        };
+
+        let skip_camera_window = skip_camera_window.unwrap_or(false);
+        let camera_window_is_visible = WindowId::Camera
+            .get(&app_handle)
+            .and_then(|window| window.is_visible().ok())
+            .unwrap_or(false);
+
+        if id == current_id && camera_in_use && !skip_camera_window {
+            if !camera_window_is_visible {
+                ShowQuiroWindow::Camera { centered: false }
+                    .show(&app_handle)
+                    .await
+                    .map(|_| ())
+                    .map_err(|err| error!("Failed to show camera preview window: {err}"))
+                    .ok();
+            }
+
             return Ok(());
         }
 
-        let previous_label = app.selected_mic_label.clone();
-        app.selected_mic_label = desired_label.clone();
-
-        (app.mic_feed.clone(), previous_label, app.handle.clone())
-    };
-
-    let apply_result = async {
-        match desired_label.as_ref() {
+        match &id {
             None => {
-                mic_feed
-                    .ask(microphone::RemoveInput)
+                let shutdown_rx = {
+                    let app = &mut *state.write().await;
+                    app.camera_in_use = false;
+                    app.selected_camera_id = None;
+                    app.camera_cleanup_done = true;
+                    if skip_camera_window {
+                        app.camera_preview.begin_shutdown()
+                    } else {
+                        app.camera_preview.pause();
+                        None
+                    }
+                };
+
+                camera_feed
+                    .ask(feeds::camera::RemoveInput)
                     .await
                     .map_err(|e| e.to_string())?;
+
+                if let Some(rx) = shutdown_rx {
+                    let _ = tokio::time::timeout(Duration::from_millis(500), rx).await;
+                }
+
+                if !skip_camera_window && let Some(window) = WindowId::Camera.get(&app_handle) {
+                    let _ = window.hide();
+                }
             }
-            Some(label) => {
-                let settings = recording_settings::RecordingSettingsStore::microphone_settings_for(
+            Some(id) => {
+                emit_camera_preview_clear(&app_handle);
+                let settings = recording_settings::RecordingSettingsStore::camera_settings_for(
                     &app_handle,
-                    label,
+                    id,
                 );
-                mic_feed
-                    .ask(microphone::SetInput {
-                        label: label.clone(),
+
+                let (camera_ws_sender, camera_preview_sender, use_ws_preview) = {
+                    let app = &mut *state.write().await;
+                    let use_ws_preview = !(camera_window_is_visible
+                        && app.camera_preview.is_initialized()
+                        && !app.camera_preview.is_paused());
+                    app.selected_camera_id = Some(id.clone());
+                    app.camera_in_use = true;
+                    app.camera_cleanup_done = false;
+                    #[allow(deprecated)]
+                    (
+                        app.camera_ws_sender.clone(),
+                        app.camera_preview.sender(),
+                        use_ws_preview,
+                    )
+                };
+
+                sync_camera_preview_sender(
+                    &camera_feed,
+                    camera_ws_sender,
+                    camera_preview_sender,
+                    use_ws_preview,
+                )
+                .await;
+
+                if !skip_camera_window {
+                    show_camera_window_unlocked(&app_handle);
+                }
+
+                let result = camera_feed
+                    .ask(feeds::camera::SetInput {
+                        id: id.clone(),
                         settings,
                     })
                     .await
-                    .map_err(|e| e.to_string())?
-                    .await
-                    .map_err(|e| e.to_string())?;
-            }
-        }
+                    .map_err(|e| e.to_string());
 
-        Ok::<(), String>(())
-    }
-    .await;
-
-    match apply_result {
-        Ok(()) => {
-            let mut app = state.write().await;
-            let cleared = app
-                .disconnected_inputs
-                .remove(&RecordingInputKind::Microphone);
-
-            if cleared {
-                let _ = RecordingEvent::InputRestored {
-                    input: RecordingInputKind::Microphone,
-                }
-                .emit(&app.handle);
-            }
-
-            Ok(())
-        }
-        Err(err) => {
-            let mut app = state.write().await;
-            if app.selected_mic_label == desired_label {
-                app.selected_mic_label = previous_label;
-            }
-            Err(err)
-        }
-    }
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn set_camera_input(
-    app_handle: AppHandle,
-    state: MutableState<'_, App>,
-    id: Option<DeviceOrModelID>,
-    skip_camera_window: Option<bool>,
-) -> Result<(), String> {
-    let operation_lock = app_handle.state::<CameraWindowOperationLock>();
-    let _operation_guard = operation_lock.lock().await;
-
-    let (camera_feed, current_id, camera_in_use) = {
-        let app = state.read().await;
-        (
-            app.camera_feed.clone(),
-            app.selected_camera_id.clone(),
-            app.camera_in_use,
-        )
-    };
-
-    let skip_camera_window = skip_camera_window.unwrap_or(false);
-    let camera_window_is_visible = WindowId::Camera
-        .get(&app_handle)
-        .and_then(|window| window.is_visible().ok())
-        .unwrap_or(false);
-
-    if id == current_id && camera_in_use && !skip_camera_window {
-        if !camera_window_is_visible {
-            ShowQuiroWindow::Camera { centered: false }
-                .show(&app_handle)
-                .await
-                .map(|_| ())
-                .map_err(|err| error!("Failed to show camera preview window: {err}"))
-                .ok();
-        }
-
-        return Ok(());
-    }
-
-    match &id {
-        None => {
-            let shutdown_rx = {
-                let app = &mut *state.write().await;
-                app.camera_in_use = false;
-                app.selected_camera_id = None;
-                app.camera_cleanup_done = true;
-                if skip_camera_window {
-                    app.camera_preview.begin_shutdown()
-                } else {
-                    app.camera_preview.pause();
-                    None
-                }
-            };
-
-            camera_feed
-                .ask(feeds::camera::RemoveInput)
-                .await
-                .map_err(|e| e.to_string())?;
-
-            if let Some(rx) = shutdown_rx {
-                let _ = tokio::time::timeout(Duration::from_millis(500), rx).await;
-            }
-
-            if !skip_camera_window
-                && let Some(window) = WindowId::Camera.get(&app_handle)
-            {
-                let _ = window.hide();
-            }
-        }
-        Some(id) => {
-            emit_camera_preview_clear(&app_handle);
-            let settings =
-                recording_settings::RecordingSettingsStore::camera_settings_for(&app_handle, id);
-
-            let (camera_ws_sender, camera_preview_sender, use_ws_preview) = {
-                let app = &mut *state.write().await;
-                let use_ws_preview = !(camera_window_is_visible
-                    && app.camera_preview.is_initialized()
-                    && !app.camera_preview.is_paused());
-                app.selected_camera_id = Some(id.clone());
-                app.camera_in_use = true;
-                app.camera_cleanup_done = false;
-                #[allow(deprecated)]
-                (
-                    app.camera_ws_sender.clone(),
-                    app.camera_preview.sender(),
-                    use_ws_preview,
-                )
-            };
-
-            sync_camera_preview_sender(
-                &camera_feed,
-                camera_ws_sender,
-                camera_preview_sender,
-                use_ws_preview,
-            )
-            .await;
-
-            if !skip_camera_window {
-                show_camera_window_unlocked(&app_handle);
-            }
-
-            let result = camera_feed
-                .ask(feeds::camera::SetInput {
-                    id: id.clone(),
-                    settings,
-                })
-                .await
-                .map_err(|e| e.to_string());
-
-            match result {
-                Ok(ready) => match ready.await {
-                    Ok(_) => emit_camera_preview_clear(&app_handle),
+                match result {
+                    Ok(ready) => match ready.await {
+                        Ok(_) => emit_camera_preview_clear(&app_handle),
+                        Err(e) => {
+                            let message = camera_preview_error_message(&e.to_string());
+                            emit_camera_preview_error(&app_handle, message);
+                            return Err(e.to_string());
+                        }
+                    },
                     Err(e) => {
-                        let message = camera_preview_error_message(&e.to_string());
+                        let message = camera_preview_error_message(&e);
                         emit_camera_preview_error(&app_handle, message);
-                        return Err(e.to_string());
+                        return Err(e);
                     }
-                },
-                Err(e) => {
-                    let message = camera_preview_error_message(&e);
-                    emit_camera_preview_error(&app_handle, message);
-                    return Err(e);
                 }
             }
         }
+
+        Ok(())
     }
-
-    Ok(())
-}
-
 }
 
 pub(crate) use input_commands::set_mic_input;
@@ -1002,7 +1016,9 @@ fn spawn_device_watchers(app: AppHandle) {
 
                 let mut guard = state.write().await;
                 let _ = if present {
-                    guard.handle_input_restored(RecordingInputKind::Camera).await
+                    guard
+                        .handle_input_restored(RecordingInputKind::Camera)
+                        .await
                 } else {
                     guard
                         .handle_input_disconnect(RecordingInputKind::Camera)
@@ -1154,6 +1170,13 @@ fn specta_bindings() -> tauri_specta::Builder {
             camera_commands::set_camera_window_position,
             camera_commands::ignore_camera_window_position,
             camera_commands::close_camera_window,
+            captions::transcribe_project_audio,
+            captions::cancel_caption_generation,
+            captions::get_caption_models,
+            captions::download_caption_model,
+            captions::delete_caption_model,
+            captions::cancel_caption_model_download,
+            captions::get_caption_model_download_status,
         ])
         .events(tauri_specta::collect_events![
             RecordingEvent,
@@ -1170,6 +1193,8 @@ fn specta_bindings() -> tauri_specta::Builder {
             editor::RenderFrameEvent,
             editor::EditorStateChanged,
             editor::FrameLayoutEvent,
+            captions::CaptionGenerationProgress,
+            captions::DownloadProgress,
         ])
         // No collected command's signature happens to reference these types
         // directly, so they need an explicit export or the frontend loses
@@ -1385,6 +1410,7 @@ pub fn run() {
                 app.manage(AppExitState::default());
                 app.manage(MainWindowReadyState::default());
                 app.manage(target_select_overlay::WindowFocusManager::default());
+                app.manage(http_client::HttpClient::default());
 
                 spawn_mic_error_handler(app.clone(), mic_error_rx);
                 spawn_device_watchers(app.clone());
@@ -1404,12 +1430,19 @@ pub fn run() {
 
             let handle = app.clone();
             tauri::async_runtime::spawn(async move {
-                if let Err(err) = (ShowQuiroWindow::Main {
-                    init_target_mode: None,
-                })
-                .show(&handle)
-                .await
-                {
+                let onboarding = general_settings::GeneralSettingsStore::get(&handle)
+                    .ok()
+                    .flatten()
+                    .map(|settings| !settings.has_completed_onboarding)
+                    .unwrap_or(true);
+                let window = if onboarding {
+                    ShowQuiroWindow::Onboarding
+                } else {
+                    ShowQuiroWindow::Main {
+                        init_target_mode: None,
+                    }
+                };
+                if let Err(err) = window.show(&handle).await {
                     error!("Failed to show startup window: {err}");
                 }
             });
@@ -1501,4 +1534,3 @@ mod tests {
         super::export_typescript_bindings().expect("Failed to export typescript bindings");
     }
 }
-

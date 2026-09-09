@@ -6,7 +6,7 @@ export function CaptionsTrack() {
 	const { project, selection, setSelection } = useEditorContext();
 	const timeline = useTimeline();
 
-	const segments = project?.captions?.segments ?? [];
+	const segments = project?.timeline?.captionSegments ?? [];
 
 	return (
 		<>
@@ -21,14 +21,14 @@ export function CaptionsTrack() {
 						key={segment.id}
 						color="var(--track-caption)"
 						selected={
-							selection?.type === "caption" && selection.index === index
+							selection?.type === "caption" && selection.id === segment.id
 						}
 						left={timeline.xOf(segment.start)}
 						width={width}
 						title={segment.text}
 						onPointerDown={(event) => {
 							event.stopPropagation();
-							setSelection({ type: "caption", index });
+							setSelection({ type: "caption", index, id: segment.id });
 						}}
 					>
 						<SegmentContent width={width}>

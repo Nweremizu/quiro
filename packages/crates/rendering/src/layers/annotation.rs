@@ -350,7 +350,10 @@ mod pixel_tests {
             return;
         };
 
-        let pixels = render(&harness, &[annotation(AnnotationType::Rectangle, "#ff0000")]);
+        let pixels = render(
+            &harness,
+            &[annotation(AnnotationType::Rectangle, "#ff0000")],
+        );
 
         assert_eq!(
             at(&pixels, W / 2, H / 2),
@@ -368,7 +371,10 @@ mod pixel_tests {
             return;
         };
 
-        let pixels = render(&harness, &[annotation(AnnotationType::Rectangle, "#ff0000")]);
+        let pixels = render(
+            &harness,
+            &[annotation(AnnotationType::Rectangle, "#ff0000")],
+        );
 
         for (x, y) in [(2, 2), (W - 3, 2), (2, H - 3), (W - 3, H - 3)] {
             assert_eq!(

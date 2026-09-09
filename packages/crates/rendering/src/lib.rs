@@ -7,8 +7,7 @@ use cursor_interpolation::{
 use decoder::{AsyncVideoDecoderHandle, spawn_decoder};
 use frame_pipeline::{
     NV12BufferPool, RenderSession, finish_encoder_nv12_pooled, finish_encoder_nv12_pooled_timed,
-    finish_encoder_timed,
-    flush_pending_readback,
+    finish_encoder_timed, flush_pending_readback,
 };
 use futures::future::OptionFuture;
 use layers::{
@@ -42,11 +41,11 @@ pub mod decoder;
 pub mod frame_chrome;
 mod frame_pipeline;
 // [DEBUG-7f21] temporary live-instance census
-pub mod live_counts;
 mod gpu_test_harness;
 #[cfg(target_os = "macos")]
 pub mod iosurface_texture;
 mod layers;
+pub mod live_counts;
 mod mask;
 pub mod perspective;
 mod project_recordings;
@@ -2465,7 +2464,6 @@ pub fn resolve_project_for_frame(
     let mut resolved = clip_overridden.unwrap_or_else(|| project.clone());
     apply_motion_offsets(&mut resolved, motion);
 
-
     Some(resolved)
 }
 
@@ -3387,11 +3385,8 @@ impl ProjectUniforms {
         // later re-reads, then sees the effective value with no segment or time
         // threaded through it. `None` when nothing applies, so the clone stays
         // off the hot path for projects that use neither feature.
-        let resolved = resolve_project_for_frame(
-            project,
-            zoom_timeline,
-            frame_number as f64 / fps as f64,
-        );
+        let resolved =
+            resolve_project_for_frame(project, zoom_timeline, frame_number as f64 / fps as f64);
         let project = resolved.as_ref().unwrap_or(project);
 
         let options = &constants.options;
@@ -4988,6 +4983,16 @@ pub struct FrameRenderStageTimings {
     pub immediate_flush_duration: std::time::Duration,
 }
 
+fn resolve_immediate_frame<T>(
+    pipelined_frame: Option<T>,
+    flushed_frame: Option<Result<T, RenderingError>>,
+) -> Result<T, RenderingError> {
+    match flushed_frame {
+        Some(frame) => frame,
+        None => pipelined_frame.ok_or(RenderingError::BufferMapWaitingFailed),
+    }
+}
+
 pub struct FrameRenderer<'a> {
     /// [DEBUG-7f21]
     _live: crate::live_counts::LiveCountGuard,
@@ -5239,15 +5244,8 @@ impl<'a> FrameRenderer<'a> {
             .render_with_timings(segment_frames, uniforms, cursor, render_display, layers)
             .await?;
 
-        if let Some(frame) = frame {
-            return Ok((frame, timings));
-        }
-
         let flush_start = Instant::now();
-        let frame = self
-            .flush_pipeline()
-            .await
-            .unwrap_or(Err(RenderingError::BufferMapWaitingFailed))?;
+        let frame = resolve_immediate_frame(frame, self.flush_pipeline().await)?;
         timings.immediate_flush_duration = flush_start.elapsed();
         Ok((frame, timings))
     }
@@ -5294,14 +5292,8 @@ impl<'a> FrameRenderer<'a> {
         let (frame, mut timings) = self
             .render_nv12_with_timings(segment_frames, uniforms, cursor, render_display, layers)
             .await?;
-        if let Some(frame) = frame {
-            return Ok((frame, timings));
-        }
         let flush_start = Instant::now();
-        let frame = self
-            .flush_pipeline_nv12()
-            .await
-            .unwrap_or(Err(RenderingError::BufferMapWaitingFailed))?;
+        let frame = resolve_immediate_frame(frame, self.flush_pipeline_nv12().await)?;
         timings.immediate_flush_duration = flush_start.elapsed();
         Ok((frame, timings))
     }
@@ -5339,8 +5331,13 @@ impl<'a> FrameRenderer<'a> {
         cursor: &CursorEvents,
         render_display: bool,
         layers: &mut RendererLayers,
-    ) -> Result<(Option<frame_pipeline::Nv12RenderedFrame>, FrameRenderStageTimings), RenderingError>
-    {
+    ) -> Result<
+        (
+            Option<frame_pipeline::Nv12RenderedFrame>,
+            FrameRenderStageTimings,
+        ),
+        RenderingError,
+    > {
         if self.constants.is_software_adapter {
             return self
                 .render_nv12_software_path(segment_frames, uniforms, cursor, render_display, layers)
@@ -5550,8 +5547,13 @@ impl<'a> FrameRenderer<'a> {
         cursor: &CursorEvents,
         render_display: bool,
         layers: &mut RendererLayers,
-    ) -> Result<(Option<frame_pipeline::Nv12RenderedFrame>, FrameRenderStageTimings), RenderingError>
-    {
+    ) -> Result<
+        (
+            Option<frame_pipeline::Nv12RenderedFrame>,
+            FrameRenderStageTimings,
+        ),
+        RenderingError,
+    > {
         let mut last_error = None;
 
         for attempt in 0..Self::MAX_RENDER_RETRIES {
@@ -5930,11 +5932,8 @@ impl RendererLayers {
             self.run_shared_camera_blur(&constants.device, &constants.queue, mode);
         }
 
-        self.annotation.prepare(
-            &constants.device,
-            &constants.queue,
-            &uniforms.annotations,
-        );
+        self.annotation
+            .prepare(&constants.device, &constants.queue, &uniforms.annotations);
 
         self.text.prepare(
             &constants.device,
@@ -6102,11 +6101,8 @@ impl RendererLayers {
         }
         timings.camera_blur_prepare_duration = start.elapsed();
 
-        self.annotation.prepare(
-            &constants.device,
-            &constants.queue,
-            &uniforms.annotations,
-        );
+        self.annotation
+            .prepare(&constants.device, &constants.queue, &uniforms.annotations);
 
         let start = Instant::now();
         self.text.prepare(
@@ -6623,5 +6619,24 @@ mod initial_decode_recovery_tests {
 
         assert!(times.iter().all(|time| *time >= 0.0));
         assert!(times.last().copied().unwrap_or_default() >= 0.0);
+    }
+}
+
+#[cfg(test)]
+mod immediate_frame_tests {
+    use super::resolve_immediate_frame;
+
+    #[test]
+    fn immediate_frame_prefers_the_newly_flushed_frame() {
+        let frame = resolve_immediate_frame(Some(10), Some(Ok(20))).expect("immediate frame");
+
+        assert_eq!(frame, 20);
+    }
+
+    #[test]
+    fn immediate_frame_uses_the_rendered_frame_when_nothing_is_pending() {
+        let frame = resolve_immediate_frame(Some(10), None).expect("immediate frame");
+
+        assert_eq!(frame, 10);
     }
 }

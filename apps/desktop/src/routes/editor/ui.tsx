@@ -15,6 +15,7 @@ export function Field({
 	className,
 	disabled,
 	children,
+	isRow = false,
 }: {
 	name: string;
 	icon?: ReactNode;
@@ -23,9 +24,16 @@ export function Field({
 	className?: string;
 	disabled?: boolean;
 	children: ReactNode;
+	isRow?: boolean;
 }) {
 	return (
-		<div className={cn("flex flex-col gap-4", className)}>
+		<div
+			className={cn(
+				"flex flex-col gap-4",
+				className,
+				isRow && "flex-row justify-between items-center",
+			)}
+		>
 			<span
 				data-disabled={disabled}
 				className="flex flex-row items-center gap-1.5 text-sm font-medium text-gray-12 data-[disabled='true']:text-gray-10"

@@ -12,12 +12,19 @@ declare global {
   const IconLucideAppWindowMac: typeof import('~icons/lucide/app-window-mac.jsx').default
   const IconLucideCheck: typeof import('~icons/lucide/check.jsx').default
   const IconLucideCircleOff: typeof import('~icons/lucide/circle-off.jsx').default
+  const IconLucideCircleStop: typeof import('~icons/lucide/circle-stop.jsx').default
   const IconLucideCrop: typeof import('~icons/lucide/crop.jsx').default
+  const IconLucideFilm: typeof import('~icons/lucide/film.jsx').default
+  const IconLucideFlipHorizontal: typeof import('~icons/lucide/flip-horizontal.jsx').default
+  const IconLucideImage: typeof import('~icons/lucide/image.jsx').default
   const IconLucideLock: typeof import('~icons/lucide/lock.jsx').default
   const IconLucideMagnet: typeof import('~icons/lucide/magnet.jsx').default
   const IconLucideMaximize2: typeof import('~icons/lucide/maximize2.jsx').default
   const IconLucideMonitor: typeof import('~icons/lucide/monitor.jsx').default
+  const IconLucidePause: typeof import('~icons/lucide/pause.jsx').default
   const IconLucideRatio: typeof import('~icons/lucide/ratio.jsx').default
   const IconLucideRotateCcw: typeof import('~icons/lucide/rotate-ccw.jsx').default
+  const IconLucideSave: typeof import('~icons/lucide/save.jsx').default
+  const IconLucideScissors: typeof import('~icons/lucide/scissors.jsx').default
   const IconLucideVideo: typeof import('~icons/lucide/video.jsx').default
 }

@@ -120,7 +120,7 @@ impl ExporterBuilder {
                         speed_audio_mode: None,
                         transform: None,
                         perspective: None,
-                            })
+                    })
                 })
                 .collect();
             if !segments.is_empty() {
@@ -136,6 +136,12 @@ impl ExporterBuilder {
                     audio_segments: Vec::new(),
                 });
             }
+        }
+
+        if let Some(captions) = project_config.captions.as_mut()
+            && !captions.settings.export_with_subtitles
+        {
+            captions.settings.enabled = false;
         }
 
         let render_constants = Arc::new(

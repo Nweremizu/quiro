@@ -16,12 +16,18 @@ export function DialogContent({
 			<DialogPrimitive.Backdrop className="fixed inset-0 z-500 bg-black/50" />
 			<DialogPrimitive.Popup
 				className={cn(
-					"fixed top-1/2 left-1/2 z-501 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border border-gray-3 bg-gray-1 p-0",
+					"fixed top-1/2 left-1/2 z-501 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border border-gray-3 bg-gray-3 p-1! gray-button-shadow dark:bg-gray-2",
 					className,
 				)}
 				{...props}
 			>
-				{children}
+				<div
+					className={cn(
+						"flex h-full w-full flex-col overflow-hidden rounded-lg bg-gray-1",
+					)}
+				>
+					{children}
+				</div>
 				<DialogPrimitive.Close className="absolute right-4 top-4 text-gray-9 hover:text-gray-12">
 					<XIcon className="size-5" />
 					<span className="sr-only">Close</span>
@@ -54,7 +60,7 @@ export function DialogHeader({
 					{icon}
 				</div>
 			)}
-			<div className="flex flex-col">
+			<div className="flex flex-col w-full">
 				{children}
 				{description && <p className="text-sm text-gray-10">{description}</p>}
 			</div>

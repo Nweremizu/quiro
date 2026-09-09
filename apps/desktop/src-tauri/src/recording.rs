@@ -22,14 +22,14 @@ use quiro_project::{Platform, RecordingMeta, RecordingMetaInner, StudioRecording
 use quiro_recording::feeds::camera::{self, CameraFeedLock};
 use quiro_recording::feeds::microphone::{self, MicrophoneFeedLock};
 use quiro_recording::sources::screen_capture::ScreenCaptureTarget;
-use quiro_recording::{studio_recording, RecordingMode};
+use quiro_recording::{RecordingMode, studio_recording};
 use tauri::{AppHandle, Manager};
 use tauri_specta::Event;
 use tracing::{error, warn};
 
 use crate::general_settings::GeneralSettingsStore;
 use crate::recording_settings::RecordingSettingsStore;
-use crate::windows::{apply_content_protection, ShowQuiroWindow, WindowId};
+use crate::windows::{ShowQuiroWindow, WindowId, apply_content_protection};
 use crate::{App, ArcLock};
 
 /// Which of the optional recording inputs a lifecycle event refers to. The
@@ -126,6 +126,8 @@ pub async fn start_recording(
         .write()
         .await
         .set_pending_recording(RecordingMode::Studio, capture_target.clone())?;
+    apply_content_protection(&app, true);
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     // From here, any early return must clear the pending state and tell the
     // main window why — otherwise it's stuck showing a "starting…" state for
@@ -183,11 +185,13 @@ pub async fn start_recording(
     // captured. A Display target already covers the whole screen, so there's
     // nothing to dim.
     let occluder_target = match &capture_target {
-        ScreenCaptureTarget::Window { id } => scap_targets::Window::from_id(id).and_then(|window| {
-            let bounds = window.display_relative_logical_bounds()?;
-            let screen_id = window.display()?.id();
-            Some((screen_id, bounds))
-        }),
+        ScreenCaptureTarget::Window { id } => {
+            scap_targets::Window::from_id(id).and_then(|window| {
+                let bounds = window.display_relative_logical_bounds()?;
+                let screen_id = window.display()?.id();
+                Some((screen_id, bounds))
+            })
+        }
         ScreenCaptureTarget::Area { screen, bounds } => Some((screen.clone(), *bounds)),
         ScreenCaptureTarget::Display { .. } | ScreenCaptureTarget::CameraOnly => None,
     };
@@ -258,7 +262,7 @@ pub async fn start_recording(
 
     let handle = match handle {
         Ok(handle) => handle,
-        Err(e) => fail!(format!("Failed to start recording: {e}")),
+        Err(e) => fail!(format!("Failed to start recording: {e:#}")),
     };
 
     *state.0.lock().map_err(|e| e.to_string())? = Some(ActiveRecording {
@@ -273,8 +277,6 @@ pub async fn start_recording(
         .write()
         .await
         .set_current_recording(capture_target);
-    apply_content_protection(&app, true);
-
     let _ = RecordingEvent::Started.emit(&app);
 
     Ok(())
@@ -301,10 +303,7 @@ pub async fn pause_recording(
 
 /// Records the pause state after the actor has actually accepted the change,
 /// so a failed pause/resume can't leave the flag lying about what's happening.
-fn set_paused_flag(
-    state: &tauri::State<'_, RecordingSession>,
-    paused: bool,
-) -> Result<(), String> {
+fn set_paused_flag(state: &tauri::State<'_, RecordingSession>, paused: bool) -> Result<(), String> {
     let guard = state.0.lock().map_err(|e| e.to_string())?;
     if let Some(active) = guard.as_ref() {
         active.paused.store(paused, Ordering::Release);
@@ -445,7 +444,9 @@ fn finalize_recording_output(
     // so `segments[0]` is always the whole take — matching Cap's own
     // `handle_recording_finish`, which reads the exact same field.
     let StudioRecordingMeta::MultipleSegments { inner } = meta else {
-        return Err("Expected a MultipleSegments recording (got the legacy SingleSegment shape)".into());
+        return Err(
+            "Expected a MultipleSegments recording (got the legacy SingleSegment shape)".into(),
+        );
     };
     let Some(segment) = inner.segments.first() else {
         return Err("Recording produced no segments".into());
@@ -502,9 +503,7 @@ async fn active_capture_target(app: &AppHandle) -> Option<ScreenCaptureTarget> {
     let guard = app_state.read().await;
     match &guard.recording_state {
         crate::RecordingState::Active { target }
-        | crate::RecordingState::Pending { target, .. } => {
-            Some(target.clone())
-        }
+        | crate::RecordingState::Pending { target, .. } => Some(target.clone()),
         crate::RecordingState::None => None,
     }
 }

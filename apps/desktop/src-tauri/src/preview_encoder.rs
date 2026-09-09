@@ -84,7 +84,9 @@ impl PreviewEncoder {
         width: u32,
         height: u32,
     ) -> Result<(), String> {
-        if self.encoder.is_some() && self.size == (width, height) && self.format == Some(input_format)
+        if self.encoder.is_some()
+            && self.size == (width, height)
+            && self.format == Some(input_format)
         {
             return Ok(());
         }
@@ -142,7 +144,8 @@ impl PreviewEncoder {
         let y_rows = height as usize;
         let uv_rows = height.div_ceil(2) as usize;
 
-        for (plane, rows, src_offset) in [(0usize, y_rows, 0usize), (1, uv_rows, src_stride * y_rows)]
+        for (plane, rows, src_offset) in
+            [(0usize, y_rows, 0usize), (1, uv_rows, src_stride * y_rows)]
         {
             let dst_stride = frame.stride(plane);
             let dst = frame.data_mut(plane);
@@ -205,8 +208,7 @@ impl PreviewEncoder {
             .expect("callers call ensure_encoder first");
         let frame = self.input.as_mut().expect("callers fill the input frame");
 
-        let timestamp =
-            std::time::Duration::from_secs_f64(frame_number as f64 / self.fps as f64);
+        let timestamp = std::time::Duration::from_secs_f64(frame_number as f64 / self.fps as f64);
 
         let mut encoded: Option<Vec<u8>> = None;
         encoder

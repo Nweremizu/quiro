@@ -1,13 +1,13 @@
 import { cn, Select, Switch } from "@quiro/ui";
 import { open } from "@tauri-apps/plugin-dialog";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useState } from "react";
 import { Disclosure } from "@/components/Disclosure";
 import { PanelSection } from "@/components/PanelSection";
+import { FEATURES } from "@/features";
+import { invalidateCachedFileImage } from "@/utils/image-cache";
 import type {
 	BorderConfiguration,
-	CameraXPosition,
-	CameraYPosition,
 	CornerStyle,
 	CursorAnimationStyle,
 	CursorType,
@@ -18,19 +18,24 @@ import type {
 import IconLucideCamera from "~icons/lucide/camera";
 import IconLucideCaptions from "~icons/lucide/captions";
 import IconLucideCommand from "~icons/lucide/command";
+import IconLucideEye from "~icons/lucide/eye";
 import IconLucideFrame from "~icons/lucide/frame";
+import IconLucideGauge from "~icons/lucide/gauge";
 import IconLucideImage from "~icons/lucide/image";
 import IconLucideKeyboard from "~icons/lucide/keyboard";
 import IconLucideLayers from "~icons/lucide/layers";
 import IconLucideMousePointer2 from "~icons/lucide/mouse-pointer-2";
 import IconLucideSparkles from "~icons/lucide/sparkles";
 import IconLucideVolume2 from "~icons/lucide/volume-2";
+import IconLucideWind from "~icons/lucide/wind";
+import IconLucideZoomIn from "~icons/lucide/zoom-in";
 import { ColorPickerPopover } from "../screenshot-editor/ColorPicker";
 import {
 	ImageTab,
 	WallpaperTab,
 	WallpaperThumbnail,
 } from "../screenshot-editor/ui";
+import { CaptionsConfig } from "./CaptionsConfig";
 import { useEditorContext } from "./context";
 import { SegmentConfig } from "./SegmentConfig";
 import { Field, Slider, Subfield } from "./ui";
@@ -120,6 +125,15 @@ const VIDEO_GRADIENT_PRESETS: Array<{
 	},
 ];
 
+const CURSOR_APPEARANCES: Array<{ type: CursorType; label: string }> = [
+	{ type: "auto", label: "Auto" },
+	{ type: "pointer", label: "Pointer" },
+	{ type: "circle", label: "Circle" },
+	{ type: "macosDark", label: "macOS" },
+	{ type: "rounded", label: "Round" },
+	{ type: "capsule", label: "Pill" },
+];
+
 function rgbToHex([r, g, b]: [number, number, number]) {
 	return `#${[r, g, b].map((c) => c.toString(16).padStart(2, "0")).join("")}`;
 }
@@ -158,6 +172,10 @@ const TABS = [
 	{ id: "captions", label: "Captions", icon: IconLucideCaptions },
 ] as const;
 
+const VISIBLE_TABS = TABS.filter(
+	(tab) => tab.id !== "captions" || FEATURES.captions,
+);
+
 type TabId = (typeof TABS)[number]["id"];
 
 export function ConfigSidebar() {
@@ -169,7 +187,7 @@ export function ConfigSidebar() {
 	// A selected timeline segment takes over the panel, the way Cap's does.
 	if (selection) {
 		return (
-			<div className="z-10 flex min-h-0 max-w-104 flex-1 shrink-0 flex-col overflow-hidden rounded-xl border border-gray-3 bg-gray-1 dark:bg-gray-2">
+			<div className="flex h-full min-h-0 max-h-full max-w-104 flex-1 shrink-0 flex-col overflow-hidden rounded-xl border border-gray-3 bg-gray-1 dark:bg-gray-2">
 				<SegmentConfig />
 			</div>
 		);
@@ -180,9 +198,9 @@ export function ConfigSidebar() {
 		false;
 
 	return (
-		<div className="z-10 flex min-h-0 max-w-104 flex-1 shrink-0  overflow-hidden rounded-xl border border-gray-3 bg-gray-1 dark:bg-gray-2">
+		<div className="flex h-full min-h-0 max-h-full max-w-104 flex-1 shrink-0 overflow-hidden rounded-xl border border-gray-3 bg-gray-1 dark:bg-gray-2">
 			<div className="sticky top-0 z-60 flex h-96 mt-2  shrink-0 flex-col items-start overflow-hidden bg-gray-1 dark:bg-gray-2">
-				{TABS.map(({ id, label, icon: Icon }) => {
+				{VISIBLE_TABS.map(({ id, label, icon: Icon }) => {
 					const selected = tab === id;
 					const disabled = id === "camera" && !hasCamera;
 
@@ -215,14 +233,14 @@ export function ConfigSidebar() {
 				})}
 			</div>
 
-			<div className="custom-scroll min-h-0 flex-1 overflow-y-scroll overflow-x-hidden text-[0.875rem]">
+			<div className="custom-scroll min-h-0 max-h-full flex-1 self-stretch overflow-x-hidden overflow-y-auto [scrollbar-gutter:stable] text-[0.875rem]">
 				{tab === "background" && <BackgroundConfig />}
 				{tab === "camera" && <CameraConfig />}
 				{tab === "audio" && <AudioConfig />}
 				{tab === "cursor" && <CursorConfig />}
 				{tab === "keyboard" && <KeyboardConfig />}
 				{tab === "hotkeys" && <HotkeysConfig />}
-				{tab === "captions" && <CaptionsConfig />}
+				{FEATURES.captions && tab === "captions" && <CaptionsConfig />}
 			</div>
 		</div>
 	);
@@ -242,7 +260,7 @@ function TabPanel({
 		<div
 			className={
 				variant === "sections"
-					? "flex flex-col [&>*:last-child]:border-b-0 mt-2 overflow-hidden"
+					? "flex flex-col [&>*:last-child]:border-b-0 mt-2 overflow-hidden gap-4"
 					: "flex flex-col gap-6 p-4"
 			}
 		>
@@ -357,8 +375,10 @@ function BackgroundConfig() {
 									},
 								],
 							});
-							if (typeof picked === "string")
+							if (typeof picked === "string") {
+								invalidateCachedFileImage(picked);
 								setBackground({ source: { type: "image", path: picked } });
+							}
 						}}
 						onClear={() =>
 							setBackground({ source: { type: "image", path: null } })
@@ -652,6 +672,7 @@ function BackgroundConfig() {
 
 function CameraConfig() {
 	const { project, setProject } = useEditorContext();
+	const reduceMotion = useReducedMotion();
 	if (!project) return null;
 
 	const camera = project.camera;
@@ -661,126 +682,343 @@ function CameraConfig() {
 			camera: { ...current.camera, ...patch },
 		}));
 
+	const positions = [
+		{ x: "left", y: "top", label: "Top left" },
+		{ x: "center", y: "top", label: "Top center" },
+		{ x: "right", y: "top", label: "Top right" },
+		{ x: "left", y: "bottom", label: "Bottom left" },
+		{ x: "center", y: "bottom", label: "Bottom center" },
+		{ x: "right", y: "bottom", label: "Bottom right" },
+	] as const;
+	const positionDescription = camera.manualPosition
+		? "Custom position"
+		: `${camera.position.y} ${camera.position.x}`;
+	const indicatorPosition = camera.manualPosition ?? {
+		x: { left: 1 / 6, center: 1 / 2, right: 5 / 6 }[camera.position.x],
+		y: { top: 1 / 4, bottom: 3 / 4 }[camera.position.y],
+	};
+
 	return (
-		<TabPanel>
-			<Field name="Camera" icon={<IconLucideCamera className="size-4" />}>
+		<TabPanel variant="sections">
+			<PanelSection
+				icon={<IconLucideCamera className="size-4" />}
+				title="Camera"
+			>
 				<Subfield name="Hide camera">
 					<Switch
+						aria-label="Hide camera"
 						checked={camera.hide}
 						onCheckedChange={(hide) => setCamera({ hide })}
 					/>
 				</Subfield>
 				<Subfield name="Mirror camera">
 					<Switch
+						aria-label="Mirror camera"
 						checked={camera.mirror}
 						onCheckedChange={(mirror) => setCamera({ mirror })}
 					/>
 				</Subfield>
-				<Subfield name="Position">
-					<div className="flex gap-2">
-						<Select
-							className="w-28"
-							value={camera.position.x}
-							onValueChange={(x) =>
-								setCamera({
-									position: { ...camera.position, x: x as CameraXPosition },
-								})
-							}
-							options={[
-								{ label: "Left", value: "left" },
-								{ label: "Center", value: "center" },
-								{ label: "Right", value: "right" },
-							]}
-						/>
-						<Select
-							className="w-28"
-							value={camera.position.y}
-							onValueChange={(y) =>
-								setCamera({
-									position: { ...camera.position, y: y as CameraYPosition },
-								})
-							}
-							options={[
-								{ label: "Top", value: "top" },
-								{ label: "Bottom", value: "bottom" },
-							]}
-						/>
+
+				<fieldset className="min-w-0">
+					<legend className="sr-only">Position</legend>
+					<div className="mb-2 flex items-center justify-between gap-3">
+						<span
+							aria-hidden="true"
+							className="text-xs font-medium text-gray-12"
+						>
+							Position
+						</span>
+						<span className="truncate text-[0.625rem] font-medium capitalize text-gray-9">
+							{positionDescription}
+						</span>
 					</div>
+					<div
+						dir="ltr"
+						className="gray-button-shadow relative grid min-h-32 grid-cols-3 grid-rows-2 overflow-hidden rounded-xl bg-gray-3 p-1"
+					>
+						<div
+							aria-hidden="true"
+							className="pointer-events-none absolute inset-2 inset-y-2 rounded-lg border border-gray-5 bg-gray-2/60 shadow-[inset_0_1px_2px_oklch(0_0_0/0.06)]"
+						/>
+						{positions.map((position) => {
+							const selected =
+								!camera.manualPosition &&
+								camera.position.x === position.x &&
+								camera.position.y === position.y;
+
+							return (
+								<div key={position.label} className="relative z-10 min-h-14">
+									<input
+										id={`camera-position-${position.y}-${position.x}`}
+										type="radio"
+										name="camera-position"
+										value={`${position.y}-${position.x}`}
+										checked={selected}
+										onChange={() =>
+											setCamera({
+												position: { x: position.x, y: position.y },
+												manualPosition: null,
+											})
+										}
+										className="peer sr-only"
+									/>
+									<label
+										htmlFor={`camera-position-${position.y}-${position.x}`}
+										className="relative flex size-full min-h-14 cursor-pointer items-center justify-center rounded-lg -outline-offset-2 transition-[background-color,box-shadow] duration-100 peer-checked:bg-transparent/85 peer-focus-visible:outline-2 peer-focus-visible:outline-accent-focus-ring active:scale-[0.97] motion-reduce:transform-none motion-reduce:transition-none"
+									>
+										<span className="sr-only">{position.label}</span>
+										<span
+											aria-hidden="true"
+											className={cn(
+												"size-1 rounded-full bg-gray-8 transition-opacity duration-100 motion-reduce:transition-none",
+												selected && "opacity-0",
+											)}
+										/>
+									</label>
+								</div>
+							);
+						})}
+						<motion.div
+							aria-hidden="true"
+							initial={false}
+							animate={{
+								left: `${indicatorPosition.x * 100}%`,
+								top: `${indicatorPosition.y * 100}%`,
+							}}
+							transition={
+								reduceMotion
+									? { duration: 0 }
+									: { type: "spring", duration: 0.55, bounce: 0 }
+							}
+							className={cn(
+								"pointer-events-none absolute z-20 size-0 transition-opacity duration-100 motion-reduce:transition-none",
+								camera.hide && "opacity-45",
+							)}
+						>
+							<div className="dark-button-shadow absolute grid size-8 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-gray-5 shadow-sm">
+								<span
+									style={{ borderRadius: `${camera.rounding}%` }}
+									className="dark-button-shadow size-5 border border-accent-border-selected bg-accent-solid shadow-sm"
+								/>
+							</div>
+						</motion.div>
+					</div>
+				</fieldset>
+			</PanelSection>
+
+			<PanelSection icon={<IconLucideFrame className="size-4" />} title="Shape">
+				<fieldset>
+					<legend className="mb-2 text-xs font-medium text-gray-12">
+						Frame
+					</legend>
+					<div className="grid grid-cols-2 gap-2">
+						{[
+							{ value: "source", label: "Source aspect" },
+							{ value: "square", label: "Square crop" },
+						].map((shape) => (
+							<div key={shape.value} className="min-w-0">
+								<input
+									id={`camera-shape-${shape.value}`}
+									type="radio"
+									name="camera-shape"
+									value={shape.value}
+									checked={camera.shape === shape.value}
+									onChange={() =>
+										setCamera({ shape: shape.value as typeof camera.shape })
+									}
+									className="peer sr-only"
+								/>
+								<label
+									htmlFor={`camera-shape-${shape.value}`}
+									className="gray-button-shadow flex min-h-24 cursor-pointer flex-col gap-2 rounded-xl bg-gray-3 p-1.5 text-[0.6875rem] font-medium text-gray-10 outline-offset-2 transition-[background-color,color,box-shadow] duration-100 peer-checked:bg-gray-4 peer-checked:text-gray-12 peer-checked:shadow-[inset_0_0_0_2px_var(--accent-border-selected),0_1px_2px_oklch(0_0_0/0.08)] peer-focus-visible:outline-2 peer-focus-visible:outline-accent-focus-ring active:scale-[0.97] motion-reduce:transform-none motion-reduce:transition-none"
+								>
+									<CameraFrameDrawing
+										shape={shape.value as typeof camera.shape}
+										rounding={camera.rounding}
+									/>
+									<span className="flex w-full min-w-0 items-center justify-between gap-2 px-1">
+										<span className="truncate">{shape.label}</span>
+										<span
+											aria-hidden="true"
+											className={cn(
+												"grid size-3.5 shrink-0 place-items-center rounded-full border border-gray-7 bg-gray-2",
+												camera.shape === shape.value &&
+													"border-accent-solid bg-accent-solid",
+											)}
+										>
+											{camera.shape === shape.value && (
+												<span className="size-2 rounded-full bg-accent-solid dark-button-shadow" />
+											)}
+										</span>
+									</span>
+								</label>
+							</div>
+						))}
+					</div>
+				</fieldset>
+				<Slider
+					size="xs"
+					label="Size"
+					ariaLabel="Camera size"
+					format={(v) => `${Math.round(v)}%`}
+					min={10}
+					max={80}
+					value={camera.size}
+					onChange={(size) => setCamera({ size })}
+				/>
+				<Slider
+					size="xs"
+					label="Rounded corners"
+					ariaLabel="Camera corner rounding"
+					format={(v) => `${Math.round(v)}%`}
+					min={0}
+					max={100}
+					value={camera.rounding}
+					onChange={(rounding) => setCamera({ rounding })}
+				/>
+			</PanelSection>
+
+			<PanelSection
+				icon={<IconLucideLayers className="size-4" />}
+				title="Depth"
+			>
+				<Slider
+					size="xs"
+					label="Shadow"
+					ariaLabel="Camera shadow"
+					format={(v) => `${Math.round(v)}%`}
+					min={0}
+					max={100}
+					value={camera.shadow}
+					onChange={(shadow) => setCamera({ shadow })}
+				/>
+				<Subfield name="Background blur">
+					<Select
+						size="sm"
+						value={camera.backgroundBlur?.mode ?? "off"}
+						onValueChange={(mode) =>
+							setCamera({
+								backgroundBlur: {
+									mode: mode as NonNullable<
+										typeof camera.backgroundBlur
+									>["mode"],
+								},
+							})
+						}
+						options={[
+							{ label: "Off", value: "off" },
+							{ label: "Light", value: "light" },
+							{ label: "Heavy", value: "heavy" },
+						]}
+					/>
 				</Subfield>
-			</Field>
+			</PanelSection>
 
-			<Slider
-				size="sm"
-				label="Size"
-				format={(v) => `${Math.round(v)}%`}
-				min={10}
-				max={80}
-				value={camera.size}
-				onChange={(size) => setCamera({ size })}
-			/>
-
-			<Slider
-				size="sm"
-				label="Rounded corners"
-				format={(v) => `${Math.round(v)}%`}
-				min={0}
-				max={100}
-				value={camera.rounding}
-				onChange={(rounding) => setCamera({ rounding })}
-			/>
-
-			<Slider
-				size="sm"
-				label="Shadow"
-				format={(v) => `${Math.round(v)}%`}
-				min={0}
-				max={100}
-				value={camera.shadow}
-				onChange={(shadow) => setCamera({ shadow })}
-			/>
-
-			<Field name="Shape">
-				<Select
-					value={camera.shape}
-					onValueChange={(shape) =>
-						setCamera({ shape: shape as typeof camera.shape })
-					}
-					options={[
-						{ label: "Square", value: "square" },
-						{ label: "Source aspect", value: "source" },
-					]}
+			<PanelSection
+				icon={<IconLucideZoomIn className="size-4" />}
+				title="During zoom"
+			>
+				<Slider
+					size="xs"
+					label="Size"
+					ariaLabel="Camera size during screen zoom"
+					format={(v) => `${Math.round(v * 100)}%`}
+					min={0.3}
+					max={1}
+					step={0.05}
+					value={camera.scaleDuringZoom ?? 0.7}
+					onChange={(scaleDuringZoom) => setCamera({ scaleDuringZoom })}
 				/>
-			</Field>
-
-			<Slider
-				size="sm"
-				label="Size during zoom"
-				format={(v) => `${Math.round(v * 100)}%`}
-				min={0.3}
-				max={1}
-				step={0.05}
-				value={camera.scaleDuringZoom ?? 0.7}
-				onChange={(scaleDuringZoom) => setCamera({ scaleDuringZoom })}
-			/>
-
-			<Field name="Background blur">
-				<Select
-					value={camera.backgroundBlur?.mode ?? "off"}
-					onValueChange={(mode) =>
-						setCamera({
-							backgroundBlur: {
-								mode: mode as NonNullable<typeof camera.backgroundBlur>["mode"],
-							},
-						})
-					}
-					options={[
-						{ label: "Off", value: "off" },
-						{ label: "Light", value: "light" },
-						{ label: "Heavy", value: "heavy" },
-					]}
-				/>
-			</Field>
+			</PanelSection>
 		</TabPanel>
+	);
+}
+
+function CameraFrameDrawing({
+	shape,
+	rounding,
+}: {
+	shape: ProjectConfiguration["camera"]["shape"];
+	rounding: number;
+}) {
+	const radius = (rounding / 100) * (shape === "square" ? 10 : 12);
+
+	return (
+		<svg
+			viewBox="0 0 96 56"
+			aria-hidden="true"
+			className="h-13 w-full rounded-lg bg-gray-2 text-gray-a10 shadow-[inset_0_1px_2px_oklch(0_0_0/0.06)]"
+		>
+			{/* <rect
+				x="0.5"
+				y="0.5"
+				width="95"
+				height="55"
+				rx="7.5"
+				fill="none"
+				stroke="var(--gray-5)"
+			/> */}
+			{shape === "source" ? (
+				<>
+					<rect
+						x="15"
+						y="10"
+						width="66"
+						height="36"
+						rx={radius}
+						fill="currentColor"
+						fillOpacity="0.1"
+						stroke="currentColor"
+						strokeWidth="1.5"
+					/>
+					<circle
+						cx="48"
+						cy="23"
+						r="6"
+						fill="currentColor"
+						fillOpacity="0.55"
+					/>
+					<path
+						d="M34 40c1.8-7.2 7-10.8 14-10.8S60.2 32.8 62 40"
+						fill="currentColor"
+						fillOpacity="0.34"
+					/>
+					<path
+						d="M21 16h6M69 16h6M21 40h6M69 40h6"
+						stroke="currentColor"
+						strokeLinecap="round"
+						strokeOpacity="0.45"
+					/>
+				</>
+			) : (
+				<>
+					<rect
+						x="31"
+						y="11"
+						width="34"
+						height="34"
+						rx={radius}
+						fill="currentColor"
+						fillOpacity="0.1"
+						stroke="currentColor"
+						strokeWidth="1.5"
+					/>
+
+					<circle
+						cx="48"
+						cy="23"
+						r="5.5"
+						fill="currentColor"
+						fillOpacity="0.55"
+					/>
+					<path
+						d="M37 40c1.5-6.8 5.5-10.2 11-10.2S57.5 33.2 59 40"
+						fill="currentColor"
+						fillOpacity="0.34"
+					/>
+				</>
+			)}
+		</svg>
 	);
 }
 
@@ -960,15 +1198,47 @@ function CursorConfig() {
 	};
 
 	return (
-		<TabPanel>
-			<Field
-				name="Cursor"
+		<TabPanel variant="sections">
+			<PanelSection
 				icon={<IconLucideMousePointer2 className="size-4" />}
+				title="Appearance"
 			>
-				<Subfield name="Hide cursor">
+				<div className="grid grid-cols-3 gap-1.5">
+					{CURSOR_APPEARANCES.map(({ type, label }) => (
+						<CursorShapeButton
+							key={type}
+							type={type}
+							label={label}
+							selected={cursor.type === type}
+							onSelect={() => setCursor({ type })}
+						/>
+					))}
+				</div>
+				<Slider
+					size="sm"
+					label="Size"
+					format={(v) => `${Math.round(v)}%`}
+					min={20}
+					max={300}
+					value={cursor.size}
+					onChange={(size) => setCursor({ size })}
+				/>
+				<Subfield name="High quality SVG">
 					<Switch
-						checked={cursor.hide}
-						onCheckedChange={(hide) => setCursor({ hide })}
+						checked={cursor.useSvg}
+						onCheckedChange={(useSvg) => setCursor({ useSvg })}
+					/>
+				</Subfield>
+			</PanelSection>
+
+			<PanelSection
+				icon={<IconLucideEye className="size-4" />}
+				title="Visibility"
+			>
+				<Subfield name="Show cursor">
+					<Switch
+						checked={!cursor.hide}
+						onCheckedChange={(visible) => setCursor({ hide: !visible })}
 					/>
 				</Subfield>
 				<Subfield name="Hide when idle">
@@ -977,70 +1247,65 @@ function CursorConfig() {
 						onCheckedChange={(hideWhenIdle) => setCursor({ hideWhenIdle })}
 					/>
 				</Subfield>
-				<Subfield name="Shape">
-					<Select
-						className="w-32"
-						value={cursor.type}
-						onValueChange={(type) => setCursor({ type: type as CursorType })}
-						options={[
-							{ label: "Auto", value: "auto" },
-							{ label: "Pointer", value: "pointer" },
-							{ label: "Circle", value: "circle" },
-						]}
-					/>
-				</Subfield>
-			</Field>
+				<Slider
+					size="sm"
+					label="Inactivity delay"
+					format={(v) => `${v.toFixed(1)}s`}
+					min={0.5}
+					max={10}
+					step={0.5}
+					value={cursor.hideWhenIdleDelay}
+					onChange={(hideWhenIdleDelay) => setCursor({ hideWhenIdleDelay })}
+					disabled={!cursor.hideWhenIdle}
+				/>
+			</PanelSection>
 
-			<Slider
-				size="sm"
-				label="Size"
-				format={(v) => `${Math.round(v)}%`}
-				min={20}
-				max={300}
-				value={cursor.size}
-				onChange={(size) => setCursor({ size })}
-			/>
-
-			<Slider
-				size="sm"
-				label="Motion blur"
-				format={(v) => `${Math.round(v * 100)}%`}
-				min={0}
-				max={1}
-				step={0.01}
-				value={cursor.motionBlur}
-				onChange={(motionBlur) => setCursor({ motionBlur })}
-			/>
-
-			<Field name="Movement">
-				<Subfield name="Animation style">
-					<Select
-						className="w-32"
-						value={cursor.animationStyle}
-						onValueChange={(animationStyle) =>
-							applyStyle(animationStyle as CursorAnimationStyle)
-						}
-						options={CURSOR_ANIMATION_STYLES.map(({ label, value }) => ({
-							label,
-							value: String(value),
-						}))}
-					/>
-				</Subfield>
-				<Subfield name="Disable smoothing">
+			<PanelSection icon={<IconLucideWind className="size-4" />} title="Motion">
+				<Subfield name="Smooth movement">
 					<Switch
-						checked={cursor.raw}
-						onCheckedChange={(raw) => setCursor({ raw })}
+						checked={!cursor.raw}
+						onCheckedChange={(smooth) => setCursor({ raw: !smooth })}
 					/>
 				</Subfield>
-				<Subfield name="High quality SVG cursors">
-					<Switch
-						checked={cursor.useSvg}
-						onCheckedChange={(useSvg) => setCursor({ useSvg })}
-					/>
-				</Subfield>
-			</Field>
+				<div
+					className={cn(
+						"grid grid-cols-5 gap-1 rounded-xl bg-gray-3 p-1 transition-opacity duration-100 motion-reduce:transition-none",
+						cursor.raw && "opacity-45",
+					)}
+				>
+					{CURSOR_ANIMATION_STYLES.map((style) => (
+						<CursorMotionStyleButton
+							key={style.value}
+							style={style.value}
+							label={style.label}
+							selected={cursor.animationStyle === style.value}
+							disabled={cursor.raw}
+							onSelect={() => applyStyle(style.value)}
+						/>
+					))}
+				</div>
+				<Slider
+					size="sm"
+					label="Motion blur"
+					format={(v) => `${Math.round(v * 100)}%`}
+					min={0}
+					max={1}
+					step={0.01}
+					value={cursor.motionBlur}
+					onChange={(motionBlur) => setCursor({ motionBlur })}
+				/>
+			</PanelSection>
 
-			<Field name="Spring" badge={cursor.raw ? "smoothing off" : undefined}>
+			<PanelSection
+				icon={<IconLucideGauge className="size-4" />}
+				title="Spring"
+				defaultOpen={false}
+			>
+				{cursor.raw && (
+					<p className="rounded-lg bg-gray-3 px-2.5 py-2 text-[11px] text-gray-10">
+						Turn on smooth movement to use spring controls.
+					</p>
+				)}
 				<Slider
 					size="xs"
 					label="Tension"
@@ -1072,20 +1337,200 @@ function CursorConfig() {
 					disabled={cursor.raw}
 					onChange={(friction) => setSpring({ friction })}
 				/>
-			</Field>
-
-			<Slider
-				size="sm"
-				label="Inactivity delay"
-				format={(v) => `${v.toFixed(1)}s`}
-				min={0.5}
-				max={10}
-				step={0.5}
-				value={cursor.hideWhenIdleDelay}
-				onChange={(hideWhenIdleDelay) => setCursor({ hideWhenIdleDelay })}
-				disabled={!cursor.hideWhenIdle}
-			/>
+			</PanelSection>
 		</TabPanel>
+	);
+}
+
+function CursorShapeButton({
+	type,
+	label,
+	selected,
+	onSelect,
+}: {
+	type: CursorType;
+	label: string;
+	selected: boolean;
+	onSelect: () => void;
+}) {
+	return (
+		<button
+			type="button"
+			aria-pressed={selected}
+			onClick={onSelect}
+			className={cn(
+				"group flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-xl px-2 text-[10px] font-semibold outline-none transition-[background-color,color,scale] duration-100 focus-visible:ring-2 focus-visible:ring-accent-focus-ring/50 active:scale-[0.96] motion-reduce:transform-none motion-reduce:transition-none",
+				selected
+					? "bg-gray-4 text-gray-12 ring-1 ring-accent-border-selected"
+					: "bg-gray-2 text-gray-10 hover:bg-gray-3 hover:text-gray-12",
+			)}
+		>
+			<CursorShapeDrawing type={type} selected={selected} />
+			{label}
+		</button>
+	);
+}
+
+function CursorShapeDrawing({
+	type,
+	selected,
+}: {
+	type: CursorType;
+	selected: boolean;
+}) {
+	if (type === "circle") {
+		return (
+			<svg viewBox="0 0 32 24" aria-hidden="true" className="h-6 w-8">
+				<circle
+					cx="16"
+					cy="12"
+					r="7"
+					fill="var(--gray-1)"
+					stroke="var(--gray-7)"
+				/>
+				<circle cx="16" cy="12" r="2.5" fill="var(--accent-solid)" />
+			</svg>
+		);
+	}
+
+	const fill = selected ? "var(--accent-solid)" : "var(--gray-11)";
+
+	return (
+		<svg viewBox="0 0 32 24" aria-hidden="true" className="h-6 w-8">
+			{type === "macosDark" ? (
+				<path
+					d="M8 3.5v17l4.5-4.4 3.5 7.6 3.2-1.5-3.6-7.4h6.5L8 3.5Z"
+					fill="var(--gray-12)"
+					stroke="var(--gray-1)"
+					strokeWidth="1.7"
+					strokeLinejoin="round"
+				/>
+			) : type === "rounded" ? (
+				<path
+					d="M8.4 4.1c-.7-.5-1.5 0-1.5.7v15.5c0 .9 1.1 1.3 1.7.7l3.7-4 3 6.2 3-1.5-2.9-6h5.8c.9 0 1.3-1.2.5-1.7L8.4 4.1Z"
+					fill={fill}
+					stroke="var(--gray-1)"
+					strokeWidth="1.6"
+					strokeLinejoin="round"
+				/>
+			) : type === "capsule" ? (
+				<path
+					d="M9 4.2c-.7-.5-1.5 0-1.5.8v14.8c0 .9 1.1 1.3 1.7.7l3.4-3.5 3 6 2.7-1.3-2.8-5.7h5.1c.9 0 1.2-1.1.5-1.7L9 4.2Z"
+					fill="var(--gray-12)"
+					stroke="var(--accent-solid)"
+					strokeWidth="1.7"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+				/>
+			) : (
+				<>
+					<path
+						d="M9 4.5 22 14h-6l-3.5 5.5L9 4.5Z"
+						fill={fill}
+						stroke="var(--gray-1)"
+						strokeLinejoin="round"
+					/>
+					{type === "auto" && (
+						<path
+							d="m23 4 .7 1.8L25.5 6.5l-1.8.7L23 9l-.7-1.8-1.8-.7 1.8-.7L23 4Z"
+							fill="var(--accent-solid)"
+						/>
+					)}
+				</>
+			)}
+		</svg>
+	);
+}
+
+function CursorMotionStyleButton({
+	style,
+	label,
+	selected,
+	disabled,
+	onSelect,
+}: {
+	style: CursorAnimationStyle;
+	label: string;
+	selected: boolean;
+	disabled: boolean;
+	onSelect: () => void;
+}) {
+	return (
+		<button
+			type="button"
+			aria-pressed={selected}
+			disabled={disabled}
+			onClick={onSelect}
+			className={cn(
+				"flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[9px] font-semibold outline-none transition-[background-color,color,scale] duration-100 focus-visible:ring-2 focus-visible:ring-accent-focus-ring/50 enabled:active:scale-[0.96] motion-reduce:transform-none motion-reduce:transition-none",
+				selected
+					? "bg-gray-1 text-gray-12"
+					: "text-gray-10 enabled:hover:bg-gray-4 enabled:hover:text-gray-12",
+			)}
+		>
+			<CursorMotionDrawing style={style} selected={selected} />
+			<span className="w-full truncate">{label}</span>
+		</button>
+	);
+}
+
+function CursorMotionDrawing({
+	style,
+	selected,
+}: {
+	style: CursorAnimationStyle;
+	selected: boolean;
+}) {
+	const stroke = selected ? "var(--accent-solid)" : "currentColor";
+
+	return (
+		<svg viewBox="0 0 32 12" aria-hidden="true" className="h-3 w-7" fill="none">
+			{style === "slow" && (
+				<path
+					d="M7 6h12m-3-3 3 3-3 3"
+					stroke={stroke}
+					strokeWidth="1.5"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+				/>
+			)}
+			{style === "smooth" && (
+				<path
+					d="M4 8c5 0 5-4 10-4s5 4 10 4"
+					stroke={stroke}
+					strokeWidth="1.5"
+					strokeLinecap="round"
+				/>
+			)}
+			{style === "mellow" && (
+				<path
+					d="M4 7c4-4 8-4 12 0s8 4 12 0"
+					stroke={stroke}
+					strokeWidth="1.5"
+					strokeLinecap="round"
+				/>
+			)}
+			{style === "fast" && (
+				<path
+					d="M3 6h23m-4-4 4 4-4 4M7 3 4 6l3 3"
+					stroke={stroke}
+					strokeWidth="1.5"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+				/>
+			)}
+			{style === "custom" && (
+				<>
+					<path
+						d="M5 3h22M5 9h22"
+						stroke="var(--gray-7)"
+						strokeLinecap="round"
+					/>
+					<circle cx="12" cy="3" r="2" fill="var(--accent-solid)" />
+					<circle cx="21" cy="9" r="2" fill="var(--accent-solid)" />
+				</>
+			)}
+		</svg>
 	);
 }
 
@@ -1179,88 +1624,6 @@ function HotkeysConfig() {
 					/>
 				</Subfield>
 			</Field>
-		</TabPanel>
-	);
-}
-
-function CaptionsConfig() {
-	const { project, setProject, selection } = useEditorContext();
-	const captions = project?.captions;
-
-	const selected =
-		selection?.type === "caption" && captions
-			? captions.segments[selection.index]
-			: undefined;
-
-	if (!captions || captions.segments.length === 0) {
-		return (
-			<TabPanel>
-				{/* Transcription is not ported (it needs an ASR model); captions
-				    authored elsewhere in `captions.json` still render and edit here. */}
-				<p className="text-xs text-gray-10">No captions on this recording.</p>
-			</TabPanel>
-		);
-	}
-
-	const setSettings = (
-		patch: Partial<NonNullable<ProjectConfiguration["captions"]>["settings"]>,
-	) =>
-		setProject((current) =>
-			current.captions
-				? {
-						...current,
-						captions: {
-							...current.captions,
-							settings: { ...current.captions.settings, ...patch },
-						},
-					}
-				: current,
-		);
-
-	return (
-		<TabPanel>
-			<Field name="Captions" icon={<IconLucideCaptions className="size-4" />}>
-				<Subfield name="Show captions">
-					<Switch
-						checked={captions.settings.enabled}
-						onCheckedChange={(enabled) => setSettings({ enabled })}
-					/>
-				</Subfield>
-			</Field>
-
-			<Slider
-				size="sm"
-				label="Size"
-				format={(v) => `${v}px`}
-				min={12}
-				max={96}
-				value={captions.settings.size}
-				onChange={(size) => setSettings({ size })}
-			/>
-
-			{selected && (
-				<Field name="Selected caption">
-					<textarea
-						className="min-h-16 w-full rounded-lg border border-gray-4 bg-gray-2 p-2 text-xs text-gray-12"
-						value={selected.text}
-						onChange={(event) => {
-							const text = event.target.value;
-							const selectedIndex = selection?.index ?? -1;
-							setProject((current) => {
-								if (!current.captions) return current;
-								const segments = current.captions.segments.map(
-									(segment, index) =>
-										index === selectedIndex ? { ...segment, text } : segment,
-								);
-								return {
-									...current,
-									captions: { ...current.captions, segments },
-								};
-							});
-						}}
-					/>
-				</Field>
-			)}
 		</TabPanel>
 	);
 }

@@ -990,8 +990,7 @@ fn get_codec_and_options(
     crf: Option<u8>,
     keyframe_interval_secs: Option<u32>,
 ) -> Vec<(Codec, Dictionary<'static>)> {
-    let keyframe_interval_secs =
-        keyframe_interval_secs.unwrap_or(DEFAULT_KEYFRAME_INTERVAL_SECS);
+    let keyframe_interval_secs = keyframe_interval_secs.unwrap_or(DEFAULT_KEYFRAME_INTERVAL_SECS);
     let denominator = config.frame_rate.denominator();
     let frames_per_sec = config.frame_rate.numerator() as f64
         / if denominator == 0 { 1 } else { denominator } as f64;

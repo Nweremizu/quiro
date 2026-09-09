@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
-import { useEditorContext } from "../context";
-import { useTimeline } from "./context";
+import { type SVGProps, useEffect, useRef, useState } from "react";
+import { FPS, useEditorContext } from "../context";
+import { startPlayheadDrag, useTimeline } from "./context";
 
 // The playhead is the one thing on screen that has to move every frame, so it
 // is animated by writing a transform straight to the DOM on an animation
@@ -8,9 +8,10 @@ import { useTimeline } from "./context";
 // what made it advance in visible steps.
 
 export function Playhead() {
-	const { playback } = useEditorContext();
+	const { playback, seek, duration, playing, togglePlay } = useEditorContext();
 	const timeline = useTimeline();
 	const ref = useRef<HTMLDivElement | null>(null);
+	const [dragging, setDragging] = useState(false);
 
 	// Read through refs so the animation loop is never restarted by a zoom or
 	// pan — it just picks up the new transform on its next tick.
@@ -55,10 +56,100 @@ export function Playhead() {
 	return (
 		<div
 			ref={ref}
-			className="pointer-events-none absolute top-0 bottom-0 left-0 z-30 will-change-transform ml-10"
+			className="pointer-events-none absolute top-0 bottom-0 left-0 z-30 ml-10 will-change-transform"
 		>
-			<div className="-mt-2 -ml-[calc(0.37rem-0.5px)] size-3 rounded-full bg-[rgb(226,64,64)]" />
-			<div className="absolute inset-y-0 left-0 w-px bg-[rgb(226,64,64)]" />
+			<div
+				role="slider"
+				tabIndex={0}
+				aria-label="Timeline playhead"
+				aria-orientation="horizontal"
+				aria-valuemin={0}
+				aria-valuemax={duration}
+				aria-valuenow={playback.getTime()}
+				aria-valuetext={`${playback.getTime().toFixed(2)} seconds`}
+				data-dragging={dragging || undefined}
+				onPointerDown={(event) => {
+					if (playing) togglePlay();
+
+					startPlayheadDrag(event, timeline, seek, setDragging);
+				}}
+				onKeyDown={(event) => {
+					const frameStep = 1 / FPS;
+					const step = event.shiftKey ? 1 : frameStep;
+					const current = playback.getTime();
+
+					let next: number;
+
+					if (event.key === "ArrowLeft") {
+						next = current - step;
+					} else if (event.key === "ArrowRight") {
+						next = current + step;
+					} else if (event.key === "Home") {
+						next = 0;
+					} else if (event.key === "End") {
+						next = duration;
+					} else {
+						return;
+					}
+
+					event.preventDefault();
+					event.stopPropagation();
+
+					if (playing) togglePlay();
+
+					seek(Math.min(Math.max(next, 0), duration));
+				}}
+				className="
+      group
+      pointer-events-auto
+      absolute
+      -top-1
+      bottom-0
+      -left-3
+      w-6
+      touch-none
+      cursor-col-resize
+      outline-none
+				data-[dragging]:cursor-grabbing
+    "
+			>
+				<div className="pointer-events-none absolute top-6 bottom-0 left-1/2 w-0.5 -translate-x-1/2 bg-gray-12/60">
+					<div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 -translate-y-1.5 bg-lime-400 group-data-[dragging]:bg-lime-500" />
+				</div>
+				<div className="pointer-events-none absolute top-0 left-1/2 h-6 w-5 -translate-x-1/2 rounded-md outline-offset-2 group-focus-visible:outline-2 group-focus-visible:outline-accent-focus-ring">
+					<TimelinePlayheadIcon className="size-full text-lime-400 drop-shadow-sm transition-colors duration-100 dark-button-shadow group-hover:text-lime-500 group-data-[dragging]:text-lime-500 motion-reduce:transition-none" />
+				</div>
+			</div>
 		</div>
+	);
+}
+
+type TimelinePlayheadIconProps = SVGProps<SVGSVGElement> & {
+	headColor?: string;
+	borderColor?: string;
+};
+
+export function TimelinePlayheadIcon({
+	className,
+	headColor = "currentColor",
+	...props
+}: TimelinePlayheadIconProps) {
+	return (
+		<svg
+			viewBox="0 0 24 28"
+			xmlns="http://www.w3.org/2000/svg"
+			className={className}
+			fill="none"
+			preserveAspectRatio="xMidYMin meet"
+			{...props}
+		>
+			<path
+				d="M5 1.5h14A3.5 3.5 0 0 1 22.5 5v12.2a5 5 0 0 1-1.8 3.8l-7.2 5.8a2.4 2.4 0 0 1-3 0L3.3 21a5 5 0 0 1-1.8-3.8V5A3.5 3.5 0 0 1 5 1.5Z"
+				fill={headColor}
+				stroke={headColor}
+				strokeWidth="1.5"
+				strokeLinejoin="round"
+			/>
+		</svg>
 	);
 }

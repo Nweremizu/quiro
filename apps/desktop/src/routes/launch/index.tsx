@@ -1,6 +1,5 @@
 import { cn, toast } from "@quiro/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
 	currentMonitor,
 	getCurrentWindow,
@@ -65,27 +64,9 @@ import {
 import { QuiroMode } from "./quiro-mode";
 import SystemAudio from "./system-audio";
 
-// `new WebviewWindow(label, ...)` throws if a window with that label
-// already exists — e.g. a leftover from a previous click whose window never
-// got destroyed properly. Reuse it instead of failing silently on every
-// click after the first.
 async function openDebugWindow() {
 	try {
-		const existing = await WebviewWindow.getByLabel("debug");
-		if (existing) {
-			await existing.show();
-			await existing.setFocus();
-			return;
-		}
-
-		const win = new WebviewWindow("debug", {
-			url: "/debug",
-			title: "Quiro Debug",
-		});
-		win.once("tauri://error", (event) => {
-			console.error("Failed to create debug window:", event);
-			toast.error("Failed to open debug window");
-		});
+		await commands.showWindow("Debug");
 	} catch (error) {
 		console.error("Failed to open debug window:", error);
 		toast.error("Failed to open debug window");

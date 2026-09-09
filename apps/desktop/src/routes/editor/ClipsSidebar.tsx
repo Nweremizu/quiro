@@ -1,6 +1,6 @@
 import { cn } from "@quiro/ui";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
+import { cachedFileImageUrl } from "@/utils/image-cache";
 import { commands, type TimelineSegment } from "@/utils/tauri";
 import IconLucideArrowLeft from "~icons/lucide/arrow-left";
 import IconLucideClapperboard from "~icons/lucide/clapperboard";
@@ -45,7 +45,7 @@ function ClipThumbnail({
 		void (async () => {
 			const result = await commands.getClipThumbnail(recordingSegment, start);
 			if (cancelled || result.status === "error") return;
-			setUrl(convertFileSrc(result.data));
+			setUrl(cachedFileImageUrl(result.data));
 		})();
 
 		return () => {
