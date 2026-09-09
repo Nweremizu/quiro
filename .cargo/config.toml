@@ -1,3 +1,8 @@
+# Windows only — Cargo has no per-target `[env]` scoping (a
+# `[target.'cfg(windows)'.env]` table is silently ignored, confirmed
+# empirically), so on Linux/macOS CI this file is deleted before the build
+# step instead (see .github/actions/setup/action.yml). There, FFmpeg headers
+# come from apt/Homebrew and are found via pkg-config without any of this.
 [env]
 FFMPEG_DIR = { relative = true, force = true, value = "target/native-deps" }
 # Camera background blur runs its segmentation model through ONNX Runtime,

@@ -28,6 +28,18 @@ runs:
       shell: bash
       run: pnpm install --frozen-lockfile
 
+    - name: Remove Windows-only cargo env (non-Windows)
+      # .cargo/config.toml's [env] table (FFMPEG_DIR, LIBCLANG_PATH, etc.) is
+      # Windows-only content — it points at target/native-deps and a Windows
+      # LLVM install that don't exist elsewhere. Cargo has no per-target
+      # `[env]` scoping to gate it with, and `force = true` means it clobbers
+      # whatever this job exports for the same keys. Deleting the file here
+      # (this is a throwaway CI checkout) is the only reliable way to keep it
+      # from breaking pkg-config-based FFmpeg/libclang discovery on Linux/macOS.
+      if: runner.os != 'Windows'
+      shell: bash
+      run: rm -f .cargo/config.toml
+
     - name: Linux system dependencies
       if: runner.os == 'Linux'
       shell: bash
@@ -65,6 +77,12 @@ runs:
         # bindgen (coreaudio-sys et al.) needs libclang; Xcode's clang doesn't
         # ship it as a discoverable shared lib, so point at Homebrew's LLVM.
         echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> "$GITHUB_ENV"
+        # Homebrew's clang has no built-in notion of the macOS SDK, so it
+        # can't find framework headers like AudioUnit/AudioUnit.h that
+        # coreaudio-sys's `#include`s expect. Point bindgen at the SDK.
+        SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
+        echo "SDKROOT=$SDKROOT" >> "$GITHUB_ENV"
+        echo "BINDGEN_EXTRA_CLANG_ARGS=-isysroot $SDKROOT" >> "$GITHUB_ENV"
 
     - name: Install Rust
       if: inputs.rust == 'true'
