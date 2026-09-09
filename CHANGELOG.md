@@ -10,6 +10,8 @@ changes.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-09
+
 ### Added
 
 - Release engineering: reproducible multi-platform bundling, `pnpm release`
