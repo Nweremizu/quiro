@@ -49,12 +49,17 @@ runs:
           libavdevice-dev \
           libavutil-dev \
           libswscale-dev \
-          libswresample-dev
+          libswresample-dev \
+          libclang-dev
 
     - name: macOS FFmpeg
       if: runner.os == 'macOS'
       shell: bash
-      run: brew install ffmpeg pkg-config
+      run: |
+        brew install ffmpeg pkg-config llvm
+        # bindgen (coreaudio-sys et al.) needs libclang; Xcode's clang doesn't
+        # ship it as a discoverable shared lib, so point at Homebrew's LLVM.
+        echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> "$GITHUB_ENV"
 
     - name: Install Rust
       if: inputs.rust == 'true'
