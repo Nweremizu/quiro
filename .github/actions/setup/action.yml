@@ -51,6 +51,11 @@ runs:
           libswscale-dev \
           libswresample-dev \
           libclang-dev
+        # bindgen's libclang autodetection has a hardcoded list of llvm-N
+        # paths that lags Ubuntu's default LLVM version, so `libclang-dev`
+        # alone isn't always enough — point it at whatever actually got
+        # installed.
+        echo "LIBCLANG_PATH=$(dirname "$(find /usr/lib -iname 'libclang.so*' -o -iname 'libclang-*.so*' | head -n1)")" >> "$GITHUB_ENV"
 
     - name: macOS FFmpeg
       if: runner.os == 'macOS'
