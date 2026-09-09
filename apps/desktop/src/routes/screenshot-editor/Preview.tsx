@@ -4,8 +4,7 @@ import { AnnotationLayer } from "./AnnotationLayer";
 import { useScreenshotEditorContext } from "./context";
 import { getImageRect } from "./layout";
 import { OcrSelectionOverlay } from "./OcrSelectionOverlay";
-import { applyFocus, paintMasks } from "./screenshotExport";
-import { frameRect, normalizeAnnotation, resolveAnnotation } from "./space";
+import { frameRect } from "./space";
 import { TransformGizmo } from "./TransformGizmo";
 import {
 	cardIsTilted,
@@ -64,17 +63,15 @@ export function Preview({
 		project,
 		originalImageSize,
 		activeTool,
-		annotations,
 		setAnchorRect,
-		setPreviewMaskCanvas,
 		setCardCanvas,
 		setCaptureSelected,
 		setSelectedAnnotationId,
+		lockedLayerIds,
 	} = useScreenshotEditorContext();
 
 	const canvasRef = useRef<HTMLCanvasElement>(null);
 	const cardCanvasRef = useRef<HTMLCanvasElement>(null);
-	const maskCanvasRef = useRef<HTMLCanvasElement>(null);
 	const [frameSize, setFrameSize] = useState({ width: 0, height: 0 });
 	const hasFrame = frameSize.width > 0;
 	const hasCard = !!latestCardFrame;
@@ -118,10 +115,6 @@ export function Preview({
 		ctx.clearRect(0, 0, canvas.width, canvas.height);
 		ctx.drawImage(latestCardFrame.bitmap, 0, 0);
 	}, [latestCardFrame]);
-
-	useEffect(() => {
-		setPreviewMaskCanvas(hasFrame ? maskCanvasRef.current : null);
-	}, [hasFrame, setPreviewMaskCanvas]);
 
 	// Published because the capture's hit test is a question about its alpha,
 	// and this is the only component that holds the canvas carrying it.
@@ -242,87 +235,6 @@ export function Preview({
 	useEffect(() => {
 		setAnchorRect(imageRect);
 	}, [imageRect, setAnchorRect]);
-
-	// Masks are painted onto a second canvas stacked over the first, reading
-	// pixels back out of it. They cannot be SVG like the other annotations —
-	// blurring and pixelating need the rendered pixels underneath — and they
-	// cannot be drawn onto the main canvas either, because each mask must sample
-	// the *unmasked* frame or overlapping masks would compound.
-	//
-	// Declared after the blit effect above so that, in a commit where both run,
-	// the frame is already on the source canvas before this samples it.
-	useEffect(() => {
-		const maskCanvas = maskCanvasRef.current;
-		const source = cardCanvasRef.current;
-		if (!maskCanvas) return;
-
-		const ctx = maskCanvas.getContext("2d");
-		if (!ctx) return;
-
-		if (!latestCardFrame || !source) {
-			maskCanvas.width = 0;
-			maskCanvas.height = 0;
-			return;
-		}
-
-		if (
-			maskCanvas.width !== latestCardFrame.width ||
-			maskCanvas.height !== latestCardFrame.height
-		) {
-			maskCanvas.width = latestCardFrame.width;
-			maskCanvas.height = latestCardFrame.height;
-		}
-
-		ctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
-
-		// Both passes run in the *card's* own space, over the card layer, and the
-		// wrapper's transform carries the result along with the capture. That is
-		// simpler than it was when the preview was one composited image: there
-		// the capture could be spun under an axis-aligned overlay and both passes
-		// had to be de-rotated to match. Here the card layer is axis-aligned by
-		// construction, because its rotation has not been applied yet.
-		//
-		// The anchor is therefore the laid-out rect, not the placed one, so the
-		// stored (capture-normalized) geometry has to be re-resolved against it —
-		// shifted by the bleed, since the card texture is the canvas grown on
-		// every side and the capture sits that much further in.
-		const cardRect = frameRect(
-			laidOutRect.x + cardBleed,
-			laidOutRect.y + cardBleed,
-			laidOutRect.width,
-			laidOutRect.height,
-		);
-		const cardAnnotations = annotations.map((annotation) =>
-			resolveAnnotation(normalizeAnnotation(annotation, imageRect), cardRect),
-		);
-
-		// The depth-of-field pass runs at interactive quality here — the same
-		// shader the export uses, just with fewer bokeh samples — and only ever
-		// over the screenshot region, so the background stays untouched. The
-		// texture upload is keyed on the frame, so dragging the focus re-runs
-		// the shader without re-uploading.
-		if (project)
-			applyFocus(
-				ctx,
-				{ canvas: source, revision: latestCardFrame },
-				cardAnnotations,
-				cardRect,
-				project,
-				"preview",
-			);
-
-		// After focus: masks re-read the pristine frame, so a redaction inside
-		// the focus region stays hard rather than picking up the defocus.
-		if (cardAnnotations.some((a) => a.type === "mask"))
-			paintMasks(ctx, source, cardAnnotations, cardRect);
-	}, [
-		latestCardFrame,
-		annotations,
-		imageRect,
-		laidOutRect,
-		cardBleed,
-		project,
-	]);
 
 	const zoomAtPoint = useCallback(
 		(clientX: number, clientY: number, nextZoom: number) => {
@@ -555,14 +467,6 @@ export function Preview({
 								!hasCard && "invisible",
 							)}
 						/>
-						<canvas
-							ref={maskCanvasRef}
-							aria-hidden
-							className={cn(
-								"pointer-events-none absolute inset-0 h-full w-full",
-								!hasCard && "invisible",
-							)}
-						/>
 					</div>
 				</div>
 				{hasFrame && (
@@ -592,6 +496,7 @@ export function Preview({
 						cssHeight={scaledHeight}
 						imageRect={imageRect}
 						cardRotation={cardRotation}
+						contentVisible={false}
 						isPanning={isPanning}
 						onBackgroundMouseDown={(event) => {
 							if (activeTool !== "select" || event.button !== 0) return;
@@ -617,7 +522,7 @@ export function Preview({
 								? 0
 								: (layerTransform?.rotation ?? 0)
 						}
-						disabled={spaceHeld}
+						disabled={spaceHeld || lockedLayerIds.has("capture")}
 						onMiss={(event) => {
 							if (event.button !== 0) return;
 							setCaptureSelected(false);

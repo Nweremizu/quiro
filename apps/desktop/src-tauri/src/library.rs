@@ -18,6 +18,52 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::{AppHandle, Manager};
 
+#[tauri::command(async)]
+#[specta::specta]
+pub fn rename_library_capture(app: AppHandle, path: String, name: String) -> Result<(), String> {
+    let name = name.trim();
+    if name.is_empty() || name.chars().count() > 80 || name.chars().any(char::is_control) {
+        return Err("Choose a name between 1 and 80 characters without control characters".into());
+    }
+    let recording = list_recordings(app.clone())
+        .into_iter()
+        .find(|(media, _)| media == &path);
+    let (metadata_path, field) = if let Some((_, meta)) = recording {
+        (
+            std::path::PathBuf::from(meta.project_path).join("recording-meta.json"),
+            "pretty_name",
+        )
+    } else if list_screenshots(app)
+        .iter()
+        .any(|(media, _)| media == &path)
+    {
+        (
+            std::path::PathBuf::from(path).with_extension("json"),
+            "prettyName",
+        )
+    } else {
+        return Err("This capture is no longer available in the library".into());
+    };
+    let content = std::fs::read_to_string(&metadata_path).map_err(|error| error.to_string())?;
+    let mut metadata: serde_json::Value =
+        serde_json::from_str(&content).map_err(|error| error.to_string())?;
+    let object = metadata.as_object_mut().ok_or("Invalid capture metadata")?;
+    object.insert(field.to_owned(), serde_json::Value::String(name.to_owned()));
+    let parent = metadata_path.parent().ok_or("Invalid metadata location")?;
+    let mut temporary =
+        tempfile::NamedTempFile::new_in(parent).map_err(|error| error.to_string())?;
+    serde_json::to_writer_pretty(temporary.as_file_mut(), &metadata)
+        .map_err(|error| error.to_string())?;
+    temporary
+        .as_file()
+        .sync_all()
+        .map_err(|error| error.to_string())?;
+    temporary
+        .persist(&metadata_path)
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 #[derive(Serialize, Deserialize, Type, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RecordingMetaWithMetadata {
@@ -134,7 +180,13 @@ pub fn list_recordings(app: AppHandle) -> Vec<(String, RecordingMetaWithMetadata
             Some((
                 media_path.to_string_lossy().to_string(),
                 RecordingMetaWithMetadata {
-                    sort_time_millis: sort_time_millis_from_pretty_name(&meta.pretty_name),
+                    sort_time_millis: sort_time_millis_from_pretty_name(
+                        project_path
+                            .file_name()
+                            .and_then(|name| name.to_str())
+                            .map(|name| name.strip_suffix(".quiro").unwrap_or(name))
+                            .unwrap_or(&meta.pretty_name),
+                    ),
                     pretty_name: meta.pretty_name,
                     project_path: project_path.to_string_lossy().to_string(),
                 },

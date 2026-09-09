@@ -358,7 +358,7 @@ impl Default for BackgroundConfiguration {
             inset: 0,
             crop: None,
             display_position: None,
-            shadow: 73.6,
+            shadow: 40.0,
             advanced_shadow: Some(ShadowConfiguration::default()),
             border: None, // Border is disabled by default for backwards compatibility
             frame: None,  // No decorative frame by default
@@ -621,9 +621,9 @@ impl Default for Camera {
 impl Default for ShadowConfiguration {
     fn default() -> Self {
         Self {
-            size: 14.4,
-            opacity: 68.1,
-            blur: 3.8,
+            size: 14.0,
+            opacity: 68.0,
+            blur: 25.0,
         }
     }
 }
@@ -1800,8 +1800,8 @@ pub enum AnnotationType {
 }
 
 /// Arrow-only shape/style. All optional on `Annotation`: absent reproduces the
-/// original straight arrow with a single solid head. Geometry lives in the
-/// frontend's `arrow.ts`; the renderer never draws annotations.
+/// original straight arrow with a single solid head. Geometry is evaluated by
+/// both the SVG interaction overlay and the native annotation shader.
 #[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum ArrowCurve {
@@ -2945,6 +2945,17 @@ pub const FAST_VELOCITY_THRESHOLD: f64 = 0.015;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn capture_shadow_defaults_match_product_baseline() {
+        let background = BackgroundConfiguration::default();
+        let shadow = background.advanced_shadow.unwrap();
+
+        assert_eq!(background.shadow, 40.0);
+        assert_eq!(shadow.size, 14.0);
+        assert_eq!(shadow.opacity, 68.0);
+        assert_eq!(shadow.blur, 25.0);
+    }
 
     fn clip(start: f64, end: f64) -> TimelineSegment {
         TimelineSegment {

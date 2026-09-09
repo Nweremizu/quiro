@@ -101,6 +101,7 @@ const NUDGE: Record<string, [number, number]> = {
 /** How long a burst of discrete edits — wheel ticks, arrow-key repeats — stays
  * open as one undo entry after the last one arrives. */
 const BURST_IDLE_MS = 400;
+const SELECTION_COLOR = "var(--accent-border-selected)";
 
 export function TransformGizmo({
 	bounds,
@@ -397,6 +398,7 @@ export function TransformGizmo({
 		if (!svg) return;
 
 		const handleWheel = (event: WheelEvent) => {
+			if (disabled) return;
 			if (event.ctrlKey || event.metaKey) return;
 			event.preventDefault();
 			event.stopPropagation();
@@ -412,13 +414,14 @@ export function TransformGizmo({
 
 		svg.addEventListener("wheel", handleWheel, { passive: false });
 		return () => svg.removeEventListener("wheel", handleWheel);
-	}, [commit, coalesce, transform]);
+	}, [commit, coalesce, disabled, transform]);
 
 	// Arrow keys nudge in frame pixels, which is the unit the user can see;
 	// Shift takes the coarse step. Held keys repeat through the OS, so there is
 	// no timer here.
 	useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent) => {
+			if (disabled) return;
 			if (event.metaKey || event.ctrlKey || event.altKey) return;
 			const target = event.target as HTMLElement | null;
 			if (
@@ -453,7 +456,7 @@ export function TransformGizmo({
 
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [commit, coalesce, transform, bounds.width, bounds.height]);
+	}, [commit, coalesce, disabled, transform, bounds.width, bounds.height]);
 
 	// Sized in frame pixels but constant on screen, so a handle stays the same
 	// physical size whatever the viewport zoom or the output resolution.
@@ -541,7 +544,7 @@ export function TransformGizmo({
 						width={imageRect.width}
 						height={imageRect.height}
 						fill="transparent"
-						stroke="#4785FF"
+						stroke={SELECTION_COLOR}
 						// Faint while merely hovered: the outline is there to say the
 						// capture is grabbable, not to compete with a selection.
 						strokeOpacity={captureSelected ? 1 : 0.4}
@@ -562,7 +565,7 @@ export function TransformGizmo({
 							y1={imageRect.y}
 							x2={rotationHandle.x}
 							y2={rotationHandle.y}
-							stroke="#4785FF"
+							stroke={SELECTION_COLOR}
 							strokeWidth={stroke}
 						/>
 						<circle
@@ -570,7 +573,7 @@ export function TransformGizmo({
 							cy={rotationHandle.y}
 							r={handleSize / 2}
 							fill="#fff"
-							stroke="#4785FF"
+							stroke={SELECTION_COLOR}
 							strokeWidth={stroke}
 							style={{ cursor: "crosshair" }}
 							onPointerDown={(event) => beginGesture(event, "rotate", null)}
@@ -586,7 +589,7 @@ export function TransformGizmo({
 									width={handleSize}
 									height={handleSize}
 									fill="#fff"
-									stroke="#4785FF"
+									stroke={SELECTION_COLOR}
 									strokeWidth={stroke}
 									style={{
 										cursor:

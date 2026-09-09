@@ -7,6 +7,12 @@ Shotbase does. Companion to
 
 Written against `main` @ `6c4370f`.
 
+Implementation update (2026-09-09): annotation coordinates, timing, anchors,
+native shapes/arrows/text/masks/focus, and the single-pass native export are
+delivered. The screenshot SVG now provides interaction and selection chrome
+only; it is no longer an export renderer. The shell/timeline consolidation in
+§5 remains the product-level follow-up to this rendering unification.
+
 ---
 
 ## 0. Verdict first

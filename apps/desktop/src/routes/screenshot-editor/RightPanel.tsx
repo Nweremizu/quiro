@@ -26,7 +26,7 @@ import { TransformPanel } from "./TransformPanel";
  * to the widest of the three (`StylePanel`'s old `w-72`) rather than an
  * average — that panel is the most control-dense, and cramming it would be a
  * worse trade than giving the other two some air. */
-const PANEL_WIDTH = "18rem";
+const PANEL_WIDTH = "18.5rem";
 
 /** The swap reads as a direction: a panel arrives from the top-right and
  * leaves toward the bottom-right, so the two are never mistaken for each
@@ -61,7 +61,7 @@ export function RightPanel() {
 
 	return (
 		<SidePanel open={active !== null} side="right" width={PANEL_WIDTH}>
-			<div className="flex h-full w-full flex-col border-l border-gray-3 bg-gray-1">
+			<div className="flex h-full w-full flex-col border-l border-gray-3 bg-gray-1 ">
 				{/* `mode="wait"` so the outgoing panel is gone before the incoming
 				    one mounts — never two inspectors alive at once, each with its
 				    own effects and refs. The container is already the right size, so

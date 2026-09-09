@@ -14,3 +14,8 @@ apps/desktop/dist
 # Release scratch
 /manifest
 /artifacts
+
+# Local planning notes / editor config — not for the repo
+/.plans
+/plans
+/.vscode

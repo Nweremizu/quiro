@@ -82,7 +82,7 @@ function SourceTabs({
 							const step = event.key === "ArrowRight" ? 1 : -1;
 							const next =
 								types[
-									(types.indexOf(active) + step + types.length) % types.length
+								(types.indexOf(active) + step + types.length) % types.length
 								];
 							onSelect(next);
 							document.getElementById(`${SOURCE_TAB_ID}-${next}`)?.focus();
@@ -161,11 +161,11 @@ function BackgroundSection({
 		source.type === "gradient"
 			? source
 			: {
-					type: "gradient",
-					from: gradient.from,
-					to: gradient.to,
-					angle: gradientAngle,
-				}
+				type: "gradient",
+				from: gradient.from,
+				to: gradient.to,
+				angle: gradientAngle,
+			}
 	) satisfies BackgroundConfiguration["source"];
 
 	return (
@@ -577,7 +577,7 @@ export function StylePanel() {
 				</button>
 			</div>
 
-			<div className="custom-scroll min-h-0 flex-1 overflow-y-auto pb-10">
+			<div className="custom-scroll min-h-0 flex-1 overflow-y-auto pb-10 space-y-3 px-3">
 				<BackgroundSection
 					background={background}
 					onChange={updateBackground}

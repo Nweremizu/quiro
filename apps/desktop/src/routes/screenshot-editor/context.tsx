@@ -135,10 +135,6 @@ export type ScreenshotEditorContextValue = {
 	 * this has caught up with the newest edit — export waits for that rather than
 	 * encoding whatever stale frame happens to be on screen. */
 	configRevision: number;
-	/** The capture layer's mask and depth-of-field overlay, painted in the
-	 * capture's own space and carried along by that layer's transform. */
-	previewMaskCanvas: HTMLCanvasElement | null;
-	setPreviewMaskCanvas: (canvas: HTMLCanvasElement | null) => void;
 	/** The rendered capture, on transparency, in its own untransformed space.
 	 * Published because it is also the hit test: whether a click landed on the
 	 * capture is a question about its alpha, not about its bounding box. */
@@ -149,6 +145,8 @@ export type ScreenshotEditorContextValue = {
 	 * the other, so there is never a moment with two things selected. */
 	captureSelected: boolean;
 	setCaptureSelected: (selected: boolean) => void;
+	lockedLayerIds: ReadonlySet<string>;
+	setLayerLocked: (id: string, locked: boolean) => void;
 
 	history: {
 		undo: () => void;
@@ -409,10 +407,49 @@ export function ScreenshotEditorProvider({
 
 	const revisionRef = useRef(0);
 	const [configRevision, setConfigRevision] = useState(0);
-	const [previewMaskCanvas, setPreviewMaskCanvas] =
-		useState<HTMLCanvasElement | null>(null);
 	const [cardCanvas, setCardCanvas] = useState<HTMLCanvasElement | null>(null);
 	const [captureSelected, setCaptureSelectedState] = useState(false);
+	const [lockedLayerIds, setLockedLayerIds] = useState<Set<string>>(
+		() => new Set(),
+	);
+	const [lockStorageLoadedFor, setLockStorageLoadedFor] = useState<
+		string | null
+	>(null);
+	const lockStorageKey = instance
+		? `quiro:screenshot-editor:locked-layers:${instance.path}`
+		: null;
+
+	useEffect(() => {
+		if (!lockStorageKey) {
+			setLockedLayerIds(new Set());
+			setLockStorageLoadedFor(null);
+			return;
+		}
+
+		let loaded = new Set<string>();
+		try {
+			const stored = localStorage.getItem(lockStorageKey);
+			const parsed: unknown = stored ? JSON.parse(stored) : [];
+			if (Array.isArray(parsed)) {
+				loaded = new Set(
+					parsed.filter((id): id is string => typeof id === "string"),
+				);
+			}
+		} catch {
+			loaded = new Set();
+		}
+		setLockedLayerIds(loaded);
+		setLockStorageLoadedFor(lockStorageKey);
+	}, [lockStorageKey]);
+
+	useEffect(() => {
+		if (!lockStorageKey || lockStorageLoadedFor !== lockStorageKey) return;
+		try {
+			localStorage.setItem(lockStorageKey, JSON.stringify([...lockedLayerIds]));
+		} catch {
+			return;
+		}
+	}, [lockStorageKey, lockStorageLoadedFor, lockedLayerIds]);
 
 	const setSelectedAnnotationId = useCallback(
 		(id: string | null | ((previous: string | null) => string | null)) => {
@@ -426,36 +463,31 @@ export function ScreenshotEditorProvider({
 		setCaptureSelectedState(selected);
 		if (selected) setSelectedAnnotationIdState(null);
 	}, []);
+	const setLayerLocked = useCallback((id: string, locked: boolean) => {
+		setLockedLayerIds((previous) => {
+			const next = new Set(previous);
+			if (locked) next.add(id);
+			else next.delete(id);
+			return next;
+		});
+		if (locked) {
+			if (id === "capture") setCaptureSelectedState(false);
+			else
+				setSelectedAnnotationIdState((selected) =>
+					selected === id ? null : selected,
+				);
+		}
+	}, []);
 	const renderTimer = useRef<number | undefined>(undefined);
 	const saveTimer = useRef<number | undefined>(undefined);
 	const lastRenderAt = useRef(0);
 
-	// Annotations are deliberately not a render input. `quiro-rendering` has
-	// no annotation concept at all — it draws the frame (background, padding,
-	// rounding, shadow, crop) and nothing else, and every arrow, shape, mask
-	// and text is composited in the browser: as SVG for the preview, as
-	// Canvas2D at export resolution (`screenshotExport.ts`). Both read the
-	// same data, which is what keeps the export identical to the preview.
-	//
-	// So an annotation edit cannot change the rendered frame, and pushing one
-	// at 60fps bought an IPC call, a GPU render and a full frame over the
-	// socket to receive a byte-identical picture. Recolouring a shape, or
-	// dragging one, now costs a repaint of one SVG node and nothing else —
-	// which is also what `plans/text-engine/003` asks for in as many words:
-	// "dragging a selected text annotation still costs no renderer frame —
-	// check the config revision does not advance during a drag".
-	const annotationsRef = useRef(annotations);
-	annotationsRef.current = annotations;
-
 	useEffect(() => {
 		if (!instance || !project) return;
 
-		// Annotations ride along so the payload is a complete configuration,
-		// but they are read from a ref: they must not be a dependency, or this
-		// effect is back to firing on every annotation edit.
 		const config: ProjectConfiguration = {
 			...project,
-			annotations: annotationsRef.current,
+			annotations,
 		};
 		const revision = ++revisionRef.current;
 		setConfigRevision(revision);
@@ -481,11 +513,9 @@ export function ScreenshotEditorProvider({
 		return () => {
 			window.clearTimeout(renderTimer.current);
 		};
-	}, [project, instance]);
+	}, [project, annotations, instance]);
 
-	// Persistence is the other half, and it *does* care about annotations —
-	// they are part of the project file even though they are not part of the
-	// rendered frame. Debounced far longer than the render, so a drag is one
+	// Persistence is debounced far longer than rendering, so a drag is one
 	// write rather than hundreds.
 	useEffect(() => {
 		if (!instance || !project) return;
@@ -740,6 +770,8 @@ export function ScreenshotEditorProvider({
 			setCardCanvas,
 			captureSelected,
 			setCaptureSelected,
+			lockedLayerIds,
+			setLayerLocked,
 			activeTool,
 			setActiveTool,
 			layersPanelOpen,
@@ -751,8 +783,6 @@ export function ScreenshotEditorProvider({
 			latestCardFrame,
 			originalImageSize,
 			configRevision,
-			previewMaskCanvas,
-			setPreviewMaskCanvas,
 			history: {
 				undo,
 				redo,
@@ -785,10 +815,11 @@ export function ScreenshotEditorProvider({
 			latestCardFrame,
 			originalImageSize,
 			configRevision,
-			previewMaskCanvas,
 			cardCanvas,
 			captureSelected,
 			setCaptureSelected,
+			lockedLayerIds,
+			setLayerLocked,
 			setSelectedAnnotationId,
 			undo,
 			redo,

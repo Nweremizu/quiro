@@ -1,14 +1,14 @@
+import "./shortcuts.css";
 import { cn, toast } from "@quiro/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type as osType } from "@tauri-apps/plugin-os";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { commands, type Hotkey, type HotkeyAction } from "@/utils/tauri";
 import IconLucideX from "~icons/lucide/x";
+import IconCheck from "~icons/ph/check-circle-fill";
+import IconWarning from "~icons/ph/warning-circle-fill";
 import { Section, SectionCard, SettingsPageContent } from "./Setting";
 
-// The bindable actions, in the order they're most likely to be wanted. `other`
-// exists in the Rust enum as a serde catch-all for forward compatibility and is
-// deliberately not listed — it isn't an action a user can pick.
 const ACTIONS: { action: HotkeyAction; label: string; description?: string }[] =
 	[
 		{
@@ -20,7 +20,7 @@ const ACTIONS: { action: HotkeyAction; label: string; description?: string }[] =
 		{
 			action: "togglePauseRecording",
 			label: "Pause / resume recording",
-			description: "One key for both — pressing it again resumes.",
+			description: "Press the same shortcut again to resume.",
 		},
 		{ action: "restartRecording", label: "Restart recording" },
 		{ action: "cycleRecordingMode", label: "Cycle recording mode" },
@@ -34,9 +34,22 @@ const ACTIONS: { action: HotkeyAction; label: string; description?: string }[] =
 	];
 
 const IS_MAC = osType() === "macos";
+const MODIFIER_CODES = new Set([
+	"ControlLeft",
+	"ControlRight",
+	"ShiftLeft",
+	"ShiftRight",
+	"AltLeft",
+	"AltRight",
+	"MetaLeft",
+	"MetaRight",
+]);
+type Feedback = {
+	keys: string[];
+	status: "listening" | "checking" | "success" | "error";
+	message?: string;
+};
 
-/** `Code` values are DOM-ish ("KeyA", "Digit1", "ArrowUp") — strip the prefixes
- *  that only exist to disambiguate, and leave the rest (F5, Space, Tab) alone. */
 function formatCode(code: string) {
 	if (code.startsWith("Key")) return code.slice(3);
 	if (code.startsWith("Digit")) return code.slice(5);
@@ -45,20 +58,116 @@ function formatCode(code: string) {
 	return code;
 }
 
-function formatHotkey(hotkey: Hotkey) {
-	const parts: string[] = [];
-	if (hotkey.ctrl) parts.push(IS_MAC ? "⌃" : "Ctrl");
-	if (hotkey.alt) parts.push(IS_MAC ? "⌥" : "Alt");
-	if (hotkey.shift) parts.push(IS_MAC ? "⇧" : "Shift");
-	if (hotkey.meta) parts.push(IS_MAC ? "⌘" : "Win");
-	parts.push(formatCode(hotkey.code));
-	return parts.join(IS_MAC ? "" : " + ");
+function hotkeyKeys(hotkey: Hotkey) {
+	const keys: string[] = [];
+	if (hotkey.ctrl) keys.push(IS_MAC ? "⌃" : "Ctrl");
+	if (hotkey.alt) keys.push(IS_MAC ? "⌥" : "Alt");
+	if (hotkey.shift) keys.push(IS_MAC ? "⇧" : "Shift");
+	if (hotkey.meta) keys.push(IS_MAC ? "⌘" : "Win");
+	if (hotkey.code) keys.push(formatCode(hotkey.code));
+	return keys;
+}
+
+function modifierKeys(event: KeyboardEvent) {
+	const keys: string[] = [];
+	if (event.ctrlKey || event.code.startsWith("Control"))
+		keys.push(IS_MAC ? "⌃" : "Ctrl");
+	if (event.altKey || event.code.startsWith("Alt"))
+		keys.push(IS_MAC ? "⌥" : "Alt");
+	if (event.shiftKey || event.code.startsWith("Shift"))
+		keys.push(IS_MAC ? "⇧" : "Shift");
+	if (event.metaKey || event.code.startsWith("Meta"))
+		keys.push(IS_MAC ? "⌘" : "Win");
+	return keys;
+}
+
+function sameHotkey(left: Hotkey, right: Hotkey) {
+	return (
+		left.code === right.code &&
+		left.ctrl === right.ctrl &&
+		left.alt === right.alt &&
+		left.shift === right.shift &&
+		left.meta === right.meta
+	);
+}
+
+function Keycaps({ keys }: { keys: string[] }) {
+	return (
+		<span className="shortcut-keycaps">
+			{keys.map((key, index) => (
+				<span className="shortcut-key-group" key={key}>
+					{index > 0 && <span className="shortcut-plus">+</span>}
+					<kbd>{key}</kbd>
+				</span>
+			))}
+		</span>
+	);
+}
+
+function ShortcutFeedback({
+	feedback,
+	above,
+}: {
+	feedback: Feedback;
+	above: boolean;
+}) {
+	const empty = feedback.keys.length === 0;
+	const title =
+		feedback.status === "success"
+			? "Shortcut saved"
+			: feedback.status === "error"
+				? "Try another shortcut"
+				: feedback.status === "checking"
+					? "Checking shortcut"
+					: "Type your shortcut";
+	return (
+		<div
+			className={cn(
+				"shortcut-feedback",
+				above && "shortcut-feedback-above",
+				`shortcut-feedback-${feedback.status}`,
+			)}
+			role="status"
+			aria-live="polite"
+		>
+			<div className="shortcut-feedback-glow" />
+			<div className="shortcut-feedback-copy">
+				<span className="shortcut-feedback-kicker">{title}</span>
+				<span>
+					{feedback.message ??
+						(empty
+							? "Modifiers appear here as you press them"
+							: "Keep typing your combination")}
+				</span>
+			</div>
+			<div className="shortcut-feedback-keys">
+				{empty ? (
+					<span className="shortcut-waiting">
+						<i />
+						<i />
+						<i />
+					</span>
+				) : (
+					<Keycaps keys={feedback.keys} />
+				)}
+			</div>
+			{feedback.status === "success" && (
+				<IconCheck className="shortcut-feedback-icon" />
+			)}
+			{feedback.status === "error" && (
+				<IconWarning className="shortcut-feedback-icon" />
+			)}
+		</div>
+	);
 }
 
 export default function ShortcutsSettings() {
 	const queryClient = useQueryClient();
 	const [capturing, setCapturing] = useState<HotkeyAction | null>(null);
-
+	const [feedback, setFeedback] = useState<Feedback>({
+		keys: [],
+		status: "listening",
+	});
 	const query = useQuery({
 		queryKey: ["hotkeys"],
 		queryFn: async () => {
@@ -67,91 +176,144 @@ export default function ShortcutsSettings() {
 			return result.data;
 		},
 	});
-
-	// specta turns the Rust `HashMap<HotkeyAction, Hotkey>` into a *required*
-	// mapped type, but the map only ever holds the actions actually bound — so
-	// the generated type overstates what's there. Narrowing to Partial here
-	// keeps the lookups below honest rather than trusting a type that lies.
 	const hotkeys = (query.data?.hotkeys ?? {}) as Partial<
 		Record<HotkeyAction, Hotkey>
 	>;
-
+	const hotkeysRef = useRef(hotkeys);
+	hotkeysRef.current = hotkeys;
+	const labels = useMemo(
+		() =>
+			Object.fromEntries(
+				ACTIONS.map(({ action, label }) => [action, label]),
+			) as Partial<Record<HotkeyAction, string>>,
+		[],
+	);
 	const apply = useCallback(
 		async (action: HotkeyAction, hotkey: Hotkey | null) => {
 			const result = await commands.setHotkey(action, hotkey);
-			if (result.status === "error") {
-				// Rust rejects a bare Escape and anything the OS already owns —
-				// both are worth surfacing verbatim, they explain themselves.
-				toast.error(result.error);
-				return;
-			}
+			if (result.status === "error") return result.error;
 			await queryClient.invalidateQueries({ queryKey: ["hotkeys"] });
+			return null;
 		},
 		[queryClient],
 	);
+	const beginCapture = (action: HotkeyAction) => {
+		if (capturing === action) {
+			setCapturing(null);
+			return;
+		}
+		setFeedback({ keys: [], status: "listening" });
+		setCapturing(action);
+	};
 
 	useEffect(() => {
 		if (!capturing) return;
-
-		const onKeyDown = (e: KeyboardEvent) => {
-			e.preventDefault();
-			e.stopPropagation();
-
-			// Escape cancels capture rather than binding — it's reserved anyway,
-			// and "press Escape to back out" is what everyone expects here.
-			if (e.code === "Escape" && !e.metaKey && !e.ctrlKey && !e.altKey) {
-				setCapturing(null);
-				return;
+		let timer: number | undefined;
+		let checking = false;
+		const fail = (keys: string[], message: string) => {
+			setFeedback({ keys, status: "error", message });
+			timer = window.setTimeout(
+				() => setFeedback({ keys: [], status: "listening" }),
+				1200,
+			);
+		};
+		const onKeyDown = (event: KeyboardEvent) => {
+			event.preventDefault();
+			event.stopPropagation();
+			if (checking || event.repeat) return;
+			if (timer !== undefined) {
+				window.clearTimeout(timer);
+				timer = undefined;
 			}
-
-			// Ignore a modifier pressed on its own; wait for the real key.
 			if (
-				[
-					"ControlLeft",
-					"ControlRight",
-					"ShiftLeft",
-					"ShiftRight",
-					"AltLeft",
-					"AltRight",
-					"MetaLeft",
-					"MetaRight",
-				].includes(e.code)
+				event.code === "Escape" &&
+				!event.metaKey &&
+				!event.ctrlKey &&
+				!event.altKey &&
+				!event.shiftKey
 			) {
+				fail(["Esc"], "Escape is reserved for closing capture overlays");
 				return;
 			}
-
-			const action = capturing;
-			setCapturing(null);
-			void apply(action, {
-				code: e.code,
-				meta: e.metaKey,
-				ctrl: e.ctrlKey,
-				alt: e.altKey,
-				shift: e.shiftKey,
+			if (MODIFIER_CODES.has(event.code)) {
+				setFeedback({ keys: modifierKeys(event), status: "listening" });
+				return;
+			}
+			const candidate: Hotkey = {
+				code: event.code,
+				meta: event.metaKey,
+				ctrl: event.ctrlKey,
+				alt: event.altKey,
+				shift: event.shiftKey,
+			};
+			const keys = hotkeyKeys(candidate);
+			const current = hotkeysRef.current[capturing];
+			if (current && sameHotkey(current, candidate)) {
+				setFeedback({
+					keys,
+					status: "success",
+					message: "This shortcut is already assigned here",
+				});
+				checking = true;
+				timer = window.setTimeout(() => setCapturing(null), 850);
+				return;
+			}
+			const conflict = Object.entries(hotkeysRef.current).find(
+				([action, hotkey]) =>
+					action !== capturing && hotkey && sameHotkey(hotkey, candidate),
+			);
+			if (conflict) {
+				fail(
+					keys,
+					`Already used by ${labels[conflict[0] as HotkeyAction] ?? "another Quiro action"}`,
+				);
+				return;
+			}
+			setFeedback({
+				keys,
+				status: "checking",
+				message: "Checking system-wide availability",
+			});
+			checking = true;
+			void apply(capturing, candidate).then((error) => {
+				if (error) {
+					checking = false;
+					fail(keys, error);
+					return;
+				}
+				setFeedback({
+					keys,
+					status: "success",
+					message: "Ready to use anywhere",
+				});
+				timer = window.setTimeout(() => setCapturing(null), 850);
 			});
 		};
-
 		window.addEventListener("keydown", onKeyDown, { capture: true });
-		return () =>
+		return () => {
 			window.removeEventListener("keydown", onKeyDown, { capture: true });
-	}, [capturing, apply]);
+			if (timer !== undefined) window.clearTimeout(timer);
+		};
+	}, [apply, capturing, labels]);
 
 	return (
 		<div className="custom-scroll h-full flex-1 overflow-y-auto">
 			<SettingsPageContent>
 				<Section
 					title="Shortcuts"
-					description="System-wide keys that work while another app has focus — which is the point, since recording something means Quiro isn't the window you're looking at."
+					description="Build system-wide shortcuts and see each key land as you type."
 				>
-					<SectionCard className="divide-y divide-gray-3">
-						{ACTIONS.map(({ action, label, description }) => {
+					<SectionCard className="shortcut-list divide-y divide-gray-3">
+						{ACTIONS.map(({ action, label, description }, index) => {
 							const hotkey = hotkeys[action];
-							const isCapturing = capturing === action;
-
+							const active = capturing === action;
 							return (
 								<div
 									key={action}
-									className="flex items-center justify-between gap-4 px-4 py-3"
+									className={cn(
+										"shortcut-row",
+										active && "shortcut-row-active",
+									)}
 								>
 									<div className="flex min-w-0 flex-1 flex-col gap-0.5">
 										<p className="text-[13px] text-gray-12">{label}</p>
@@ -161,60 +323,53 @@ export default function ShortcutsSettings() {
 											</p>
 										)}
 									</div>
-
-									<div className="flex shrink-0 items-center gap-1.5">
+									<div className="shortcut-control">
 										<button
 											type="button"
-											onClick={() => setCapturing(isCapturing ? null : action)}
+											onClick={() => beginCapture(action)}
+											aria-expanded={active}
 											className={cn(
-												"min-w-28 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-focus-ring",
-												isCapturing
-													? "border-accent-border-selected bg-accent-surface text-accent-text"
-													: hotkey
-														? "border-gray-5 bg-gray-3 text-gray-12 hover:bg-gray-4"
-														: "border-gray-5 bg-gray-2 text-gray-10 hover:bg-gray-3",
+												"shortcut-trigger",
+												active && "shortcut-trigger-active",
 											)}
 										>
-											{isCapturing
-												? "Press keys…"
-												: hotkey
-													? formatHotkey(hotkey)
-													: "Not set"}
+											{hotkey ? (
+												<Keycaps keys={hotkeyKeys(hotkey)} />
+											) : (
+												<span>{active ? "Listening…" : "Set shortcut"}</span>
+											)}
 										</button>
-
 										<button
 											type="button"
 											aria-label={`Clear shortcut for ${label}`}
 											disabled={!hotkey}
-											onClick={() => void apply(action, null)}
-											className="flex size-6 items-center justify-center rounded-md text-gray-10 transition-colors hover:bg-gray-4 hover:text-gray-12 disabled:pointer-events-none disabled:opacity-30"
+											onClick={() =>
+												void apply(action, null).then(
+													(error) => error && toast.error(error),
+												)
+											}
+											className="shortcut-clear"
 										>
-											<IconLucideX className="size-3.5" />
+											<IconLucideX />
 										</button>
+										{active && (
+											<ShortcutFeedback
+												feedback={feedback}
+												above={index >= 8}
+											/>
+										)}
 									</div>
 								</div>
 							);
 						})}
 					</SectionCard>
 				</Section>
-
-				<Section title="Notes">
+				<Section title="How it works">
 					<SectionCard padded>
-						<ul className="space-y-2 text-xs leading-relaxed text-gray-11">
-							<li>
-								Escape on its own stays reserved for closing the capture
-								overlay, so it can't be bound. Escape with a modifier is fine.
-							</li>
-							<li>
-								A shortcut another app already owns can't be taken — Quiro will
-								tell you rather than silently doing nothing.
-							</li>
-							{capturing && (
-								<li className="text-accent-text">
-									Press Escape to cancel without changing the binding.
-								</li>
-							)}
-						</ul>
+						<p className="text-xs leading-relaxed text-gray-11">
+							Select a shortcut and type. Quiro checks conflicts with your other
+							actions and the operating system before saving it.
+						</p>
 					</SectionCard>
 				</Section>
 			</SettingsPageContent>

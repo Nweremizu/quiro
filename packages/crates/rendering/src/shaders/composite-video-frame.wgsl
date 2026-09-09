@@ -26,6 +26,14 @@ struct Uniforms {
     // the uniform rounding; the display squares its top corners against
     // decorative frame chrome with (0, 0, 1, 1).
     corner_radii: vec4<f32>,
+    // centre xy, radii xy in card-local UV
+    focus_region: vec4<f32>,
+    // rotation, max CoC fraction, falloff, inner edge
+    focus_optics: vec4<f32>,
+    // near blur, far blur, highlight, cat-eye
+    focus_style: vec4<f32>,
+    // shape power, animation alpha, padding
+    focus_state: vec4<f32>,
     // Screen pixels -> card-plane pixels. Identity is a true no-op and is what
     // the video, camera and frame layers send, so their output is unchanged.
     inv_perspective: mat3x3<f32>,
@@ -171,6 +179,76 @@ fn to_card_space(p: vec2<f32>) -> CardPoint {
     return out;
 }
 
+fn focus_shape_distance(n: vec2<f32>) -> f32 {
+    if uniforms.focus_state.x < 2.5 {
+        return length(n);
+    }
+    let a = abs(n);
+    let a2 = a * a;
+    let a6 = a2 * a2 * a2;
+    return pow(a6.x + a6.y, 1.0 / 6.0);
+}
+
+fn focus_coc(uv: vec2<f32>) -> f32 {
+    var offset = (uv - uniforms.focus_region.xy) * uniforms.target_size;
+    let c = cos(-uniforms.focus_optics.x);
+    let s = sin(-uniforms.focus_optics.x);
+    offset = vec2<f32>(offset.x * c - offset.y * s, offset.x * s + offset.y * c);
+    let radius = max(uniforms.focus_region.zw * uniforms.target_size, vec2<f32>(1.0));
+    let distance = focus_shape_distance(offset / radius);
+    let focus_factor = 1.0 - smoothstep(uniforms.focus_optics.w, 1.0, distance);
+    let amount = pow(1.0 - focus_factor, uniforms.focus_optics.z);
+    let nearness = smoothstep(-0.2, 0.2, uv.y - uniforms.focus_region.y);
+    let side_blur = mix(uniforms.focus_style.y, uniforms.focus_style.x, nearness);
+    return uniforms.focus_optics.y * min(uniforms.target_size.x, uniforms.target_size.y) * amount * side_blur;
+}
+
+fn focus_luma(color: vec3<f32>) -> f32 {
+    return dot(color, vec3<f32>(0.2126, 0.7152, 0.0722));
+}
+
+fn focus_expand_highlights(color: vec3<f32>) -> vec3<f32> {
+    let linear = color * color;
+    return linear * (1.0 + uniforms.focus_style.z * smoothstep(0.45, 1.0, focus_luma(linear)) * 7.0);
+}
+
+fn focused_sample(uv: vec2<f32>, crop_bounds_uv: vec4<f32>, pixel: vec2<f32>) -> vec4<f32> {
+    let center = sample_texture(uv, crop_bounds_uv);
+    if uniforms.focus_state.y <= 0.0 {
+        return center;
+    }
+    let radius = focus_coc(uv);
+    if radius < 0.5 {
+        return center;
+    }
+
+    var color = focus_expand_highlights(center.rgb);
+    var alpha = center.a;
+    var total = 1.0;
+    let spin = interleaved_noise(pixel) * 6.28318530718 + uniforms.focus_optics.x;
+    let from_center = uv - vec2<f32>(0.5);
+    let radial = normalize(from_center + vec2<f32>(0.00001));
+    let squash = 1.0 - clamp(length(from_center) * 2.0 * uniforms.focus_style.w, 0.0, 0.8);
+
+    for (var i = 0; i < 24; i = i + 1) {
+        let fi = f32(i) + 0.5;
+        let sample_radius = radius * sqrt(fi / 24.0);
+        let angle = fi * 2.39996323 + spin;
+        var offset = vec2<f32>(cos(angle), sin(angle)) * sample_radius;
+        let along = dot(offset, radial);
+        offset = radial * along + (offset - radial * along) * squash;
+        let sample_uv = clamp(uv + offset / uniforms.target_size, vec2<f32>(0.0), vec2<f32>(1.0));
+        let weight = clamp(focus_coc(sample_uv) - sample_radius + 1.0, 0.0, 1.0);
+        let sample = sample_texture(sample_uv, crop_bounds_uv);
+        color += focus_expand_highlights(sample.rgb) * weight;
+        alpha += sample.a * weight;
+        total += weight;
+    }
+
+    let blurred = vec4<f32>(sqrt(max(color / total, vec3<f32>(0.0))), alpha / total);
+    return mix(center, blurred, uniforms.focus_state.y);
+}
+
 @fragment
 fn fs_main(@builtin(position) frag_coord: vec4<f32>) -> @location(0) vec4<f32> {
     // Everything below works in card space. With the identity matrix this is
@@ -282,7 +360,7 @@ fn fs_main(@builtin(position) frag_coord: vec4<f32>) -> @location(0) vec4<f32> {
     }
 
     let sample_target_uv = clamp(target_uv, vec2<f32>(0.0), vec2<f32>(1.0));
-    var base_color = sample_texture(sample_target_uv, crop_bounds_uv);
+    var base_color = focused_sample(sample_target_uv, crop_bounds_uv, p);
     base_color.a = base_color.a * shape_coverage * uniforms.opacity;
 
     let zoom_amount = uniforms.motion_blur_params.z;
@@ -389,7 +467,7 @@ fn sample_texture(uv: vec2<f32>, crop_bounds_uv: vec4<f32>) -> vec4<f32> {
         let upscale_ratio = max(target_size.x / source_size.x, target_size.y / source_size.y);
         let is_upscaling = upscale_ratio > 1.05;
 
-        let center_sample = textureSample(frame_texture, frame_sampler, cropped_uv);
+        let center_sample = textureSampleLevel(frame_texture, frame_sampler, cropped_uv, 0.0);
         let center_color = center_sample.rgb;
         let out_alpha = select(1.0, center_sample.a, uniforms.preserve_source_alpha > 0.5);
 
@@ -399,25 +477,29 @@ fn sample_texture(uv: vec2<f32>, crop_bounds_uv: vec4<f32>) -> vec4<f32> {
             let offset_x = vec2<f32>(texel_size.x, 0.0);
             let offset_y = vec2<f32>(0.0, texel_size.y);
 
-            let left = textureSample(
+            let left = textureSampleLevel(
                 frame_texture,
                 frame_sampler,
-                clamp(cropped_uv - offset_x, safe_min, safe_max)
+                clamp(cropped_uv - offset_x, safe_min, safe_max),
+                0.0
             ).rgb;
-            let right = textureSample(
+            let right = textureSampleLevel(
                 frame_texture,
                 frame_sampler,
-                clamp(cropped_uv + offset_x, safe_min, safe_max)
+                clamp(cropped_uv + offset_x, safe_min, safe_max),
+                0.0
             ).rgb;
-            let top = textureSample(
+            let top = textureSampleLevel(
                 frame_texture,
                 frame_sampler,
-                clamp(cropped_uv - offset_y, safe_min, safe_max)
+                clamp(cropped_uv - offset_y, safe_min, safe_max),
+                0.0
             ).rgb;
-            let bottom = textureSample(
+            let bottom = textureSampleLevel(
                 frame_texture,
                 frame_sampler,
-                clamp(cropped_uv + offset_y, safe_min, safe_max)
+                clamp(cropped_uv + offset_y, safe_min, safe_max),
+                0.0
             ).rgb;
 
             let blurred = (left + right + top + bottom) * 0.25;
@@ -434,25 +516,29 @@ fn sample_texture(uv: vec2<f32>, crop_bounds_uv: vec4<f32>) -> vec4<f32> {
             let offset_x = vec2<f32>(texel_size.x, 0.0);
             let offset_y = vec2<f32>(0.0, texel_size.y);
 
-            let left = textureSample(
+            let left = textureSampleLevel(
                 frame_texture,
                 frame_sampler,
-                clamp(cropped_uv - offset_x, safe_min, safe_max)
+                clamp(cropped_uv - offset_x, safe_min, safe_max),
+                0.0
             ).rgb;
-            let right = textureSample(
+            let right = textureSampleLevel(
                 frame_texture,
                 frame_sampler,
-                clamp(cropped_uv + offset_x, safe_min, safe_max)
+                clamp(cropped_uv + offset_x, safe_min, safe_max),
+                0.0
             ).rgb;
-            let top = textureSample(
+            let top = textureSampleLevel(
                 frame_texture,
                 frame_sampler,
-                clamp(cropped_uv - offset_y, safe_min, safe_max)
+                clamp(cropped_uv - offset_y, safe_min, safe_max),
+                0.0
             ).rgb;
-            let bottom = textureSample(
+            let bottom = textureSampleLevel(
                 frame_texture,
                 frame_sampler,
-                clamp(cropped_uv + offset_y, safe_min, safe_max)
+                clamp(cropped_uv + offset_y, safe_min, safe_max),
+                0.0
             ).rgb;
 
             let blurred = (left + right + top + bottom) * 0.25;

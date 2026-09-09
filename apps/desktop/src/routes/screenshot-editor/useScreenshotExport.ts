@@ -7,11 +7,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { commands } from "@/utils/tauri";
 import { useScreenshotEditorContext } from "./context";
 import type { SocketFrame } from "./frameSocket";
-import { getImageRect } from "./layout";
 import {
 	canvasNeedsTransparency,
 	canvasToBlob,
-	renderScreenshotExportCanvas,
+	nativeFrameToCanvas,
 	type ScreenshotExportStatus,
 } from "./screenshotExport";
 
@@ -33,14 +32,8 @@ function withWhiteBackground(source: HTMLCanvasElement): HTMLCanvasElement {
 }
 
 export function useScreenshotExport() {
-	const {
-		instance,
-		latestFrame,
-		annotations,
-		project,
-		configRevision,
-		originalImageSize,
-	} = useScreenshotEditorContext();
+	const { instance, latestFrame, project, configRevision } =
+		useScreenshotEditorContext();
 
 	const [isExporting, setIsExporting] = useState(false);
 	const [exportStatus, setExportStatus] =
@@ -84,7 +77,7 @@ export function useScreenshotExport() {
 	const renderExportCanvas = useCallback(async () => {
 		if (!project) throw new Error("Screenshot is still loading");
 
-		const frame = await waitForSyncedPreview();
+		await waitForSyncedPreview();
 
 		// Always a fresh render, never the frame on screen. The preview is a
 		// layer stack the browser composites — canvas and capture as separate
@@ -107,28 +100,11 @@ export function useScreenshotExport() {
 		);
 
 		try {
-			return renderScreenshotExportCanvas({
-				renderedBitmap,
-				project,
-				annotations,
-				frame,
-				// Where the screenshot sits inside the preview frame; the export
-				// scales it up so the depth-of-field pass runs at output size.
-				imageRect: frame
-					? getImageRect(
-							frame,
-							originalImageSize,
-							project.background.padding,
-							project.background.crop,
-							project.aspectRatio,
-							project.background.displayTransform,
-						)
-					: null,
-			});
+			return nativeFrameToCanvas(renderedBitmap);
 		} finally {
 			renderedBitmap.close();
 		}
-	}, [project, annotations, originalImageSize, waitForSyncedPreview]);
+	}, [project, waitForSyncedPreview]);
 
 	const exportImage = useCallback(
 		async (destination: "file" | "clipboard") => {

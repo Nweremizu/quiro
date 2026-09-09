@@ -1,10 +1,12 @@
-import { Button, cn, Select } from "@quiro/ui";
+import { Button, cn, LoadingSpinner, Select } from "@quiro/ui";
 import { Menu, MenuItem } from "@tauri-apps/api/menu";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
 	isPermissionGranted,
 	requestPermission,
 } from "@tauri-apps/plugin-notification";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { check, type Update } from "@tauri-apps/plugin-updater";
 import { useState } from "react";
 import { generalSettingsStore } from "@/store";
 import {
@@ -63,10 +65,22 @@ const getExclusionSecondaryLabel = (entry: WindowExclusion) => {
 	return entry.bundleIdentifier ?? null;
 };
 
+type UpdateState =
+	| { kind: "idle" }
+	| { kind: "checking" }
+	| { kind: "up-to-date" }
+	| { kind: "available"; update: Update }
+	| { kind: "downloading"; progress: number | null }
+	| { kind: "ready" }
+	| { kind: "error"; message: string };
+
 export default function GeneralSettings() {
 	const query = generalSettingsStore.useQuery();
 	const settings = query.data;
 	const [excludedWindowsBusy, setExcludedWindowsBusy] = useState(false);
+	const [updateState, setUpdateState] = useState<UpdateState>({
+		kind: "idle",
+	});
 
 	const update = (patch: Parameters<typeof generalSettingsStore.set>[0]) =>
 		void generalSettingsStore.set(patch);
@@ -140,9 +154,103 @@ export default function GeneralSettings() {
 
 	const excludedWindows = settings?.excludedWindows ?? [];
 
+	const handleCheckForUpdates = async () => {
+		setUpdateState({ kind: "checking" });
+		try {
+			const update = await check();
+			setUpdateState(
+				update ? { kind: "available", update } : { kind: "up-to-date" },
+			);
+		} catch (error) {
+			setUpdateState({
+				kind: "error",
+				message: error instanceof Error ? error.message : String(error),
+			});
+		}
+	};
+
+	const handleInstallUpdate = async (update: Update) => {
+		setUpdateState({ kind: "downloading", progress: null });
+		try {
+			let downloaded = 0;
+			let total: number | null = null;
+			await update.downloadAndInstall((event) => {
+				if (event.event === "Started") total = event.data.contentLength ?? null;
+				if (event.event === "Progress") downloaded += event.data.chunkLength;
+				setUpdateState({
+					kind: "downloading",
+					progress: total ? downloaded / total : null,
+				});
+			});
+			setUpdateState({ kind: "ready" });
+		} catch (error) {
+			setUpdateState({
+				kind: "error",
+				message: error instanceof Error ? error.message : String(error),
+			});
+		}
+	};
+
 	return (
 		<div className="custom-scroll h-full flex-1 overflow-y-auto">
 			<div className="max-w-[42rem] space-y-7 px-6 py-6">
+				<Section title="Software update">
+					<SectionCard padded>
+						<div className="flex items-center justify-between gap-4">
+							<p className="text-xs text-gray-10">
+								{updateState.kind === "idle" &&
+									"Check for a newer version of Quiro."}
+								{updateState.kind === "checking" && "Checking for updates…"}
+								{updateState.kind === "up-to-date" &&
+									"You're on the latest version."}
+								{updateState.kind === "available" &&
+									`Version ${updateState.update.version} is available.`}
+								{updateState.kind === "downloading" &&
+									(updateState.progress != null
+										? `Downloading update… ${Math.round(updateState.progress * 100)}%`
+										: "Downloading update…")}
+								{updateState.kind === "ready" &&
+									"Update installed. Restart to finish."}
+								{updateState.kind === "error" &&
+									`Couldn't check for updates: ${updateState.message}`}
+							</p>
+							{updateState.kind === "available" ? (
+								<Button
+									variant="dark"
+									size="sm"
+									onClick={() => void handleInstallUpdate(updateState.update)}
+								>
+									Download &amp; install
+								</Button>
+							) : updateState.kind === "ready" ? (
+								<Button
+									variant="dark"
+									size="sm"
+									onClick={() => void relaunch()}
+								>
+									Restart now
+								</Button>
+							) : (
+								<Button
+									variant="gray"
+									size="sm"
+									disabled={
+										updateState.kind === "checking" ||
+										updateState.kind === "downloading"
+									}
+									onClick={() => void handleCheckForUpdates()}
+								>
+									{(updateState.kind === "checking" ||
+										updateState.kind === "downloading") && (
+										<LoadingSpinner size={14} />
+									)}
+									Check for updates
+								</Button>
+							)}
+						</div>
+					</SectionCard>
+				</Section>
+
 				<Section
 					title="Appearance"
 					description="Match Quiro to your system theme or pick a fixed look."

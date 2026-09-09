@@ -298,6 +298,15 @@ pub fn set_hotkey(
     let state = app.state::<HotkeysState>();
     let mut store = state.lock().map_err(|e| e.to_string())?;
 
+    if let Some(hotkey) = hotkey
+        && store
+            .hotkeys
+            .iter()
+            .any(|(bound_action, bound_hotkey)| bound_action != &action && bound_hotkey == &hotkey)
+    {
+        return Err("That shortcut is already assigned to another Quiro action.".to_string());
+    }
+
     let previous = store.hotkeys.get(&action).copied();
 
     match hotkey {
@@ -307,8 +316,10 @@ pub fn set_hotkey(
 
     // Only release the old shortcut once nothing else is bound to it —
     // two actions sharing a chord would otherwise deregister each other.
+    let previous_was_unregistered =
+        previous.is_some_and(|previous| !store.hotkeys.values().any(|hotkey| hotkey == &previous));
     if let Some(previous) = previous
-        && !store.hotkeys.values().any(|h| h == &previous)
+        && previous_was_unregistered
     {
         let _ = global_shortcut.unregister(Shortcut::from(previous));
     }
@@ -323,6 +334,11 @@ pub fn set_hotkey(
             Some(previous) => store.hotkeys.insert(action, previous),
             None => store.hotkeys.remove(&action),
         };
+        if let Some(previous) = previous
+            && previous_was_unregistered
+        {
+            let _ = global_shortcut.register(Shortcut::from(previous));
+        }
         return Err(format!(
             "That shortcut is already in use by another app: {err}"
         ));

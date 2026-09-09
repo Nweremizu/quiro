@@ -8,6 +8,7 @@ import {
 } from "@tauri-apps/api/window";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { cameraSettingsKey } from "@/components/DeviceMenu";
 import {
 	mergeRecentMedia,
@@ -45,6 +46,7 @@ import {
 } from "@/utils/tauri";
 import IconLucideBug from "~icons/lucide/bug";
 import IconLucideCircleHelp from "~icons/lucide/circle-help";
+import IconLucideHome from "~icons/lucide/home";
 import IconLucideMaximize2 from "~icons/lucide/maximize-2";
 import IconLucideMinimize2 from "~icons/lucide/minimize-2";
 import IconLucideSettings from "~icons/lucide/settings";
@@ -268,6 +270,7 @@ export default function LaunchRoute() {
 
 export function LaunchRoutePage() {
 	const queryClient = useQueryClient();
+	const navigate = useNavigate();
 	const [isExpanded, setIsExpanded] = useState(false);
 	const { rawOptions, setOptions } = useRecordingOptions();
 
@@ -1061,6 +1064,16 @@ export function LaunchRoutePage() {
 							className="flex gap-1 items-center shrink-0"
 							data-tauri-drag-region
 						>
+							<Tooltip content={<span>Home</span>}>
+								<button
+									type="button"
+									onClick={() => navigate("/home")}
+									aria-label="Open home"
+									className="flex shrink-0 items-center justify-center size-5 focus:outline-hidden"
+								>
+									<IconLucideHome className="size-3.5 text-gray-11 transition-colors hover:text-gray-12" />
+								</button>
+							</Tooltip>
 							<Tooltip content={<span>Settings</span>}>
 								<button
 									type="button"

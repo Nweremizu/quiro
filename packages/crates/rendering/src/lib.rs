@@ -2303,6 +2303,10 @@ fn snap_bounds_to_output_pixels(bounds: [f32; 4], output_size: [f32; 2]) -> [f32
     [x0, y0, x1, y1]
 }
 
+fn bounds_to_origin_size([left, top, right, bottom]: [f32; 4]) -> [f32; 4] {
+    [left, top, right - left, bottom - top]
+}
+
 fn inset_crop_bounds(bounds: [f32; 4], frame_size: [f32; 2], inset: f32) -> [f32; 4] {
     let max_x = frame_size[0].max(1.0);
     let max_y = frame_size[1].max(1.0);
@@ -2531,6 +2535,27 @@ impl ProjectUniforms {
         if let Some(chrome) = self.frame_chrome.as_mut() {
             slide(&mut chrome.composite.target_bounds);
             chrome.composite.output_size = self.display.output_size;
+        }
+
+        for mask in &mut self.masks {
+            let old_width = mask.output_size.x.max(1) as f32;
+            let old_height = mask.output_size.y.max(1) as f32;
+            let new_width = self.output_size.0 as f32;
+            let new_height = self.output_size.1 as f32;
+            mask.center.x = (mask.center.x * old_width + shift) / new_width;
+            mask.center.y = (mask.center.y * old_height + shift) / new_height;
+            mask.size.x = mask.size.x * old_width / new_width;
+            mask.size.y = mask.size.y * old_height / new_height;
+            mask.output_size = XY::new(self.output_size.0, self.output_size.1);
+        }
+
+        for annotation in &mut self.annotations {
+            annotation.bounds[0] += shift;
+            annotation.bounds[1] += shift;
+        }
+
+        for text in &mut self.texts {
+            slide(&mut text.bounds);
         }
 
         if self.display.inv_perspective != perspective::IDENTITY {
@@ -3591,7 +3616,7 @@ impl ProjectUniforms {
             None
         };
 
-        let (display, display_motion_parent, frame_chrome, display_outer_bounds) = {
+        let (mut display, display_motion_parent, frame_chrome, display_outer_bounds) = {
             let output_size = XY::new(output_size.0 as f64, output_size.1 as f64);
             let size = [options.screen_size.x as f32, options.screen_size.y as f32];
 
@@ -3939,6 +3964,10 @@ impl ProjectUniforms {
                     _padding1: [0.0; 3],
                     border_color,
                     corner_radii: display_corner_radii,
+                    focus_region: [0.0; 4],
+                    focus_optics: [0.0; 4],
+                    focus_style: [0.0; 4],
+                    focus_state: [0.0; 4],
                 },
                 display_parent_motion_px,
                 frame_chrome,
@@ -4274,11 +4303,48 @@ impl ProjectUniforms {
         // whose bounds already carry zoom and pan — so a callout tracks what it
         // points at without annotations knowing the camera exists.
         let anchor_rects = annotation::AnchorRects {
-            capture: display.target_bounds,
+            capture: bounds_to_origin_size(display.target_bounds),
             canvas: [0.0, 0.0, output_size.0 as f32, output_size.1 as f32],
         };
         let annotations =
             annotation::prepare_annotations(&project.annotations, anchor_rects, frame_time as f64);
+
+        if let Some(prepared) = annotations.iter().find(|prepared| {
+            prepared.annotation.annotation_type == quiro_project::AnnotationType::Focus
+                && prepared.annotation.focus.is_some()
+        }) {
+            if let Some(focus) = prepared.annotation.focus {
+                let depth = (focus.depth as f32 / 100.0).clamp(0.0, 1.0);
+                display.focus_region = [
+                    focus.x as f32,
+                    focus.y as f32,
+                    focus.radius_x.max(0.001) as f32,
+                    focus.radius_y.max(0.001) as f32,
+                ];
+                display.focus_optics = [
+                    focus.rotation.to_radians() as f32,
+                    (focus.blur as f32 / 100.0).clamp(0.0, 1.0) * 0.06,
+                    0.75 + depth * 3.0,
+                    0.75 - depth * 0.5,
+                ];
+                display.focus_style = [
+                    focus.near_blur.max(0.0) as f32,
+                    focus.far_blur.max(0.0) as f32,
+                    (focus.lens as f32 / 100.0).clamp(0.0, 1.0),
+                    (focus.lens as f32 / 100.0).clamp(0.0, 1.0) * 0.6,
+                ];
+                display.focus_state = [
+                    if focus.shape == quiro_project::FocusShape::Rectangle {
+                        6.0
+                    } else {
+                        2.0
+                    },
+                    prepared.alpha.clamp(0.0, 1.0),
+                    0.0,
+                    0.0,
+                ];
+            }
+        }
 
         // Text and mask annotations draw through the layers those types already
         // have, rather than a second text stack and a second mask shader inside
@@ -4365,6 +4431,14 @@ mod tests {
             snap_bounds_to_output_pixels([1919.7, 1079.8, 1920.2, 1080.4], [1920.0, 1080.0]);
 
         assert_eq!(bounds, [1919.0, 1079.0, 1920.0, 1080.0]);
+    }
+
+    #[test]
+    fn display_bounds_convert_to_annotation_anchor_geometry() {
+        assert_eq!(
+            bounds_to_origin_size([120.0, 80.0, 1720.0, 980.0]),
+            [120.0, 80.0, 1600.0, 900.0]
+        );
     }
 
     #[test]
@@ -6208,6 +6282,17 @@ impl RendererLayers {
                 }
                 let mut pass = render_pass!(session.current_texture_view(), wgpu::LoadOp::Load);
                 self.display.render(&mut pass);
+            }
+            for mask in &uniforms.masks {
+                self.mask.render(device, queue, session, encoder, mask);
+            }
+            if self.annotation.has_content() {
+                let mut pass = render_pass!(session.current_texture_view(), wgpu::LoadOp::Load);
+                self.annotation.render(&mut pass);
+            }
+            if !uniforms.texts.is_empty() {
+                let mut pass = render_pass!(session.current_texture_view(), wgpu::LoadOp::Load);
+                self.text.render(&mut pass);
             }
             return;
         }

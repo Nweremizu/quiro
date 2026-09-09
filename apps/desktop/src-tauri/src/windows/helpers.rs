@@ -491,10 +491,31 @@ pub(crate) fn hide_main_window_for_editor(app: &AppHandle) {
     }
 }
 
-/// Counterpart to opening Settings, which hides Main via `hide_recording_
-/// windows` in show_window.rs — brings Main back once Settings closes, unless
-/// a recording is intentionally keeping it hidden or the app is shutting down.
+static SETTINGS_ORIGIN: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+pub(crate) fn remember_settings_origin(app: &AppHandle) {
+    let mut origin = SETTINGS_ORIGIN
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    if origin.is_some() {
+        return;
+    }
+    let settings_label = WindowId::Settings.to_string();
+    if let Some(window) = app
+        .webview_windows()
+        .into_values()
+        .find(|window| window.label() != settings_label && window.is_focused().unwrap_or(false))
+    {
+        *origin = Some(window.label().to_owned());
+        let _ = window.hide();
+    }
+}
+
 pub(crate) fn restore_main_window_after_settings(app: &AppHandle) {
+    let origin = SETTINGS_ORIGIN
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .take();
     if crate::app_is_exiting(app) {
         return;
     }
@@ -513,17 +534,11 @@ pub(crate) fn restore_main_window_after_settings(app: &AppHandle) {
         return;
     }
 
-    let app = app.clone();
-    tauri::async_runtime::spawn(async move {
-        if let Err(err) = (ShowQuiroWindow::Main {
-            init_target_mode: None,
-        })
-        .show(&app)
-        .await
-        {
-            error!(?err, "Failed to restore main window after closing settings");
+    if let Some(window) = origin.and_then(|label| app.get_webview_window(&label)) {
+        if let Err(err) = window.show().and_then(|()| window.set_focus()) {
+            error!(?err, "Failed to restore window after closing settings");
         }
-    });
+    }
 }
 
 /// Counterpart to [`hide_main_window_for_editor`], called when an editor

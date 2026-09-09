@@ -1,0 +1,46 @@
+{
+	"$schema": "../gen/schemas/desktop-schema.json",
+	"identifier": "editor-windows",
+	"description": "File and clipboard permissions used by project editors",
+	"windows": ["editor-*", "screenshot-editor-*"],
+	"permissions": [
+		"core:path:default",
+		"core:event:default",
+		"core:resources:allow-close",
+		"core:window:default",
+		"core:window:allow-close",
+		"core:window:allow-minimize",
+		"core:window:allow-unminimize",
+		"core:window:allow-maximize",
+		"core:window:allow-unmaximize",
+		"core:window:allow-set-size",
+		"core:window:allow-set-focus",
+		"core:window:allow-start-dragging",
+		"core:window:allow-set-position",
+		"core:window:allow-set-theme",
+		"core:window:allow-set-progress-bar",
+		"core:window:allow-set-effects",
+		"core:image:default",
+		"dialog:default",
+		"store:default",
+		"os:default",
+		"clipboard-manager:allow-write-text",
+		"clipboard-manager:allow-write-image",
+		"opener:allow-reveal-item-in-dir",
+		"fs:allow-read-text-file",
+		"fs:allow-write-text-file",
+		"fs:allow-write-file",
+		"fs:allow-remove",
+		{
+			"identifier": "fs:scope",
+			"allow": [
+				{ "path": "$APPDATA/**" },
+				{ "path": "$PICTURE/**" },
+				{ "path": "$VIDEO/**" },
+				{ "path": "$DOCUMENT/**" },
+				{ "path": "$DOWNLOAD/**" },
+				{ "path": "$DESKTOP/**" }
+			]
+		}
+	]
+}

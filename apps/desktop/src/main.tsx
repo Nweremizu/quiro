@@ -7,12 +7,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { message } from "@tauri-apps/plugin-dialog";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import Camera from "./routes/camera";
-import Debug from "./routes/debug";
-import CameraSettingsBreak from "./routes/dev/camera-settings-break";
-import CameraSettingsVariants from "./routes/dev/camera-settings-variants";
-import ZoomSegmentSettingsBreak from "./routes/dev/zoom-segment-settings-break";
-import ZoomSegmentSettingsVariants from "./routes/dev/zoom-segment-settings-variants";
 import Editor from "./routes/editor";
+import Home from "./routes/home";
 import MainWindow from "./routes/launch";
 import Onboarding from "./routes/onboarding";
 import ScreenshotEditor from "./routes/screenshot-editor";
@@ -27,6 +23,22 @@ import { ToolbarWindow } from "./routes/ToolbarWindow";
 import TargetSelectOverlay from "./routes/target-select-overlay";
 import WindowCaptureOccluder from "./routes/window-capture-occluder";
 import WindowLayout from "./routes/window-layout";
+
+const Debug = import.meta.env.DEV
+	? React.lazy(() => import("./routes/debug"))
+	: null;
+const CameraSettingsBreak = import.meta.env.DEV
+	? React.lazy(() => import("./routes/dev/camera-settings-break"))
+	: null;
+const CameraSettingsVariants = import.meta.env.DEV
+	? React.lazy(() => import("./routes/dev/camera-settings-variants"))
+	: null;
+const ZoomSegmentSettingsBreak = import.meta.env.DEV
+	? React.lazy(() => import("./routes/dev/zoom-segment-settings-break"))
+	: null;
+const ZoomSegmentSettingsVariants = import.meta.env.DEV
+	? React.lazy(() => import("./routes/dev/zoom-segment-settings-variants"))
+	: null;
 
 const queryClient = new QueryClient({
 	defaultOptions: {
@@ -80,24 +92,33 @@ function Inner() {
 			<Route path="/onboarding" element={<Onboarding />} />
 			<Route path="/" element={<WindowLayout />}>
 				<Route index element={<MainWindow />} />
+				<Route path="/home" element={<Home />} />
 
-				<Route path="/debug" element={<Debug />} />
-				<Route
-					path="/debug/camera-settings-break"
-					element={<CameraSettingsBreak />}
-				/>
-				<Route
-					path="/debug/camera-settings-variants"
-					element={<CameraSettingsVariants />}
-				/>
-				<Route
-					path="/debug/zoom-segment-settings-break"
-					element={<ZoomSegmentSettingsBreak />}
-				/>
-				<Route
-					path="/debug/zoom-segment-settings-variants"
-					element={<ZoomSegmentSettingsVariants />}
-				/>
+				{Debug && <Route path="/debug" element={<Debug />} />}
+				{CameraSettingsBreak && (
+					<Route
+						path="/debug/camera-settings-break"
+						element={<CameraSettingsBreak />}
+					/>
+				)}
+				{CameraSettingsVariants && (
+					<Route
+						path="/debug/camera-settings-variants"
+						element={<CameraSettingsVariants />}
+					/>
+				)}
+				{ZoomSegmentSettingsBreak && (
+					<Route
+						path="/debug/zoom-segment-settings-break"
+						element={<ZoomSegmentSettingsBreak />}
+					/>
+				)}
+				{ZoomSegmentSettingsVariants && (
+					<Route
+						path="/debug/zoom-segment-settings-variants"
+						element={<ZoomSegmentSettingsVariants />}
+					/>
+				)}
 				<Route path="/screenshot-editor" element={<ScreenshotEditor />} />
 				<Route path="/editor" element={<Editor />} />
 				{/* Rust's show_settings builds the URL as `/settings/{page}`,

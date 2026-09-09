@@ -209,8 +209,7 @@ export const DRAFT_GRADIENT: {
 	noise_intensity: 0,
 };
 
-/** Cap's `DEFAULT_BACKGROUND_SHADOW`. */
-const DEFAULT_BACKGROUND_SHADOW = 73.6;
+const DEFAULT_BACKGROUND_SHADOW = 40;
 
 /**
  * Cap's `ensurePaddingForBackground`, and it matters more than it looks:

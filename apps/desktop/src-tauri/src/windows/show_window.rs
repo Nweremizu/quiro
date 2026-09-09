@@ -86,6 +86,7 @@ impl ShowQuiroWindow {
         }
 
         if matches!(self, Self::Settings { .. }) {
+            remember_settings_origin(app);
             hide_recording_windows(app, true);
             release_camera_preview_if_idle(app);
         }
@@ -114,7 +115,9 @@ impl ShowQuiroWindow {
                     .await?
             }
             Self::Settings { page } => {
-                variants::main_window::show_settings(self, app, page, cursor_monitor).await?
+                variants::main_window::show_settings(self, app, page, cursor_monitor)
+                    .await
+                    .inspect_err(|_| restore_main_window_after_settings(app))?
             }
             Self::ModeSelect => {
                 variants::main_window::show_mode_select(self, app, cursor_monitor).await?

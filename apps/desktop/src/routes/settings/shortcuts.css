@@ -1,0 +1,304 @@
+.shortcut-list {
+	overflow: visible;
+}
+.shortcut-row {
+	position: relative;
+	display: flex;
+	min-height: 66px;
+	align-items: center;
+	justify-content: space-between;
+	gap: 18px;
+	padding: 12px 16px;
+	transition: background-color 160ms;
+}
+.shortcut-row-active {
+	z-index: 20;
+	background: color-mix(in srgb, var(--color-accent-solid) 4%, transparent);
+}
+.shortcut-control {
+	position: relative;
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	gap: 6px;
+}
+.shortcut-trigger {
+	display: flex;
+	min-width: 122px;
+	min-height: 37px;
+	align-items: center;
+	justify-content: center;
+	border: 1px solid var(--color-gray-6);
+	border-radius: 9px;
+	padding: 5px 8px;
+	background: var(--color-gray-2);
+	color: var(--color-gray-10);
+	font-size: 11px;
+	transition:
+		border-color 150ms,
+		background-color 150ms;
+}
+.shortcut-trigger:hover {
+	border-color: var(--color-gray-7);
+	background: var(--color-gray-3);
+}
+.shortcut-trigger-active {
+	border-color: var(--color-accent-border-selected);
+	background: var(--color-accent-surface);
+	color: var(--color-accent-text);
+}
+.shortcut-trigger:focus-visible,
+.shortcut-clear:focus-visible {
+	outline: 2px solid var(--color-accent-focus-ring);
+	outline-offset: 2px;
+}
+.shortcut-clear {
+	display: grid;
+	width: 26px;
+	height: 26px;
+	place-items: center;
+	border-radius: 6px;
+	color: var(--color-gray-9);
+}
+.shortcut-clear:hover {
+	background: var(--color-gray-4);
+	color: var(--color-gray-12);
+}
+.shortcut-clear:disabled {
+	pointer-events: none;
+	opacity: 0.28;
+}
+.shortcut-clear svg {
+	width: 14px;
+	height: 14px;
+}
+.shortcut-keycaps,
+.shortcut-key-group {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+.shortcut-plus {
+	color: var(--color-gray-8);
+	font-size: 9px;
+}
+.shortcut-keycaps kbd {
+	min-width: 25px;
+	height: 25px;
+	padding: 4px 7px 5px;
+	border: 1px solid var(--color-gray-7);
+	border-bottom-width: 3px;
+	border-radius: 6px;
+	background: linear-gradient(
+		to bottom,
+		var(--color-gray-4),
+		var(--color-gray-3)
+	);
+	box-shadow:
+		inset 0 1px 0 color-mix(in srgb, white 10%, transparent),
+		0 1px 2px #00000020;
+	color: var(--color-gray-12);
+	font-family: inherit;
+	font-size: 10px;
+	font-weight: 650;
+	line-height: 14px;
+	text-align: center;
+}
+.shortcut-feedback {
+	position: absolute;
+	z-index: 50;
+	right: 0;
+	top: calc(100% + 11px);
+	width: 330px;
+	overflow: hidden;
+	border: 1px solid var(--color-accent-border-selected);
+	border-radius: 14px;
+	padding: 14px;
+	background: color-mix(in srgb, var(--color-gray-2) 94%, transparent);
+	box-shadow:
+		0 18px 48px #00000045,
+		inset 0 1px 0 #ffffff0d;
+	backdrop-filter: blur(20px);
+	transform-origin: 85% top;
+	animation: shortcut-pop 170ms ease-out both;
+}
+.shortcut-feedback::before {
+	content: "";
+	position: absolute;
+	right: 27px;
+	top: -5px;
+	width: 10px;
+	height: 10px;
+	rotate: 45deg;
+	border-left: 1px solid var(--color-accent-border-selected);
+	border-top: 1px solid var(--color-accent-border-selected);
+	background: var(--color-gray-2);
+}
+.shortcut-feedback-above {
+	top: auto;
+	bottom: calc(100% + 11px);
+	transform-origin: 85% bottom;
+}
+.shortcut-feedback-above::before {
+	top: auto;
+	bottom: -5px;
+	rotate: 225deg;
+}
+.shortcut-feedback-glow {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	background: radial-gradient(
+		circle at 85% 0%,
+		color-mix(in srgb, var(--color-accent-solid) 16%, transparent),
+		transparent 42%
+	);
+}
+.shortcut-feedback-copy {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	padding-right: 26px;
+	color: var(--color-gray-9);
+	font-size: 10px;
+}
+.shortcut-feedback-kicker {
+	color: var(--color-gray-12);
+	font-size: 12px;
+	font-weight: 650;
+}
+.shortcut-feedback-keys {
+	position: relative;
+	display: flex;
+	min-height: 45px;
+	align-items: center;
+	justify-content: center;
+	margin-top: 12px;
+	border-radius: 9px;
+	background: var(--color-gray-3);
+}
+.shortcut-feedback-keys kbd {
+	min-width: 34px;
+	height: 32px;
+	padding: 6px 9px 7px;
+	font-size: 12px;
+}
+.shortcut-feedback-icon {
+	position: absolute;
+	right: 14px;
+	top: 14px;
+	width: 20px;
+	height: 20px;
+}
+.shortcut-feedback-success {
+	border-color: #35b979;
+	animation:
+		shortcut-pop 170ms ease-out both,
+		shortcut-success 420ms ease-out;
+}
+.shortcut-feedback-success .shortcut-feedback-icon,
+.shortcut-feedback-success .shortcut-feedback-kicker {
+	color: #48cc8c;
+}
+.shortcut-feedback-success .shortcut-feedback-keys {
+	box-shadow: inset 0 0 0 1px #35b97999;
+}
+.shortcut-feedback-error {
+	border-color: #e05858;
+	animation: shortcut-shake 420ms ease-in-out;
+}
+.shortcut-feedback-error .shortcut-feedback-icon,
+.shortcut-feedback-error .shortcut-feedback-kicker {
+	color: #f06a6a;
+}
+.shortcut-feedback-error .shortcut-feedback-keys {
+	background: color-mix(in srgb, #e05858 12%, var(--color-gray-3));
+	box-shadow: inset 0 0 0 1px #e0585899;
+}
+.shortcut-feedback-error kbd {
+	border-color: #e05858;
+	background: linear-gradient(
+		to bottom,
+		color-mix(in srgb, #e05858 18%, var(--color-gray-4)),
+		color-mix(in srgb, #e05858 10%, var(--color-gray-3))
+	);
+}
+.shortcut-waiting {
+	display: flex;
+	gap: 5px;
+}
+.shortcut-waiting i {
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	background: var(--color-accent-solid);
+	animation: shortcut-wait 900ms infinite ease-in-out;
+}
+.shortcut-waiting i:nth-child(2) {
+	animation-delay: 120ms;
+}
+.shortcut-waiting i:nth-child(3) {
+	animation-delay: 240ms;
+}
+@keyframes shortcut-pop {
+	from {
+		opacity: 0;
+		transform: translateY(-5px) scale(0.97);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+}
+@keyframes shortcut-shake {
+	0%,
+	100% {
+		transform: translateX(0);
+	}
+	20% {
+		transform: translateX(-7px);
+	}
+	40% {
+		transform: translateX(6px);
+	}
+	60% {
+		transform: translateX(-4px);
+	}
+	80% {
+		transform: translateX(2px);
+	}
+}
+@keyframes shortcut-success {
+	0% {
+		box-shadow:
+			0 18px 48px #00000045,
+			0 0 0 0 #35b97966;
+	}
+	55% {
+		box-shadow:
+			0 18px 48px #00000045,
+			0 0 0 5px #35b97922;
+	}
+}
+@keyframes shortcut-wait {
+	0%,
+	60%,
+	100% {
+		opacity: 0.3;
+		transform: translateY(0);
+	}
+	30% {
+		opacity: 1;
+		transform: translateY(-3px);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.shortcut-row,
+	.shortcut-trigger,
+	.shortcut-feedback,
+	.shortcut-waiting i {
+		animation: none;
+		transition: none;
+	}
+}

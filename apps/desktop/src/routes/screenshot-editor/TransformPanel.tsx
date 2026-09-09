@@ -53,7 +53,7 @@ export function TransformPanel() {
 	if (!project || !instance) return null;
 
 	return (
-		<div className="flex h-full w-full min-h-0 flex-col overflow-y-auto">
+		<div className="flex h-full w-full min-h-0 flex-col overflow-y-auto gap-3">
 			<TransformControls
 				transform={transform}
 				perspective={perspective}

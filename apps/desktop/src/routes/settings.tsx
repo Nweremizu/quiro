@@ -11,9 +11,9 @@ import IconLucideSquarePlay from "~icons/lucide/square-play";
 import IconQuiroLogo from "~icons/quiro/logo";
 
 // React port of Cap's (window-chrome)/settings.tsx sidebar shell, trimmed to
-// what Quiro actually has: no cloud account/sign-in (no cloud backend), no
-// update-check button (no updatesCheck command wired up), just the nav +
-// content outlet. WindowLayout already supplies the titlebar/drag-region
+// what Quiro actually has: no cloud account/sign-in (no cloud backend). The
+// update-check button lives in the General tab, not this shell. WindowLayout
+// already supplies the titlebar/drag-region
 // for this route (see its isSettings branch), so this only needs its own
 // drag-region spacer for macOS, where WindowLayout's header renders nothing
 // for /settings.

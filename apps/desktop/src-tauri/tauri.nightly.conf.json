@@ -5,7 +5,7 @@
 	"plugins": {
 		"updater": {
 			"endpoints": [
-				"https://REPLACE_WITH_RELEASE_HOST/nightly/latest.json"
+				"https://pub-0bd568b6a8864cd5b8257f39f8b653ba.r2.dev/nightly/latest.json"
 			]
 		}
 	}

@@ -9,9 +9,11 @@ import IconLucideFocus from "~icons/lucide/focus";
 import IconLucideGripVertical from "~icons/lucide/grip-vertical";
 import IconLucideImage from "~icons/lucide/image";
 import IconLucideLayers from "~icons/lucide/layers";
+import IconLucideLock from "~icons/lucide/lock";
 import IconLucideSquare from "~icons/lucide/square";
 import IconLucideTrash2 from "~icons/lucide/trash-2";
 import IconLucideType from "~icons/lucide/type";
+import IconLucideUnlock from "~icons/lucide/unlock";
 import IconLucideX from "~icons/lucide/x";
 import { useScreenshotEditorContext } from "./context";
 import { textContentString } from "./text-content";
@@ -57,6 +59,8 @@ export function LayersPanel() {
 		setCaptureSelected,
 		setLayersPanelOpen,
 		setActiveTool,
+		lockedLayerIds,
+		setLayerLocked,
 	} = useScreenshotEditorContext();
 
 	const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -72,6 +76,10 @@ export function LayersPanel() {
 	// Topmost annotation first, matching how they stack on the canvas — the
 	// array itself is painted back-to-front.
 	const ordered = [...reorderable].reverse();
+	const captureLocked = lockedLayerIds.has("capture");
+	const focusLocked = focusAnnotation
+		? lockedLayerIds.has(focusAnnotation.id)
+		: false;
 	const toActualIndex = useCallback(
 		(reversedIndex: number) => reorderable.length - 1 - reversedIndex,
 		[reorderable.length],
@@ -166,23 +174,43 @@ export function LayersPanel() {
 				    it is selectable at all, now that there is no tool for it.
 				    Pinned to the bottom because it is behind everything else, and
 				    not draggable for the same reason: nothing goes under it. */}
-				<button
-					type="button"
-					onClick={() => setCaptureSelected(!captureSelected)}
+				<div
 					className={cn(
-						"order-last flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors",
+						"group order-last flex w-full items-center gap-1 rounded-md px-1.5 py-1",
 						captureSelected
-							? "bg-blue-3 text-blue-11"
+							? "bg-accent-surface text-accent-text"
 							: "text-gray-11 hover:bg-gray-3 hover:text-gray-12",
 					)}
 				>
-					<IconLucideImage className="size-3.5 shrink-0" />
-					<span className="truncate">Screenshot</span>
-				</button>
+					<button
+						type="button"
+						disabled={captureLocked}
+						onClick={() => setCaptureSelected(!captureSelected)}
+						className="flex min-w-0 flex-1 items-center gap-2 px-0.5 py-0.5 text-left text-xs disabled:cursor-not-allowed"
+					>
+						<IconLucideImage className="size-3.5 shrink-0" />
+						<span className="truncate">Screenshot</span>
+					</button>
+					<button
+						type="button"
+						aria-label={captureLocked ? "Unlock Screenshot" : "Lock Screenshot"}
+						aria-pressed={captureLocked}
+						title={captureLocked ? "Unlock Screenshot" : "Lock Screenshot"}
+						onClick={() => setLayerLocked("capture", !captureLocked)}
+						className="flex size-6 shrink-0 items-center justify-center rounded text-gray-9 hover:bg-gray-4 hover:text-gray-12"
+					>
+						{captureLocked ? (
+							<IconLucideLock className="size-3.5" />
+						) : (
+							<IconLucideUnlock className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
+						)}
+					</button>
+				</div>
 
 				{ordered.map((annotation, index) => {
 					const Icon = TYPE_ICONS[annotation.type];
 					const isSelected = selectedAnnotationId === annotation.id;
+					const isLocked = lockedLayerIds.has(annotation.id);
 					return (
 						<div key={annotation.id} data-layer-item>
 							{dropIndex === index && (
@@ -200,8 +228,9 @@ export function LayersPanel() {
 								<button
 									type="button"
 									aria-label={`Reorder ${labelFor(annotation)}`}
+									disabled={isLocked}
 									onMouseDown={() => setDraggedId(annotation.id)}
-									className="cursor-grab text-gray-9 hover:text-gray-11"
+									className="cursor-grab text-gray-9 hover:text-gray-11 disabled:cursor-not-allowed disabled:opacity-40"
 								>
 									<IconLucideGripVertical className="size-3.5" />
 								</button>
@@ -209,6 +238,7 @@ export function LayersPanel() {
 								<button
 									type="button"
 									onClick={() => {
+										if (isLocked) return;
 										setActiveTool("select");
 										setSelectedAnnotationId(annotation.id);
 									}}
@@ -226,15 +256,38 @@ export function LayersPanel() {
 								<button
 									type="button"
 									aria-label={`Delete ${labelFor(annotation)}`}
+									disabled={isLocked}
 									onClick={() => {
 										setAnnotations(
 											annotations.filter((a) => a.id !== annotation.id),
 										);
 										if (isSelected) setSelectedAnnotationId(null);
 									}}
-									className="flex size-6 shrink-0 items-center justify-center rounded text-gray-10 opacity-0 transition-opacity hover:bg-red-3 hover:text-red-9 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-focus-ring/50 group-hover:opacity-100"
+									className="flex size-6 shrink-0 items-center justify-center rounded text-gray-10 opacity-0 transition-opacity hover:bg-red-3 hover:text-red-9 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-focus-ring/50 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
 								>
 									<IconLucideTrash2 className="size-3.5" />
+								</button>
+								<button
+									type="button"
+									aria-label={
+										isLocked
+											? `Unlock ${labelFor(annotation)}`
+											: `Lock ${labelFor(annotation)}`
+									}
+									aria-pressed={isLocked}
+									title={
+										isLocked
+											? `Unlock ${labelFor(annotation)}`
+											: `Lock ${labelFor(annotation)}`
+									}
+									onClick={() => setLayerLocked(annotation.id, !isLocked)}
+									className="flex size-6 shrink-0 items-center justify-center rounded text-gray-9 opacity-0 transition-opacity hover:bg-gray-4 hover:text-gray-12 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-focus-ring/50 group-hover:opacity-100"
+								>
+									{isLocked ? (
+										<IconLucideLock className="size-3.5" />
+									) : (
+										<IconLucideUnlock className="size-3.5" />
+									)}
 								</button>
 							</div>
 						</div>
@@ -263,6 +316,7 @@ export function LayersPanel() {
 								setSelectedAnnotationId(focusAnnotation.id);
 							}}
 							className="flex min-w-0 flex-1 items-center gap-2 text-left"
+							disabled={focusLocked}
 						>
 							<IconLucideFocus className="size-3.5 shrink-0 text-gray-11" />
 							<span className="truncate text-xs text-gray-12">Focus</span>
@@ -271,6 +325,7 @@ export function LayersPanel() {
 						<button
 							type="button"
 							aria-label="Delete Focus"
+							disabled={focusLocked}
 							onClick={() => {
 								setAnnotations(
 									annotations.filter((a) => a.id !== focusAnnotation.id),
@@ -281,6 +336,20 @@ export function LayersPanel() {
 							className="flex size-6 shrink-0 items-center justify-center rounded text-gray-10 opacity-0 transition-opacity hover:bg-red-3 hover:text-red-9 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-focus-ring/50 group-hover:opacity-100"
 						>
 							<IconLucideTrash2 className="size-3.5" />
+						</button>
+						<button
+							type="button"
+							aria-label={focusLocked ? "Unlock Focus" : "Lock Focus"}
+							aria-pressed={focusLocked}
+							title={focusLocked ? "Unlock Focus" : "Lock Focus"}
+							onClick={() => setLayerLocked(focusAnnotation.id, !focusLocked)}
+							className="flex size-6 shrink-0 items-center justify-center rounded text-gray-9 opacity-0 transition-opacity hover:bg-gray-4 hover:text-gray-12 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-focus-ring/50 group-hover:opacity-100"
+						>
+							{focusLocked ? (
+								<IconLucideLock className="size-3.5" />
+							) : (
+								<IconLucideUnlock className="size-3.5" />
+							)}
 						</button>
 					</div>
 				</div>

@@ -10,7 +10,9 @@
 //! `crate::annotation`, GPU-free and unit-tested, because that is the half that
 //! has to agree with the frontend's SVG overlay.
 
-use self::annotation_color::{parse_rgba, shape_code};
+use self::annotation_color::{
+    arrow_curve_code, arrow_head_code, line_style_code, parse_rgba, shape_code,
+};
 use crate::{annotation::PreparedAnnotation, create_shader_render_pipeline};
 use wgpu::util::DeviceExt;
 
@@ -24,6 +26,8 @@ struct AnnotationUniforms {
     params: [f32; 4],
     /// master alpha, then padding to keep the struct 16-byte aligned
     opacity: [f32; 4],
+    arrow_style: [f32; 4],
+    arrow_heads: [f32; 4],
 }
 
 pub struct AnnotationLayer {
@@ -133,14 +137,25 @@ fn uniforms_for(prepared: &PreparedAnnotation) -> Option<AnnotationUniforms> {
     let fill = parse_rgba(&annotation.fill_color);
     let stroke = parse_rgba(&annotation.stroke_color);
     let stroke_width = prepared.stroke_width.max(0.0);
-    if fill[3] <= 0.0 && (stroke[3] <= 0.0 || stroke_width <= 0.0) {
+    if annotation.annotation_type != quiro_project::AnnotationType::Arrow
+        && fill[3] <= 0.0
+        && (stroke[3] <= 0.0 || stroke_width <= 0.0)
+    {
         return None;
     }
 
     let [x, y, width, height] = prepared.bounds;
-    if width <= 0.0 || height <= 0.0 {
+    if annotation.annotation_type != quiro_project::AnnotationType::Arrow
+        && (width.abs() <= f32::EPSILON || height.abs() <= f32::EPSILON)
+    {
         return None;
     }
+
+    let anchor_scale = if annotation.stroke_width.abs() > f64::EPSILON {
+        prepared.stroke_width / annotation.stroke_width as f32
+    } else {
+        1.0
+    };
 
     Some(AnnotationUniforms {
         rect: [x, y, width, height],
@@ -155,32 +170,78 @@ fn uniforms_for(prepared: &PreparedAnnotation) -> Option<AnnotationUniforms> {
             annotation.rotation.to_radians() as f32,
         ],
         opacity: [prepared.alpha, 0.0, 0.0, 0.0],
+        arrow_style: [
+            arrow_curve_code(annotation.arrow_curve),
+            annotation.arrow_bend.unwrap_or(0.0) as f32,
+            line_style_code(annotation.line_style),
+            if annotation.arrow_taper.unwrap_or(false) {
+                1.0
+            } else {
+                0.0
+            },
+        ],
+        arrow_heads: [
+            arrow_head_code(annotation.arrow_start_head),
+            arrow_head_code(Some(
+                annotation
+                    .arrow_end_head
+                    .unwrap_or(quiro_project::ArrowHead::Triangle),
+            )),
+            annotation
+                .arrow_head_size
+                .map_or(1.0, |size| size as f32 * anchor_scale),
+            prepared.reveal,
+        ],
     })
 }
 
 /// Colour parsing and the shape table, split out so they can be tested without
 /// a GPU — `AnnotationLayer::new` needs a `wgpu::Device`, these do not.
 pub(crate) mod annotation_color {
-    use quiro_project::AnnotationType;
+    use quiro_project::{AnnotationType, ArrowCurve, ArrowHead, LineStyle};
 
     /// Which shape the shader should draw, or `None` for a type this layer does
     /// not handle yet.
     ///
-    /// Mask and Focus already have `MaskLayer`; Text needs glyph layout and
-    /// belongs with `TextLayer`; Arrow needs `arrow.ts` path parity before it
-    /// can be drawn without drifting from the editing overlay.
+    /// Mask uses `MaskLayer`, Text needs glyph layout and belongs with
+    /// `TextLayer`, and Focus is sampled inside the display compositor.
     pub fn shape_code(annotation_type: AnnotationType) -> Option<f32> {
         match annotation_type {
             AnnotationType::Rectangle => Some(0.0),
             AnnotationType::Circle => Some(1.0),
+            AnnotationType::Arrow => Some(2.0),
             // Text and Mask are drawn, but not here: they route to `TextLayer`
             // and `MaskLayer` via `prepare_annotation_text` and
             // `mask_from_annotation`, so this layer must not also paint a box
-            // where they go. Arrow and Focus are genuinely not implemented yet.
-            AnnotationType::Text
-            | AnnotationType::Mask
-            | AnnotationType::Arrow
-            | AnnotationType::Focus => None,
+            // where they go.
+            AnnotationType::Text | AnnotationType::Mask | AnnotationType::Focus => None,
+        }
+    }
+
+    pub fn arrow_curve_code(curve: Option<ArrowCurve>) -> f32 {
+        match curve.unwrap_or(ArrowCurve::Straight) {
+            ArrowCurve::Straight => 0.0,
+            ArrowCurve::Quadratic => 1.0,
+            ArrowCurve::Cubic => 2.0,
+            ArrowCurve::Elbow => 3.0,
+        }
+    }
+
+    pub fn arrow_head_code(head: Option<ArrowHead>) -> f32 {
+        match head.unwrap_or(ArrowHead::None) {
+            ArrowHead::None => 0.0,
+            ArrowHead::Arrow => 1.0,
+            ArrowHead::Triangle => 2.0,
+            ArrowHead::Circle => 3.0,
+            ArrowHead::Square => 4.0,
+        }
+    }
+
+    pub fn line_style_code(style: Option<LineStyle>) -> f32 {
+        match style.unwrap_or(LineStyle::Solid) {
+            LineStyle::Solid => 0.0,
+            LineStyle::Dashed => 1.0,
+            LineStyle::Dotted => 2.0,
         }
     }
 
@@ -413,21 +474,44 @@ mod pixel_tests {
         );
     }
 
-    /// Types this slice does not implement must draw nothing, rather than
-    /// falling through to some default shape.
     #[test]
-    fn unimplemented_types_draw_nothing() {
+    fn an_arrow_reaches_the_frame() {
         let Some(harness) = GpuHarness::new() else {
             eprintln!("no wgpu adapter available; skipping");
             return;
         };
 
-        for annotation_type in [AnnotationType::Arrow, AnnotationType::Text] {
+        let mut arrow = annotation(AnnotationType::Arrow, "transparent");
+        arrow.stroke_color = "#ff0000".into();
+        arrow.stroke_width = 8.0;
+        let pixels = render(&harness, &[arrow]);
+
+        assert_eq!(
+            at(&pixels, W / 2, H / 2),
+            [255, 0, 0, 255],
+            "the arrow shaft must cross its midpoint"
+        );
+    }
+
+    /// Types this slice does not implement must draw nothing, rather than
+    /// falling through to some default shape.
+    #[test]
+    fn routed_types_draw_nothing_in_the_shape_layer() {
+        let Some(harness) = GpuHarness::new() else {
+            eprintln!("no wgpu adapter available; skipping");
+            return;
+        };
+
+        for annotation_type in [
+            AnnotationType::Text,
+            AnnotationType::Mask,
+            AnnotationType::Focus,
+        ] {
             let pixels = render(&harness, &[annotation(annotation_type, "#ff0000")]);
             assert_eq!(
                 at(&pixels, W / 2, H / 2),
                 [255, 255, 255, 255],
-                "{annotation_type:?} must not paint until it is implemented"
+                "{annotation_type:?} must be painted by its dedicated layer"
             );
         }
     }
@@ -485,8 +569,7 @@ mod tests {
     fn only_the_implemented_shapes_draw() {
         assert_eq!(shape_code(AnnotationType::Rectangle), Some(0.0));
         assert_eq!(shape_code(AnnotationType::Circle), Some(1.0));
-        // Deliberately unhandled for now — each needs its own slice.
-        assert_eq!(shape_code(AnnotationType::Arrow), None);
+        assert_eq!(shape_code(AnnotationType::Arrow), Some(2.0));
         assert_eq!(shape_code(AnnotationType::Text), None);
         assert_eq!(shape_code(AnnotationType::Mask), None);
         assert_eq!(shape_code(AnnotationType::Focus), None);

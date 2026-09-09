@@ -5,11 +5,10 @@ import { listCaptureDisplaysQuery } from "@/utils/queries";
 import { commands } from "@/utils/tauri";
 
 // React port of Cap's routes/debug.tsx, trimmed to what Quiro actually has:
-// no Onboarding window, no updater plugin registered (tauri-plugin-updater
-// is a Cargo dependency but never .plugin()-mounted in lib.rs, so
-// @tauri-apps/plugin-updater's check() would just throw), no fail-point
-// injection commands (listFails/setFail). Just the one section that maps
-// to something real: force-opening each window Quiro can show.
+// no Onboarding window, no fail-point injection commands (listFails/setFail).
+// Update checking lives in Settings > General, not here. Just the one
+// section that maps to something real: force-opening each window Quiro can
+// show.
 export default function Debug() {
 	const [version, setVersion] = useState("");
 	const displays = useQuery(listCaptureDisplaysQuery);

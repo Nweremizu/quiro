@@ -72,6 +72,7 @@ const clamp = (value: number, min: number, max: number) =>
 // screenshots that are usually light, and a neutral mark reads as annotation
 // rather than as alarm; the inspector changes it per object from here.
 const DEFAULT_STROKE = "#000000";
+const SELECTION_COLOR = "var(--accent-border-selected)";
 
 /** Only these carry a rotation transform + rotate handle. Arrows rotate by
  * dragging an endpoint; focus has its own rotation; masks resample pixels. */
@@ -99,6 +100,7 @@ export function AnnotationLayer({
 	cssHeight,
 	imageRect,
 	cardRotation,
+	contentVisible = true,
 	isPanning,
 	onBackgroundMouseDown,
 }: {
@@ -112,6 +114,7 @@ export function AnnotationLayer({
 	 * which keeps every geometry, snap and hit test below in the capture's own
 	 * unrotated frame, exactly as it was before rotation existed. */
 	cardRotation: number;
+	contentVisible?: boolean;
 	isPanning?: boolean;
 	onBackgroundMouseDown?: (event: React.MouseEvent) => void;
 }) {
@@ -126,6 +129,7 @@ export function AnnotationLayer({
 		anchorRect,
 		textFragments,
 		recordTextMeasurement,
+		lockedLayerIds,
 	} = useScreenshotEditorContext();
 
 	// "select" edits existing shapes and "transform" belongs to the capture's
@@ -623,6 +627,8 @@ export function AnnotationLayer({
 	};
 
 	const startDrag = (event: React.MouseEvent, id: string, handle?: string) => {
+		if (lockedLayerIds.has(id)) return;
+
 		// A click inside the live editor belongs to the caret, not to a drag.
 		// This runs before the SVG's own `.text-editor` guard can — the
 		// annotation's `<g>` is deeper in the tree, so it sees the event first
@@ -776,7 +782,7 @@ export function AnnotationLayer({
 							}
 						}}
 						style={{
-							pointerEvents: "all",
+							pointerEvents: lockedLayerIds.has(annotation.id) ? "none" : "all",
 							cursor: activeTool === "select" ? "move" : "inherit",
 						}}
 					>
@@ -845,15 +851,18 @@ export function AnnotationLayer({
 								}}
 							/>
 						) : (
-							<RenderAnnotation
-								annotation={annotation}
-								fragments={textFragments.get(annotation.id) ?? []}
-								selected={selectedAnnotationId === annotation.id}
-								haloScale={anchorScale(anchorRect)}
-							/>
+							<g opacity={contentVisible || dragState ? undefined : 0}>
+								<RenderAnnotation
+									annotation={annotation}
+									fragments={textFragments.get(annotation.id) ?? []}
+									selected={selectedAnnotationId === annotation.id}
+									haloScale={anchorScale(anchorRect)}
+								/>
+							</g>
 						)}
 
 						{selectedAnnotationId === annotation.id &&
+							!lockedLayerIds.has(annotation.id) &&
 							annotation.type !== "focus" && (
 								<SelectionHandles
 									// While editing, the bounds follow the text rather
@@ -888,7 +897,8 @@ export function AnnotationLayer({
 				{annotations.map((annotation) =>
 					annotation.type === "focus" &&
 					annotation.focus &&
-					selectedAnnotationId === annotation.id ? (
+					selectedAnnotationId === annotation.id &&
+					!lockedLayerIds.has(annotation.id) ? (
 						<FocusOverlay
 							key={`focus-${annotation.id}`}
 							focus={annotation.focus}
@@ -913,7 +923,7 @@ export function AnnotationLayer({
 						y1={bounds.y}
 						x2={snapGuides.x}
 						y2={bounds.y + bounds.height}
-						stroke="#F03808"
+						stroke={SELECTION_COLOR}
 						strokeWidth={guideStroke}
 						style={{ pointerEvents: "none" }}
 					/>
@@ -924,7 +934,7 @@ export function AnnotationLayer({
 						y1={snapGuides.y}
 						x2={bounds.x + bounds.width}
 						y2={snapGuides.y}
-						stroke="#F03808"
+						stroke={SELECTION_COLOR}
 						strokeWidth={guideStroke}
 						style={{ pointerEvents: "none" }}
 					/>
@@ -1600,7 +1610,7 @@ function SelectionHandles({
 						cy={point.y}
 						r={half}
 						fill="#fff"
-						stroke="#3B82F6"
+						stroke={SELECTION_COLOR}
 						strokeWidth={half * 0.35}
 						style={{ cursor: "pointer", pointerEvents: "all" }}
 						onMouseDown={(event) =>
@@ -1613,7 +1623,7 @@ function SelectionHandles({
 						cx={bend.x}
 						cy={bend.y}
 						r={half}
-						fill="#3B82F6"
+						fill="var(--accent-solid)"
 						stroke="#fff"
 						strokeWidth={half * 0.35}
 						style={{ cursor: "pointer", pointerEvents: "all" }}
@@ -1656,7 +1666,7 @@ function SelectionHandles({
 				width={rect.width}
 				height={rect.height}
 				fill="none"
-				stroke="#3B82F6"
+				stroke={SELECTION_COLOR}
 				strokeWidth={half * 0.25}
 				style={{ pointerEvents: "none" }}
 			/>
@@ -1667,7 +1677,7 @@ function SelectionHandles({
 						y1={rect.y}
 						x2={rotateX}
 						y2={rotateY}
-						stroke="#3B82F6"
+						stroke={SELECTION_COLOR}
 						strokeWidth={half * 0.25}
 						style={{ pointerEvents: "none" }}
 					/>
@@ -1676,7 +1686,7 @@ function SelectionHandles({
 						cy={rotateY}
 						r={half}
 						fill="#fff"
-						stroke="#3B82F6"
+						stroke={SELECTION_COLOR}
 						strokeWidth={half * 0.35}
 						style={{ cursor: "grab", pointerEvents: "all" }}
 						onMouseDown={(event) =>
@@ -1694,7 +1704,7 @@ function SelectionHandles({
 						width={handleSize}
 						height={handleSize}
 						fill="#fff"
-						stroke={"#F03808"}
+						stroke={SELECTION_COLOR}
 						strokeWidth={half * 0.25}
 						rx={half * 0.4}
 						style={{ cursor: cursorFor(handle.id), pointerEvents: "all" }}

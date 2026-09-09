@@ -511,6 +511,14 @@ async importScreenshot(source: string) : Promise<Result<string, string>> {
 async listRecordings() : Promise<([string, RecordingMetaWithMetadata])[]> {
     return await TAURI_INVOKE("list_recordings");
 },
+async renameLibraryCapture(path: string, name: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("rename_library_capture", { path, name }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async listScreenshots() : Promise<([string, ScreenshotMetaWithMetadata])[]> {
     return await TAURI_INVOKE("list_screenshots");
 },
@@ -901,8 +909,8 @@ export type AnnotationType = "arrow" | "circle" | "rectangle" | "text" | "mask" 
 export type AppTheme = "system" | "light" | "dark"
 /**
  * Arrow-only shape/style. All optional on `Annotation`: absent reproduces the
- * original straight arrow with a single solid head. Geometry lives in the
- * frontend's `arrow.ts`; the renderer never draws annotations.
+ * original straight arrow with a single solid head. Geometry is evaluated by
+ * both the SVG interaction overlay and the native annotation shader.
  */
 export type ArrowCurve = "straight" | "quadratic" | "cubic" | "elbow"
 export type ArrowHead = "none" | "arrow" | "triangle" | "circle" | "square"

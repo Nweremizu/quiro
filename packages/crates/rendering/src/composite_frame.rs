@@ -92,6 +92,10 @@ pub struct CompositeVideoFrameUniforms {
     /// squares its top corners against decorative frame chrome with
     /// `[0, 0, 1, 1]`.
     pub corner_radii: [f32; 4],
+    pub focus_region: [f32; 4],
+    pub focus_optics: [f32; 4],
+    pub focus_style: [f32; 4],
+    pub focus_state: [f32; 4],
     /// Inverse homography, screen pixels -> card-plane pixels. Defaults to
     /// `perspective::IDENTITY`; only the screenshot path sends anything else.
     pub inv_perspective: crate::perspective::PerspectiveMatrix,
@@ -122,6 +126,10 @@ impl Default for CompositeVideoFrameUniforms {
             _padding1: [0.0; 3],
             border_color: [0.0, 0.0, 0.0, 0.0],
             corner_radii: [1.0; 4],
+            focus_region: [0.0; 4],
+            focus_optics: [0.0; 4],
+            focus_style: [0.0; 4],
+            focus_state: [0.0; 4],
             inv_perspective: crate::perspective::IDENTITY,
         }
     }
@@ -307,5 +315,20 @@ impl CompositeVideoFramePipeline {
                 view_formats: &[],
             }),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CompositeVideoFramePipeline;
+    use crate::gpu_test_harness::GpuHarness;
+
+    #[test]
+    fn composite_pipeline_compiles_on_gpu() {
+        let Some(harness) = GpuHarness::new() else {
+            return;
+        };
+
+        let _pipeline = CompositeVideoFramePipeline::new(&harness.device);
     }
 }

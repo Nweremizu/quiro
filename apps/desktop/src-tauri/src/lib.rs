@@ -1140,6 +1140,7 @@ fn specta_bindings() -> tauri_specta::Builder {
             import::import_video,
             import::import_screenshot,
             library::list_recordings,
+            library::rename_library_capture,
             library::list_screenshots,
             diagnostics::get_system_diagnostics,
             diagnostics::get_logs_dir,
