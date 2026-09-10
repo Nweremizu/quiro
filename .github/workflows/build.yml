@@ -53,9 +53,11 @@ jobs:
           - label: macOS arm64
             os: macos-latest
             rust-target: aarch64-apple-darwin
-          - label: macOS x64
-            os: macos-latest
-            rust-target: x86_64-apple-darwin
+          # macOS x64 is out: Quiro ships Apple Silicon only. Building it on
+          # macos-latest can't work anyway — those runners are arm64, so
+          # Homebrew's FFmpeg is arm64 and linking an x86_64 binary against it
+          # fails on undefined symbols. It would need the (being-retired)
+          # Intel macos-13 image, or a universal build with both arch's libs.
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
