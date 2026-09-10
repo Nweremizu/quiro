@@ -76,7 +76,13 @@ runs:
         # ffmpeg-sys-next 7.1.x expects the FFmpeg 7.1 header/ABI surface
         # (avfft.h et al., removed in newer FFmpeg); Homebrew's default
         # `ffmpeg` formula is 9.x now, so pin the keg-only ffmpeg@7 instead.
-        brew install ffmpeg@7 pkg-config llvm
+        # llvm@18, not plain `llvm` (23.x): ffmpeg-sys-next builds its
+        # bindings with bindgen 0.70, which can't parse a clang that new —
+        # it silently degrades FFmpeg structs to opaque (size 1) while still
+        # emitting layout assertions for their real sizes, so the build dies
+        # in const-eval as `1_usize - 24_usize` underflows. Linux builds fine
+        # on apt's clang 18, so match it here.
+        brew install ffmpeg@7 pkg-config llvm@18
         echo "PKG_CONFIG_PATH=$(brew --prefix ffmpeg@7)/lib/pkgconfig:$PKG_CONFIG_PATH" >> "$GITHUB_ENV"
         # macos-latest runners are arm64; building the x86_64-apple-darwin
         # target there is real cross-compilation, which pkg-config-rs
@@ -84,7 +90,7 @@ runs:
         echo "PKG_CONFIG_ALLOW_CROSS=1" >> "$GITHUB_ENV"
         # bindgen (coreaudio-sys et al.) needs libclang; Xcode's clang doesn't
         # ship it as a discoverable shared lib, so point at Homebrew's LLVM.
-        echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> "$GITHUB_ENV"
+        echo "LIBCLANG_PATH=$(brew --prefix llvm@18)/lib" >> "$GITHUB_ENV"
         # Homebrew's clang has no built-in notion of the macOS SDK, so it
         # can't find framework headers like AudioUnit/AudioUnit.h that
         # coreaudio-sys's `#include`s expect. Point bindgen at the SDK.
