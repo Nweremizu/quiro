@@ -35,4 +35,9 @@ jobs:
         working-directory: apps/desktop/src-tauri
         # `short` keeps the log skimmable — one line per error instead of the
         # full rustc rendering, which runs to thousands of lines here.
-        run: cargo check --target aarch64-apple-darwin --message-format short 2>&1 | tail -n 200
+        # pipefail matters: without it the pipeline reports tail's exit code
+        # and a failing check shows up as a green job.
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo check --target aarch64-apple-darwin --message-format short 2>&1 | tail -n 200

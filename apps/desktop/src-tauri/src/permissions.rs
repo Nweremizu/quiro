@@ -402,7 +402,9 @@ fn macos_open_permission_settings(app: &tauri::AppHandle, permission: &OSPermiss
                     }
                     _ => {}
                 }
-                crate::tray::refresh_tray_menu_for_app(&app);
+                // No tray refresh here: Quiro's tray menu is static (open /
+                // record / screenshot / settings / quit), so unlike Cap's it
+                // has nothing that reflects permission state to rebuild.
                 sync_macos_dock_visibility(&app);
             });
         }

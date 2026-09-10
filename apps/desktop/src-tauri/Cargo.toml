@@ -31,6 +31,10 @@ tauri = { version = "2", features = [
     "image-png",
     "devtools",
     "protocol-asset",
+    # WebviewWindowBuilder::transparent() is compiled out on macOS without
+    # this, and the camera preview / overlays are all built transparent.
+    # Pairs with "macOSPrivateApi": true in tauri.conf.json.
+    "macos-private-api",
 ] }
 tauri-specta = { version = "=2.0.0-rc.20", features = ["derive", "typescript"] }
 tauri-plugin-dialog = "2.2.0"
@@ -112,6 +116,7 @@ quiro-text = { path = "../../../packages/crates/text" }
 quiro-media = { path = "../../../packages/crates/media" }
 quiro-flags = { path = "../../../packages/crates/flags" }
 quiro-recording = { path = "../../../packages/crates/recording" }
+quiro-camera-ffmpeg = { path = "../../../packages/crates/camera-ffmpeg" }
 
 [target.'cfg(not(all(target_os = "macos", target_arch = "x86_64")))'.dependencies]
 parakeet-rs = "0.3.4"
@@ -124,6 +129,15 @@ cidre = { workspace = true }
 objc2 = "0.6"
 objc2-app-kit = "0.3.1"
 objc2-foundation = "0.3.1"
+# The camera preview is an NSPanel, not a window, so it can float over
+# full-screen apps without stealing focus. Pinned to a rev rather than the
+# branch so the build can't shift underneath us. The v2 branch (not v2.1) is
+# the one that still re-exports `cocoa`, which this app's panel code imports;
+# v2.1 moved to objc2 and requires Tauri 2.8.
+tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", rev = "18ffb9a201fbf6fedfaa382fd4b92315ea30ab1a" }
+cocoa = "0.26.0"
+objc = "0.2.7"
+core-foundation = "0.10.0"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winreg = "0.55.0"

@@ -4,6 +4,8 @@ use specta::Type;
 pub mod win;
 
 #[cfg(target_os = "macos")]
+pub mod delegates;
+#[cfg(target_os = "macos")]
 pub mod macos;
 
 #[cfg(target_os = "macos")]

@@ -2,6 +2,8 @@ mod audio_meter;
 mod camera;
 mod camera_commands;
 mod camera_legacy;
+#[cfg(target_os = "macos")]
+mod camera_native;
 mod captions;
 mod capture;
 mod capture_targets;
@@ -23,6 +25,8 @@ mod import;
 mod library;
 #[cfg(target_os = "windows")]
 mod nvapi_power_policy;
+#[cfg(target_os = "macos")]
+mod panel_manager;
 mod permissions;
 mod platform;
 mod power_observer;
@@ -1284,7 +1288,7 @@ pub fn run() {
     // stay alive, so the two calls don't fight over ownership.
     let specta_invoke_handler = specta_builder.invoke_handler();
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_dialog::init())
@@ -1293,7 +1297,15 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_store::Builder::new().build())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_updater::Builder::new().build());
+
+    // Registers the panel store that `try_to_panel`/`get_webview_panel` read
+    // from; without it, converting a window to an NSPanel fails at runtime.
+    // Split out of the chain because it's the one platform-conditional plugin.
+    #[cfg(target_os = "macos")]
+    let builder = builder.plugin(tauri_nspanel::init());
+
+    builder
         // The global-shortcut plugin now lives in `hotkeys::init` (called from
         // setup below) rather than here: it needs the hotkeys store to dispatch
         // user bindings, and that store isn't loadable until the app handle
@@ -1408,6 +1420,8 @@ pub fn run() {
                 app.manage(three_spike::SpikeSink::default());
                 app.manage(CameraWindowPositionGuard::default());
                 app.manage(CameraWindowOperationLock::default());
+                #[cfg(target_os = "macos")]
+                app.manage(panel_manager::PanelManager::new());
                 app.manage(AppExitState::default());
                 app.manage(MainWindowReadyState::default());
                 app.manage(target_select_overlay::WindowFocusManager::default());

@@ -2,15 +2,19 @@ use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use quiro_recording::sources::screen_capture::{
     CaptureDisplay, CaptureWindow, list_displays, list_windows,
 };
+#[cfg(windows)]
 use scap_direct3d::{Capturer, PixelFormat, Settings};
 use scap_targets::{Display, Window, bounds::LogicalBounds};
 use serde::Serialize;
 use specta::Type;
+#[cfg(windows)]
 use std::sync::mpsc;
+#[cfg(windows)]
 use windows::Graphics::Capture::GraphicsCaptureItem;
 
 /// Longest edge a thumbnail is downscaled to before being base64-encoded —
 /// these are for picker-grid previews, not full quality, so keep them small.
+#[cfg(windows)]
 const THUMBNAIL_MAX_DIMENSION: u32 = 320;
 
 #[derive(Serialize, Type)]
@@ -82,6 +86,7 @@ pub fn list_windows_with_thumbnails() -> Vec<CaptureWindowWithThumbnail> {
         .collect()
 }
 
+#[cfg(windows)]
 fn capture_display_thumbnail(display: &Display) -> Result<String, String> {
     let item = display
         .raw_handle()
@@ -90,6 +95,7 @@ fn capture_display_thumbnail(display: &Display) -> Result<String, String> {
     capture_single_frame_thumbnail(item)
 }
 
+#[cfg(windows)]
 fn capture_window_thumbnail(window: &Window) -> Result<String, String> {
     let item = window
         .raw_handle()
@@ -98,10 +104,25 @@ fn capture_window_thumbnail(window: &Window) -> Result<String, String> {
     capture_single_frame_thumbnail(item)
 }
 
+// Thumbnail capture is Direct3D-based (`scap_direct3d` + GraphicsCaptureItem),
+// so it has no equivalent here yet — the ScreenCaptureKit path isn't wired up.
+// `thumbnail` is already Option, so the picker just renders without preview
+// images rather than failing.
+#[cfg(not(windows))]
+fn capture_display_thumbnail(_display: &Display) -> Result<String, String> {
+    Err("display thumbnails are only implemented on Windows".to_string())
+}
+
+#[cfg(not(windows))]
+fn capture_window_thumbnail(_window: &Window) -> Result<String, String> {
+    Err("window thumbnails are only implemented on Windows".to_string())
+}
+
 /// Grabs exactly one frame from a display or window and returns it as a
 /// downscaled `data:image/png;base64,...` string. Mirrors `capture::
 /// take_screenshot`'s single-frame-then-stop pattern, but scaled down and
 /// kept in memory instead of written full-res to disk.
+#[cfg(windows)]
 fn capture_single_frame_thumbnail(item: GraphicsCaptureItem) -> Result<String, String> {
     let (tx, rx) = mpsc::channel();
 
