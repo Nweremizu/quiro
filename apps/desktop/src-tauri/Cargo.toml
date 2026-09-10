@@ -17,6 +17,21 @@ workspace = true
 name = "quiro_desktop_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
+# Behind a feature so it isn't built by default. Cargo auto-discovers
+# src/bin/*, and Tauri bundles every binary the crate produces — so this
+# developer tool was being installed onto users' machines as a stray 31 MB
+# executable next to the app, and was being LTO'd in every release build for
+# nothing (it's what ran the CI runner out of memory).
+#
+#   cargo run -p quiro-desktop --bin export-bindings --features export-bindings
+[[bin]]
+name = "export-bindings"
+path = "src/bin/export-bindings.rs"
+required-features = ["export-bindings"]
+
+[features]
+export-bindings = []
+
 
 
 [build-dependencies]
