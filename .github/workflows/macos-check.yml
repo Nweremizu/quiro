@@ -1,0 +1,38 @@
+name: macOS check
+
+# Fast feedback for the macOS port: `cargo check` only, no bundling, so an
+# iteration is minutes instead of the ~10 a full `tauri build` costs. Manual
+# trigger — this is a porting aid, not part of CI.
+#
+# Delete this once macOS builds green in build.yml.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: cargo check (macOS)
+    runs-on: macos-latest
+    env:
+      # Keep the compiled dependency tree even when the check fails —
+      # otherwise every iteration recompiles hundreds of crates from cold,
+      # which is exactly the loop this workflow exists to shorten.
+      CACHE_ON_FAILURE: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup
+        with:
+          rust-targets: aarch64-apple-darwin
+          cache-key: macos-check
+
+      - name: Build frontend
+        # tauri_build::build() in the app crate's build script wants the
+        # frontend dist to exist, even for a check.
+        run: pnpm --filter desktop build
+
+      - name: cargo check
+        working-directory: apps/desktop/src-tauri
+        # `short` keeps the log skimmable — one line per error instead of the
+        # full rustc rendering, which runs to thousands of lines here.
+        run: cargo check --target aarch64-apple-darwin --message-format short 2>&1 | tail -n 200
