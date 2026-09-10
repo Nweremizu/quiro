@@ -118,6 +118,39 @@ jobs:
           prerelease: ${{ inputs.prerelease }}
           args: ${{ inputs.tauri-args }} --target ${{ matrix.rust-target }}
 
+      - name: Stamp the arch onto the macOS updater payload
+        # Tauri names it "<App>.app.tar.gz" with no architecture — every other
+        # bundle carries one. Without this it matches none of the generator's
+        # darwin suffixes and macOS drops out of latest.json, and two arches
+        # would collide on one basename once the bundles are flattened.
+        #
+        # It has to happen here, not at flatten time: upload-artifact strips
+        # the common path prefix, so the target-triple directory is gone by
+        # then and there's nothing left to infer the arch from.
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="target/${{ matrix.rust-target }}/release/bundle/macos"
+          case "${{ matrix.rust-target }}" in
+            aarch64-*) arch=aarch64 ;;
+            x86_64-*)  arch=x64 ;;
+            *)         echo "unhandled target"; exit 1 ;;
+          esac
+          for payload in "$dir"/*.app.tar.gz; do
+            [ -e "$payload" ] || continue
+            base=$(basename "$payload" .app.tar.gz)
+            # Skip an already-stamped name, so a re-run on a warm build dir
+            # can't produce Quiro_aarch64_aarch64.app.tar.gz — which would
+            # match no platform and drop macOS from the manifest again.
+            case "$base" in *_"$arch") continue ;; esac
+            mv "$payload" "$dir/${base}_${arch}.app.tar.gz"
+            if [ -e "$payload.sig" ]; then
+              mv "$payload.sig" "$dir/${base}_${arch}.app.tar.gz.sig"
+            fi
+          done
+          ls -la "$dir"
+
       - name: Collect bundles
         uses: actions/upload-artifact@v4
         with:
@@ -155,30 +188,12 @@ jobs:
         # The manifest references files by basename, so everything lands in one
         # directory and is uploaded flat.
         #
-        # One exception to "names already carry the arch": Tauri writes the
-        # macOS updater payload as "<Name>.app.tar.gz" with no architecture at
-        # all (tauri-action only renames it when attaching to the GitHub
-        # Release). Flattened as-is it matches none of the generator's
-        # darwin suffixes, so macOS silently vanished from latest.json — and
-        # two arches would collide on the same basename here. Recover the arch
-        # from the target-triple directory the artifact preserved.
+        # Every bundle carries its arch by the time it gets here (the macOS
+        # updater payload is renamed in the build job), so basenames are
+        # unique across platforms.
         run: |
           mkdir dist
-          find downloaded -type f | while read -r src; do
-            name=$(basename "$src")
-            case "$src" in
-              */aarch64-apple-darwin/*) arch=aarch64 ;;
-              */x86_64-apple-darwin/*)  arch=x64 ;;
-              *)                        arch= ;;
-            esac
-            if [ -n "$arch" ]; then
-              case "$name" in
-                *.app.tar.gz)     name="${name%.app.tar.gz}_${arch}.app.tar.gz" ;;
-                *.app.tar.gz.sig) name="${name%.app.tar.gz.sig}_${arch}.app.tar.gz.sig" ;;
-              esac
-            fi
-            cp -n "$src" "dist/$name"
-          done
+          find downloaded -type f -exec cp -n {} dist/ \;
           ls -la dist
 
       - name: Generate latest.json
