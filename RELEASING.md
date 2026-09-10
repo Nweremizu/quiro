@@ -1,7 +1,9 @@
 # Releasing Quiro
 
-Quiro ships as native installers (`.exe`/NSIS on Windows, `.dmg` on macOS,
-`.AppImage`/`.deb` on Linux) with in-app auto-update via the Tauri updater.
+Quiro ships as native installers (`.exe`/NSIS on Windows, `.dmg` on macOS)
+with in-app auto-update via the Tauri updater. Linux (`.AppImage`/`.deb`) is
+in the Tauri bundle config but not currently in the build matrix —
+`quiro-recording`/`quiro-rendering`/`quiro-text` don't compile there yet.
 
 ## How a change ships
 
@@ -94,6 +96,6 @@ Release and skips the R2 push, so auto-update stays inert.
 - **`ci.yml`** on every PR and push to `main`: Biome, `tsc`, the geometry/arrow
   self-checks (`pnpm check`), the frontend build, then `cargo fmt`/`clippy -D
   warnings`/`test`. On `main` only it also does a no-publish `bundle-smoke` on
-  all three OSes.
+  Windows and macOS (Linux excluded — see above).
 - **`build.yml`** is the reusable engine (`workflow_call`) shared by
   `release.yml` and `nightly.yml`. Don't trigger it directly.

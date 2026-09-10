@@ -23,10 +23,14 @@ const rootDir = path.resolve(
 const targetDir = path.join(rootDir, "target");
 
 // FFmpeg 7.1 — must match the ABI the `ffmpeg-sys-next` build expects
-// (avcodec 61 / avformat 61 / avutil 59 / …). BtbN ships a versioned tag.
-const TAG = "n7.1";
-const ASSET = `ffmpeg-${TAG}-latest-win64-gpl-shared.zip`;
-const URL = `https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/${ASSET}`;
+// (avcodec 61 / avformat 61 / avutil 59 / …). This used to come from BtbN's
+// rolling "latest" tag, but that tag has since moved on to FFmpeg 8/9 and no
+// longer carries a 7.1 build (BtbN doesn't keep 7.1 under any other tag
+// either). Vendored as a release asset on this repo instead — Gyan's mirror
+// only ships MinGW `.dll.a` import libs, not the MSVC-compatible `.lib`
+// files an x86_64-pc-windows-msvc build needs.
+const ASSET = "ffmpeg-n7.1.5-12-g1fdbca85aa-win64-gpl-shared-7.1.zip";
+const URL = `https://github.com/Nweremizu/quiro/releases/download/vendor-deps/${ASSET}`;
 
 const DLLS = [
 	"avcodec-61.dll",
