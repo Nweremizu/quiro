@@ -81,13 +81,34 @@ async function main() {
 	const url = `https://github.com/microsoft/onnxruntime/releases/download/v${VERSION}/${assetName}`;
 	const archivePath = path.join(targetDir, assetName);
 
+	// A release build downloads this on every CI runner, so an occasional
+	// connect timeout to github.com is a matter of when, not if — one took a
+	// whole release run down. 4xx isn't retried: a wrong URL won't fix itself.
+	async function fetchWithRetry(target, attempts = 3) {
+		for (let attempt = 1; ; attempt++) {
+			try {
+				const res = await fetch(target);
+				if (res.ok) return res;
+				if (res.status < 500) {
+					throw new Error(`Failed to download ${target}: ${res.status}`);
+				}
+				throw new Error(`${target} returned ${res.status}`);
+			} catch (error) {
+				const fatal = /: 4\d\d$/.test(error.message);
+				if (fatal || attempt >= attempts) throw error;
+				const backoffMs = attempt * 2000;
+				console.log(
+					`  attempt ${attempt}/${attempts} failed (${error.message}); retrying in ${backoffMs}ms`,
+				);
+				await new Promise((resolve) => setTimeout(resolve, backoffMs));
+			}
+		}
+	}
+
 	await fs.mkdir(targetDir, { recursive: true });
 	if (!(await fileExists(archivePath))) {
 		console.log(`Downloading ${assetName}…`);
-		const res = await fetch(url);
-		if (!res.ok) {
-			throw new Error(`Failed to download ${url}: ${res.status}`);
-		}
+		const res = await fetchWithRetry(url);
 		await fs.writeFile(archivePath, Buffer.from(await res.arrayBuffer()));
 	} else {
 		console.log(`Using cached archive ${assetName}`);
