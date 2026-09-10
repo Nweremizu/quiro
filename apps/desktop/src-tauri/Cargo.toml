@@ -129,6 +129,13 @@ cidre = { workspace = true }
 objc2 = "0.6"
 objc2-app-kit = "0.3.1"
 objc2-foundation = "0.3.1"
+# CALayer's CGFloat-typed setters (setCornerRadius) are behind the
+# objc2-core-foundation feature. objc2-app-kit pulls this crate in without it,
+# so declare it here to turn them on — cargo features are additive.
+objc2-quartz-core = { version = "0.3", features = [
+    "CALayer",
+    "objc2-core-foundation",
+] }
 # The camera preview is an NSPanel, not a window, so it can float over
 # full-screen apps without stealing focus. Pinned to a rev rather than the
 # branch so the build can't shift underneath us. The v2 branch (not v2.1) is

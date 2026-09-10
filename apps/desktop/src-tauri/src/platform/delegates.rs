@@ -61,7 +61,7 @@ pub fn position_window_controls(handle: UnsafeWindowHandle, inset: &LogicalPosit
         let mut rect = container.frame();
         rect.size.height = title_bar_height;
         rect.origin.y = window.frame().size.height - title_bar_height;
-        unsafe { container.setFrame(rect) };
+        container.setFrame(rect);
     }
 
     // Preserve AppKit's own spacing rather than hardcoding one, so the layout
@@ -73,6 +73,6 @@ pub fn position_window_controls(handle: UnsafeWindowHandle, inset: &LogicalPosit
         let mut origin = button.frame().origin;
         origin.x = inset.x + spacing * index as f64;
         origin.y = y;
-        unsafe { button.setFrameOrigin(origin) };
+        button.setFrameOrigin(origin);
     }
 }
