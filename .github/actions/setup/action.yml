@@ -90,7 +90,13 @@ runs:
         # coreaudio-sys's `#include`s expect. Point bindgen at the SDK.
         SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
         echo "SDKROOT=$SDKROOT" >> "$GITHUB_ENV"
-        echo "BINDGEN_EXTRA_CLANG_ARGS=-isysroot $SDKROOT" >> "$GITHUB_ENV"
+        # Without an explicit --target, bindgen's clang parses headers using
+        # the host's default (arm64 on macos-latest), computing wrong struct
+        # sizes/alignment for a cross-compiled x86_64-apple-darwin build
+        # (arch-conditional layouts in FFmpeg's headers) — surfaces as a
+        # bindgen const-eval underflow, not an obvious "wrong arch" error.
+        RUST_TARGET="${{ inputs.rust-targets }}"
+        echo "BINDGEN_EXTRA_CLANG_ARGS=-isysroot $SDKROOT --target=$RUST_TARGET" >> "$GITHUB_ENV"
 
     - name: Install Rust
       if: inputs.rust == 'true'
