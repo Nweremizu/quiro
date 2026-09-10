@@ -153,11 +153,32 @@ jobs:
 
       - name: Flatten bundles
         # The manifest references files by basename, so everything lands in one
-        # directory and is uploaded flat. Bundle names already carry the arch,
-        # so there are no collisions across platforms.
+        # directory and is uploaded flat.
+        #
+        # One exception to "names already carry the arch": Tauri writes the
+        # macOS updater payload as "<Name>.app.tar.gz" with no architecture at
+        # all (tauri-action only renames it when attaching to the GitHub
+        # Release). Flattened as-is it matches none of the generator's
+        # darwin suffixes, so macOS silently vanished from latest.json — and
+        # two arches would collide on the same basename here. Recover the arch
+        # from the target-triple directory the artifact preserved.
         run: |
           mkdir dist
-          find downloaded -type f -exec cp -n {} dist/ \;
+          find downloaded -type f | while read -r src; do
+            name=$(basename "$src")
+            case "$src" in
+              */aarch64-apple-darwin/*) arch=aarch64 ;;
+              */x86_64-apple-darwin/*)  arch=x64 ;;
+              *)                        arch= ;;
+            esac
+            if [ -n "$arch" ]; then
+              case "$name" in
+                *.app.tar.gz)     name="${name%.app.tar.gz}_${arch}.app.tar.gz" ;;
+                *.app.tar.gz.sig) name="${name%.app.tar.gz.sig}_${arch}.app.tar.gz.sig" ;;
+              esac
+            fi
+            cp -n "$src" "dist/$name"
+          done
           ls -la dist
 
       - name: Generate latest.json

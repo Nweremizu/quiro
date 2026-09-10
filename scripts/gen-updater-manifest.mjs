@@ -111,6 +111,28 @@ if (Object.keys(platforms).length === 0) {
 	process.exit(1);
 }
 
+// A payload that matches no suffix above is how macOS silently dropped out of
+// a release once: Tauri names it "<App>.app.tar.gz" with no arch, every
+// darwin suffix missed, and a Windows-only manifest published as if fine.
+// Only a *total* miss is an error — a second file mapping to an
+// already-claimed key (an .exe plus its .nsis.zip) matches a suffix and is
+// skipped deliberately.
+const unmatched = [
+	...new Set(
+		files
+			.map((f) => f.split(/[\\/]/).pop())
+			.filter((name) => /\.(app\.tar\.gz|AppImage)$/.test(name))
+			.filter((name) => !PLATFORMS.some(({ suffix }) => name.endsWith(suffix))),
+	),
+];
+if (unmatched.length > 0) {
+	console.error(
+		`updater payloads matched no platform: ${unmatched.join(", ")}\n` +
+			"they'd be missing from latest.json, so those users would never see the update",
+	);
+	process.exit(1);
+}
+
 const manifest = {
 	version,
 	notes,
