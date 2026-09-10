@@ -196,7 +196,7 @@ jobs:
           find downloaded -type f -exec cp -n {} dist/ \;
           ls -la dist
 
-      - name: Generate latest.json
+      - name: Generate release manifests
         run: |
           node scripts/gen-updater-manifest.mjs \
             --artifacts ./dist \
@@ -211,7 +211,9 @@ jobs:
           tag_name: ${{ inputs.tag }}
           draft: true
           prerelease: ${{ inputs.prerelease }}
-          files: manifest/${{ inputs.channel }}/latest.json
+          files: |
+            manifest/${{ inputs.channel }}/latest.json
+            manifest/${{ inputs.channel }}/downloads.json
 
       - name: Publish to Cloudflare R2
         if: env.BASE_URL != ''
@@ -233,6 +235,21 @@ jobs:
             --cache-control "public, max-age=31536000, immutable"
           # Mutable, must be fetched fresh: the channel manifest.
           $R2 cp "./manifest/$CHANNEL/latest.json" "s3://$BUCKET/$CHANNEL/latest.json" \
+            --content-type application/json \
+            --cache-control "no-cache"
+          windows_installer=$(find ./dist -type f -name '*x64-setup.exe' -print -quit)
+          macos_installer=$(find ./dist -type f -name '*aarch64.dmg' -print -quit)
+          test -n "$windows_installer"
+          test -n "$macos_installer"
+          $R2 cp "$windows_installer" "s3://$BUCKET/$CHANNEL/downloads/quiro-windows-x64.exe" \
+            --content-type application/vnd.microsoft.portable-executable \
+            --content-disposition 'attachment; filename="Quiro-Windows-x64.exe"' \
+            --cache-control "no-cache"
+          $R2 cp "$macos_installer" "s3://$BUCKET/$CHANNEL/downloads/quiro-macos-arm64.dmg" \
+            --content-type application/x-apple-diskimage \
+            --content-disposition 'attachment; filename="Quiro-macOS-arm64.dmg"' \
+            --cache-control "no-cache"
+          $R2 cp "./manifest/$CHANNEL/downloads.json" "s3://$BUCKET/$CHANNEL/downloads.json" \
             --content-type application/json \
             --cache-control "no-cache"
           echo "Published $CHANNEL $VERSION -> $BASE_URL/$CHANNEL/"

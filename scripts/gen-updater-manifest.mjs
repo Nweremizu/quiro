@@ -6,9 +6,8 @@
 //     --base-url https://downloads.example.com/updates \
 //     --notes-file ./notes.md --out ./manifest
 //
-// Output: <out>/<channel>/latest.json, referencing files at
-// <base-url>/<channel>/<version>/<file>. Uploading the bundle files to that
-// location is the release workflow's job (see .github/workflows/build.yml).
+// Output: <out>/<channel>/latest.json for the updater and downloads.json for
+// the website, referencing files uploaded by .github/workflows/build.yml.
 
 import {
 	mkdirSync,
@@ -68,6 +67,25 @@ const PLATFORMS = [
 	{ suffix: "aarch64.AppImage", key: "linux-aarch64" },
 	{ suffix: "amd64.AppImage.tar.gz", key: "linux-x86_64" },
 	{ suffix: "aarch64.AppImage.tar.gz", key: "linux-aarch64" },
+];
+
+const DOWNLOADS = [
+	{
+		suffix: "x64-setup.exe",
+		key: "windows-x86_64",
+		platform: "Windows",
+		architecture: "x64",
+		minimumVersion: "Windows 10",
+		alias: "quiro-windows-x64.exe",
+	},
+	{
+		suffix: "aarch64.dmg",
+		key: "darwin-aarch64",
+		platform: "macOS",
+		architecture: "Apple silicon",
+		minimumVersion: "macOS 12",
+		alias: "quiro-macos-arm64.dmg",
+	},
 ];
 
 const walk = (dir) => {
@@ -140,12 +158,41 @@ const manifest = {
 	platforms,
 };
 
+const downloads = DOWNLOADS.map((download) => {
+	const bundle = files.find((file) => file.endsWith(download.suffix));
+	if (!bundle) {
+		console.error(`no public installer found for ${download.key}`);
+		process.exit(1);
+	}
+
+	const fileName = bundle.split(/[\\/]/).pop();
+	return {
+		platform: download.platform,
+		architecture: download.architecture,
+		minimumVersion: download.minimumVersion,
+		fileName,
+		bytes: statSync(bundle).size,
+		url: `${baseUrl}/${channel}/downloads/${download.alias}`,
+		versionedUrl: `${baseUrl}/${channel}/${version}/${encodeURIComponent(fileName)}`,
+	};
+});
+
+const downloadManifest = {
+	version,
+	pub_date: manifest.pub_date,
+	downloads,
+};
+
 const dest = join(outDir, channel);
 mkdirSync(dest, { recursive: true });
 writeFileSync(
 	join(dest, "latest.json"),
 	`${JSON.stringify(manifest, null, 2)}\n`,
 );
+writeFileSync(
+	join(dest, "downloads.json"),
+	`${JSON.stringify(downloadManifest, null, 2)}\n`,
+);
 console.log(
-	`\nwrote ${join(dest, "latest.json")} (${Object.keys(platforms).length} platforms)`,
+	`\nwrote ${join(dest, "latest.json")} (${Object.keys(platforms).length} platforms) and ${join(dest, "downloads.json")} (${downloads.length} installers)`,
 );
