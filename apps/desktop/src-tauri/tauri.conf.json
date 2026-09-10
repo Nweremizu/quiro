@@ -57,7 +57,12 @@
 		"windows": {
 			"nsis": {
 				"installMode": "currentUser",
-				"installerHooks": "installer-hooks.nsh"
+				"installerHooks": "installer-hooks.nsh",
+				"installerIcon": "icons/icon.ico",
+				"uninstallerIcon": "icons/icon.ico",
+				"headerImage": "installer/header.bmp",
+				"uninstallerHeaderImage": "installer/header.bmp",
+				"sidebarImage": "installer/sidebar.bmp"
 			}
 		},
 		"macOS": {
