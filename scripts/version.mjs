@@ -119,8 +119,13 @@ bumpCargoToml("apps/desktop/src-tauri/Cargo.toml");
 {
 	const path = "Cargo.lock";
 	const src = readFileSync(rel(path), "utf8");
+	// `\r?\n`, not `\n`: core.autocrlf checks this file out with CRLF endings on
+	// Windows, where a bare `\n` never matches and the release aborts claiming
+	// the entry is missing — while it's sitting right there in the file. The
+	// newline stays inside the capture group so whichever ending is in use is
+	// preserved rather than rewritten.
 	const out = src.replace(
-		/(name = "quiro-desktop"\nversion = ")[^"]+(")/,
+		/(name = "quiro-desktop"\r?\nversion = ")[^"]+(")/,
 		`$1${next}$2`,
 	);
 	if (out === src)
