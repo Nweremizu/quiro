@@ -223,6 +223,18 @@ impl ShowQuiroWindow {
         // removing this for now as it causes windows to just stay hidden sometimes -_-
         // window.hide().ok();
 
+        // Only reached on first creation — a reused window (see the
+        // try_reuse/try_reuse_existing calls above) already has this from
+        // when it was first shown.
+        {
+            let rasterization_window = window.clone();
+            window.on_window_event(move |event| {
+                if let tauri::WindowEvent::ScaleFactorChanged { scale_factor, .. } = event {
+                    update_window_rasterization_scale(&rasterization_window, *scale_factor);
+                }
+            });
+        }
+
         #[cfg(target_os = "macos")]
         if let Some(position) = _id.traffic_lights_position() {
             add_traffic_lights(&window, position);

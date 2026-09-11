@@ -1065,7 +1065,7 @@ function ShortcutsStep({ active }: { active: boolean }) {
 						className={cn(
 							"rounded-xl bg-white px-4 py-3.5 shadow-xs transition-[transform,opacity] duration-500 dark:bg-gray-2",
 							area.primary &&
-							"col-span-2 border-accent-border-selected bg-accent-surface/45",
+								"col-span-2 border-accent-border-selected bg-accent-surface/45",
 						)}
 						style={{
 							transitionDelay: `${150 + index * 80}ms`,

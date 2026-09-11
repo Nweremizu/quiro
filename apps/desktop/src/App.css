@@ -4,89 +4,89 @@
 @tailwind utilities;
 
 .startup-grain {
-    position: absolute;
-    inset: -150% -50%;
-    width: 200%;
-    height: 400%;
-    pointer-events: none;
-    opacity: 0.22;
-    z-index: 2;
-    mix-blend-mode: overlay;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.5' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+	position: absolute;
+	inset: -150% -50%;
+	width: 200%;
+	height: 400%;
+	pointer-events: none;
+	opacity: 0.22;
+	z-index: 2;
+	mix-blend-mode: overlay;
+	background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.5' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
 
 .dark .dark-button-shadow {
-    box-shadow: 0 1.5px 0 0 oklch(0% 0 0 / 0.1) inset;
+	box-shadow: 0 1.5px 0 0 oklch(0% 0 0 / 0.1) inset;
 }
 
 .dark-button-shadow {
-    box-shadow: 0 1.5px 0 0 oklch(100% 0 0 / 0.2) inset;
+	box-shadow: 0 1.5px 0 0 oklch(100% 0 0 / 0.2) inset;
 }
 
 .dark .gray-button-shadow {
-    box-shadow: 0 1.5px 0 0 oklch(100% 0 0 / 0.1) inset;
+	box-shadow: 0 1.5px 0 0 oklch(100% 0 0 / 0.1) inset;
 }
 
 .gray-button-shadow {
-    box-shadow: 0 1.5px 0 0 oklch(100% 0 0 / 0.4) inset;
+	box-shadow: 0 1.5px 0 0 oklch(100% 0 0 / 0.4) inset;
 }
 
 .dark .gray-button-border {
-    @apply border-gray-2;
+	@apply border-gray-2;
 }
 
 .gray-button-border {
-    @apply border-gray-8;
+	@apply border-gray-8;
 }
 
 .dark .dark-button-border {
-    @apply border-gray-2;
+	@apply border-gray-2;
 }
 
 .dark-button-border {
-    @apply border-gray-12;
+	@apply border-gray-12;
 }
 
 [data-transparent-window] {
-    background: transparent;
+	background: transparent;
 }
 
 [data-transparent-window] body {
-    background: transparent;
+	background: transparent;
 }
 
 /* Custom scrollbar */
 .custom-scroll {
-    margin-right: 3px; /* Add margin to create space between scrollbar and window edge */
-    overflow-y: scroll;
-    margin-top: var(--margin-top-scroll);
+	margin-right: 3px; /* Add margin to create space between scrollbar and window edge */
+	overflow-y: scroll;
+	margin-top: var(--margin-top-scroll);
 }
 
 .custom-scroll::-webkit-scrollbar {
-    width: 7px;
-    background-color: transparent;
+	width: 7px;
+	background-color: transparent;
 }
 
 .custom-scroll::-webkit-scrollbar-thumb {
-    background-color: var(--gray-300);
-    width: 7px;
-    border-radius: 500px;
+	background-color: var(--gray-300);
+	width: 7px;
+	border-radius: 500px;
 }
 
 /* Ensure transparent windows stay transparent in dark mode */
 .dark [data-transparent-window],
 .dark [data-transparent-window] body {
-    background: transparent;
+	background: transparent;
 }
 
 .custom-scroll::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
-    background-color: transparent;
+	width: 4px;
+	height: 4px;
+	background-color: transparent;
 }
 
 .hide-scroll::-webkit-scrollbar {
-    display: none;
+	display: none;
 }
 
 /* Editor timeline track colours. Each track owns one hue so a glance at the
@@ -104,32 +104,32 @@
  * are theme-aware: the light set would read as heavy against a dark
  * timeline, so the dark set lifts lightness and eases chroma. */
 :root {
-    --track-mask: #e14754;
-    --track-clip: #f3801f; /* --accent-solid, the brand orange */
-    --track-keyboard: #e2cc3f;
-    --track-audio: #33ae78;
-    --track-text: #17a9b6;
-    --track-zoom: #4ca0f1;
-    --track-scene: #9167ea;
-    --track-caption: #d05faf;
+	--track-mask: #e14754;
+	--track-clip: #f3801f; /* --accent-solid, the brand orange */
+	--track-keyboard: #e2cc3f;
+	--track-audio: #33ae78;
+	--track-text: #17a9b6;
+	--track-zoom: #4ca0f1;
+	--track-scene: #9167ea;
+	--track-caption: #d05faf;
 
-    /* One dark label for every fill: the tracks span the whole hue wheel, so
+	/* One dark label for every fill: the tracks span the whole hue wheel, so
        a neutral reads consistently where a hue-tinted one (e.g.
        --accent-on-solid, which is warm) would look off on the blues. */
-    --track-label: oklch(20% 0.015 260);
+	--track-label: oklch(20% 0.015 260);
 }
 
 :root.dark {
-    --track-mask: #f1636a;
-    --track-clip: #f3801f; /* identical in both themes, like the brand itself */
-    --track-keyboard: #e8d557;
-    --track-audio: #52c08a;
-    --track-text: #4bbac0;
-    --track-zoom: #6fb2fb;
-    --track-scene: #a27ef7;
-    --track-caption: #e176c0;
+	--track-mask: #f1636a;
+	--track-clip: #f3801f; /* identical in both themes, like the brand itself */
+	--track-keyboard: #e8d557;
+	--track-audio: #52c08a;
+	--track-text: #4bbac0;
+	--track-zoom: #6fb2fb;
+	--track-scene: #a27ef7;
+	--track-caption: #e176c0;
 
-    --track-label: oklch(20% 0.015 260);
+	--track-label: oklch(20% 0.015 260);
 }
 
 /* Segments wear the Export button's treatment — a vertical gradient, a
@@ -145,31 +145,31 @@
  * The border stays a darker mix of the same hue, so a segment still reads as
  * one colour rather than two. */
 .track-segment-fill {
-    background: linear-gradient(
-        to bottom,
-        color-mix(in oklab, var(--seg-color) 84%, white),
-        var(--seg-color)
-    );
-    border: 1px solid color-mix(in srgb, var(--seg-color) 58%, black);
-    box-shadow:
-        0 2px 8px -4px color-mix(in srgb, var(--seg-color) 55%, transparent),
-        inset 0 1px 0 0 rgb(255 255 255 / 0.22);
-    transition:
-        box-shadow 200ms ease-out,
-        filter 200ms ease-out;
+	background: linear-gradient(
+		to bottom,
+		color-mix(in oklab, var(--seg-color) 84%, white),
+		var(--seg-color)
+	);
+	border: 1px solid color-mix(in srgb, var(--seg-color) 58%, black);
+	box-shadow:
+		0 2px 8px -4px color-mix(in srgb, var(--seg-color) 55%, transparent),
+		inset 0 1px 0 0 rgb(255 255 255 / 0.22);
+	transition:
+		box-shadow 200ms ease-out,
+		filter 200ms ease-out;
 }
 
 /* `group` on this element is what the drag handles already hover off, so the
    lift and the handles appear together as one response. */
 .track-segment-fill:hover {
-    filter: brightness(1.08);
-    box-shadow:
-        0 4px 12px -5px color-mix(in srgb, var(--seg-color) 65%, transparent),
-        inset 0 1px 0 0 rgb(255 255 255 / 0.28);
+	filter: brightness(1.08);
+	box-shadow:
+		0 4px 12px -5px color-mix(in srgb, var(--seg-color) 65%, transparent),
+		inset 0 1px 0 0 rgb(255 255 255 / 0.28);
 }
 
 .track-segment-fill:active {
-    filter: brightness(0.95);
+	filter: brightness(0.95);
 }
 
 /* Same one-step-darker shift the Export button makes in dark mode. The track
@@ -177,17 +177,17 @@
    *direction*: keeping the highlight at the top edge and the shade below it,
    rather than mixing toward white on a colour that is already bright. */
 :root.dark .track-segment-fill {
-    background: linear-gradient(
-        to bottom,
-        var(--seg-color),
-        color-mix(in oklab, var(--seg-color) 86%, black)
-    );
+	background: linear-gradient(
+		to bottom,
+		var(--seg-color),
+		color-mix(in oklab, var(--seg-color) 86%, black)
+	);
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .track-segment-fill {
-        transition: none;
-    }
+	.track-segment-fill {
+		transition: none;
+	}
 }
 
 /* Selection. This used to be a brand-orange ring, which stopped working the
@@ -198,215 +198,243 @@
    keeps the white edge visible against a light timeline background, where a
    lone white ring would simply vanish. */
 .track-segment-selected {
-    box-shadow:
-        0 0 0 2px oklch(100% 0 0 / 0.95),
-        0 0 0 4px oklch(20% 0.02 260 / 0.5);
+	box-shadow:
+		0 0 0 2px oklch(100% 0 0 / 0.95),
+		0 0 0 4px oklch(20% 0.02 260 / 0.5);
 }
 
 .timeline-scissors-cursor,
 .timeline-scissors-cursor * {
-    cursor: none;
+	cursor: none;
 }
 
 .timeline-merge-overlay {
-    width: 1px;
+	width: 1px;
 }
 
 .timeline-merge-overlay::before {
-    position: absolute;
-    inset: 2px -32px;
-    z-index: -1000;
-    content: "";
-    /* Soft accent mesh gradient */
-    background: linear-gradient(90deg, var(--accent-300), var(--accent-200));
-    border-top: 1px solid var(--accent-400);
-    border-bottom: 1px solid var(--accent-400);
-    opacity: 0;
-    animation: timeline-merge-glow 400ms ease-out both;
+	position: absolute;
+	inset: 2px -32px;
+	z-index: -1000;
+	content: "";
+	/* Soft accent mesh gradient */
+	background: linear-gradient(90deg, var(--accent-300), var(--accent-200));
+	border-top: 1px solid var(--accent-400);
+	border-bottom: 1px solid var(--accent-400);
+	opacity: 0;
+	animation: timeline-merge-glow 400ms ease-out both;
 }
 
 .timeline-merge-pill {
-    animation: timeline-merge-pill 400ms ease-out both;
+	animation: timeline-merge-pill 400ms ease-out both;
 }
 
 .timeline-merge-overlay-frozen::before {
-    animation: none;
-    opacity: 1;
-    transform: scaleY(1);
+	animation: none;
+	opacity: 1;
+	transform: scaleY(1);
 }
 
 .timeline-merge-overlay-frozen .timeline-merge-pill {
-    animation: none;
-    opacity: 1;
+	animation: none;
+	opacity: 1;
 }
 
 .timeline-merge-preview-left {
-    translate: -24px 0;
-    z-index: 1000;
+	translate: -24px 0;
+	z-index: 1000;
 }
 
 .timeline-merge-preview-right {
-    translate: 24px 0;
-    z-index: 1000;
+	translate: 24px 0;
+	z-index: 1000;
 }
 
 .timeline-merge-nudge-left {
-    animation: timeline-merge-left 400ms ease-out both;
-    z-index: 1000;
+	animation: timeline-merge-left 400ms ease-out both;
+	z-index: 1000;
 }
 
 .timeline-merge-nudge-right {
-    animation: timeline-merge-right 400ms ease-out both;
-    z-index: 1000;
+	animation: timeline-merge-right 400ms ease-out both;
+	z-index: 1000;
 }
 
 @keyframes timeline-merge-left {
-    0%, 100% { translate: 0 0; }
-    45% { translate: -24px 0; }
+	0%,
+	100% {
+		translate: 0 0;
+	}
+	45% {
+		translate: -24px 0;
+	}
 }
 
 @keyframes timeline-merge-right {
-    0%, 100% { translate: 0 0; }
-    45% { translate: 24px 0; }
+	0%,
+	100% {
+		translate: 0 0;
+	}
+	45% {
+		translate: 24px 0;
+	}
 }
 
 @keyframes timeline-merge-glow {
-    0% { opacity: 0; transform: scaleY(.35); }
-    35% { opacity: 1; transform: scaleY(1); }
-    100% { opacity: 0; transform: scaleY(.7); }
+	0% {
+		opacity: 0;
+		transform: scaleY(0.35);
+	}
+	35% {
+		opacity: 1;
+		transform: scaleY(1);
+	}
+	100% {
+		opacity: 0;
+		transform: scaleY(0.7);
+	}
 }
 
 @keyframes timeline-merge-pill {
-    0% { opacity: 0; scale: .65; }
-    30% { opacity: 1; scale: 1.08; }
-    100% { opacity: 0; scale: 1; }
+	0% {
+		opacity: 0;
+		scale: 0.65;
+	}
+	30% {
+		opacity: 1;
+		scale: 1.08;
+	}
+	100% {
+		opacity: 0;
+		scale: 1;
+	}
 }
 
 :root {
-    --macos-settings-sidebar-width: 227px;
-    --macos-settings-sidebar-padding-x: 10px;
-    --macos-settings-content-padding-x: 16px;
-    --macos-settings-window-header-height: 52px;
-    --macos-settings-sidebar-wrapper-padding: 8px;
-    --macos-settings-window-radius: 16px;
-    --macos-settings-sidebar-radius: 0px;
-    --macos-settings-blur-2: 12px;
-    --macos-settings-blur-3: 24px;
-    --macos-settings-blur-4: 36px;
-    --macos-settings-window: oklch(96.7% 0.001 0 / 0.84);
-    --macos-settings-sidebar: oklch(98.5% 0.001 0 / 0.74);
-    --macos-settings-content: oklch(96.7% 0.001 0 / 0.84);
-    --macos-settings-card: oklch(98.2% 0.001 0 / 0.94);
-    --macos-settings-fill: oklch(0% 0 0 / 0.055);
-    --macos-settings-control-fill: oklch(100% 0 0 / 0.78);
-    --macos-settings-control-hover: oklch(100% 0 0 / 0.96);
-    --macos-settings-control-active: oklch(0% 0 0 / 0.08);
-    --macos-settings-selection: oklch(0% 0 0 / 0.1);
-    --macos-settings-hover: oklch(0% 0 0 / 0.055);
-    --macos-settings-border: oklch(0% 0 0 / 0.08);
-    --macos-settings-text: oklch(0% 0 0 / 0.88);
-    --macos-settings-muted: oklch(0% 0 0 / 0.48);
-    --macos-settings-accent: AccentColor;
-    --macos-settings-accent-text: AccentColorText;
-    --macos-settings-shadow:
-        0 28px 80px oklch(0% 0 0 / 0.26), 0 4px 18px oklch(0% 0 0 / 0.1);
-    --macos-settings-tahoe-shadow:
-        0 1px 1px -1px oklch(0% 0 0 / 0.05),
-        0 4px 2px -3px oklch(0% 0 0 / 0.05),
-        0 8px 4px -6px oklch(0% 0 0 / 0.05),
-        0 12px 40px -12px oklch(0% 0 0 / 0.1),
-        0 24px 64px -24px oklch(0% 0 0 / 0.2);
-    --macos-settings-dimmed-bg: oklch(92.5% 0 0 / 0.5);
+	--macos-settings-sidebar-width: 227px;
+	--macos-settings-sidebar-padding-x: 10px;
+	--macos-settings-content-padding-x: 16px;
+	--macos-settings-window-header-height: 52px;
+	--macos-settings-sidebar-wrapper-padding: 8px;
+	--macos-settings-window-radius: 16px;
+	--macos-settings-sidebar-radius: 0px;
+	--macos-settings-blur-2: 12px;
+	--macos-settings-blur-3: 24px;
+	--macos-settings-blur-4: 36px;
+	--macos-settings-window: oklch(96.7% 0.001 0 / 0.84);
+	--macos-settings-sidebar: oklch(98.5% 0.001 0 / 0.74);
+	--macos-settings-content: oklch(96.7% 0.001 0 / 0.84);
+	--macos-settings-card: oklch(98.2% 0.001 0 / 0.94);
+	--macos-settings-fill: oklch(0% 0 0 / 0.055);
+	--macos-settings-control-fill: oklch(100% 0 0 / 0.78);
+	--macos-settings-control-hover: oklch(100% 0 0 / 0.96);
+	--macos-settings-control-active: oklch(0% 0 0 / 0.08);
+	--macos-settings-selection: oklch(0% 0 0 / 0.1);
+	--macos-settings-hover: oklch(0% 0 0 / 0.055);
+	--macos-settings-border: oklch(0% 0 0 / 0.08);
+	--macos-settings-text: oklch(0% 0 0 / 0.88);
+	--macos-settings-muted: oklch(0% 0 0 / 0.48);
+	--macos-settings-accent: AccentColor;
+	--macos-settings-accent-text: AccentColorText;
+	--macos-settings-shadow:
+		0 28px 80px oklch(0% 0 0 / 0.26), 0 4px 18px oklch(0% 0 0 / 0.1);
+	--macos-settings-tahoe-shadow:
+		0 1px 1px -1px oklch(0% 0 0 / 0.05),
+		0 4px 2px -3px oklch(0% 0 0 / 0.05),
+		0 8px 4px -6px oklch(0% 0 0 / 0.05),
+		0 12px 40px -12px oklch(0% 0 0 / 0.1),
+		0 24px 64px -24px oklch(0% 0 0 / 0.2);
+	--macos-settings-dimmed-bg: oklch(92.5% 0 0 / 0.5);
 }
 
 :root.dark {
-    --macos-settings-window: oklch(17.8% 0 0 / 0.94);
-    --macos-settings-sidebar: oklch(20% 0 0 / 0.9);
-    --macos-settings-content: oklch(17.8% 0 0 / 0.94);
-    --macos-settings-card: oklch(22.6% 0 0 / 0.96);
-    --macos-settings-fill: oklch(100% 0 0 / 0.05);
-    --macos-settings-control-fill: oklch(100% 0 0 / 0.08);
-    --macos-settings-control-hover: oklch(100% 0 0 / 0.12);
-    --macos-settings-control-active: oklch(100% 0 0 / 0.06);
-    --macos-settings-selection: oklch(29.3% 0 0);
-    --macos-settings-hover: oklch(100% 0 0 / 0.05);
-    --macos-settings-border: oklch(100% 0 0 / 0.07);
-    --macos-settings-text: oklch(100% 0 0 / 0.95);
-    --macos-settings-muted: oklch(70.9% 0 0);
-    --macos-settings-shadow:
-        0 28px 80px oklch(0% 0 0 / 0.55), 0 4px 18px oklch(0% 0 0 / 0.32);
-    --macos-settings-dimmed-bg: oklch(17.8% 0 0 / 0.7);
+	--macos-settings-window: oklch(17.8% 0 0 / 0.94);
+	--macos-settings-sidebar: oklch(20% 0 0 / 0.9);
+	--macos-settings-content: oklch(17.8% 0 0 / 0.94);
+	--macos-settings-card: oklch(22.6% 0 0 / 0.96);
+	--macos-settings-fill: oklch(100% 0 0 / 0.05);
+	--macos-settings-control-fill: oklch(100% 0 0 / 0.08);
+	--macos-settings-control-hover: oklch(100% 0 0 / 0.12);
+	--macos-settings-control-active: oklch(100% 0 0 / 0.06);
+	--macos-settings-selection: oklch(29.3% 0 0);
+	--macos-settings-hover: oklch(100% 0 0 / 0.05);
+	--macos-settings-border: oklch(100% 0 0 / 0.07);
+	--macos-settings-text: oklch(100% 0 0 / 0.95);
+	--macos-settings-muted: oklch(70.9% 0 0);
+	--macos-settings-shadow:
+		0 28px 80px oklch(0% 0 0 / 0.55), 0 4px 18px oklch(0% 0 0 / 0.32);
+	--macos-settings-dimmed-bg: oklch(17.8% 0 0 / 0.7);
 }
 
 [data-macos-visual-system="liquid-glass"] {
-    --macos-settings-window-radius: 26px;
-    --macos-settings-sidebar-radius: 18px;
-    --macos-settings-shadow: var(--macos-settings-tahoe-shadow);
-    --macos-settings-window: transparent;
-    --macos-settings-sidebar: oklch(100% 0 0 / 0.58);
-    --macos-settings-content: oklch(97.3% 0.001 0);
-    --macos-settings-card: oklch(100% 0 0 / 0.92);
-    --macos-settings-fill: oklch(0% 0 0 / 0.045);
-    --macos-settings-hover: oklch(0% 0 0 / 0.065);
-    --macos-settings-selection: oklch(0% 0 0 / 0.1);
-    --macos-settings-border: oklch(0% 0 0 / 0.14);
+	--macos-settings-window-radius: 26px;
+	--macos-settings-sidebar-radius: 18px;
+	--macos-settings-shadow: var(--macos-settings-tahoe-shadow);
+	--macos-settings-window: transparent;
+	--macos-settings-sidebar: oklch(100% 0 0 / 0.58);
+	--macos-settings-content: oklch(97.3% 0.001 0);
+	--macos-settings-card: oklch(100% 0 0 / 0.92);
+	--macos-settings-fill: oklch(0% 0 0 / 0.045);
+	--macos-settings-hover: oklch(0% 0 0 / 0.065);
+	--macos-settings-selection: oklch(0% 0 0 / 0.1);
+	--macos-settings-border: oklch(0% 0 0 / 0.14);
 }
 
 :root.dark[data-macos-visual-system="liquid-glass"] {
-    --macos-settings-sidebar: oklch(22.6% 0 0 / 0.88);
-    --macos-settings-content: oklch(17.8% 0 0 / 0.92);
-    --macos-settings-card: oklch(22.6% 0 0 / 0.94);
-    --macos-settings-fill: oklch(100% 0 0 / 0.05);
-    --macos-settings-control-fill: oklch(100% 0 0 / 0.08);
-    --macos-settings-control-hover: oklch(100% 0 0 / 0.12);
-    --macos-settings-control-active: oklch(100% 0 0 / 0.06);
-    --macos-settings-hover: oklch(100% 0 0 / 0.05);
-    --macos-settings-selection: oklch(29.3% 0 0);
-    --macos-settings-border: oklch(100% 0 0 / 0.07);
-    --macos-settings-text: oklch(100% 0 0 / 0.95);
-    --macos-settings-muted: oklch(70.9% 0 0);
+	--macos-settings-sidebar: oklch(22.6% 0 0 / 0.88);
+	--macos-settings-content: oklch(17.8% 0 0 / 0.92);
+	--macos-settings-card: oklch(22.6% 0 0 / 0.94);
+	--macos-settings-fill: oklch(100% 0 0 / 0.05);
+	--macos-settings-control-fill: oklch(100% 0 0 / 0.08);
+	--macos-settings-control-hover: oklch(100% 0 0 / 0.12);
+	--macos-settings-control-active: oklch(100% 0 0 / 0.06);
+	--macos-settings-hover: oklch(100% 0 0 / 0.05);
+	--macos-settings-selection: oklch(29.3% 0 0);
+	--macos-settings-border: oklch(100% 0 0 / 0.07);
+	--macos-settings-text: oklch(100% 0 0 / 0.95);
+	--macos-settings-muted: oklch(70.9% 0 0);
 }
 
 [data-macos-native-material],
 [data-macos-native-material] body {
-    background: transparent;
+	background: transparent;
 }
 
 [data-macos-native-material] .cap-window-shell {
-    background: var(--macos-settings-window);
-    border: 1px solid var(--macos-settings-border);
-    border-radius: var(--macos-settings-window-radius);
-    box-shadow: var(--macos-settings-shadow);
+	background: var(--macos-settings-window);
+	border: 1px solid var(--macos-settings-border);
+	border-radius: var(--macos-settings-window-radius);
+	box-shadow: var(--macos-settings-shadow);
 }
 
 [data-macos-native-material] .cap-window-header {
-    background: oklch(98.5% 0.001 0 / 0.72);
-    border-bottom: 1px solid var(--macos-settings-border);
-    -webkit-backdrop-filter: blur(28px) saturate(1.45);
-    backdrop-filter: blur(28px) saturate(1.45);
+	background: oklch(98.5% 0.001 0 / 0.72);
+	border-bottom: 1px solid var(--macos-settings-border);
+	-webkit-backdrop-filter: blur(28px) saturate(1.45);
+	backdrop-filter: blur(28px) saturate(1.45);
 }
 
 :root.dark[data-macos-native-material] .cap-window-header {
-    background: oklch(22.6% 0 0 / 0.88);
+	background: oklch(22.6% 0 0 / 0.88);
 }
 
 [data-macos-visual-system="liquid-glass"] .cap-window-shell {
-    background: transparent;
-    border: 0;
-    box-shadow: none;
+	background: transparent;
+	border: 0;
+	box-shadow: none;
 }
 
 [data-macos-native-material="panel"] .cap-window-shell {
-    border-radius: 16px;
+	border-radius: 16px;
 }
 
 [data-macos-native-material="teleprompter"] .cap-window-shell {
-    border-radius: 16px;
+	border-radius: 16px;
 }
 
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="teleprompter"]
-    .cap-window-shell {
-    border-radius: 22px;
+	.cap-window-shell {
+	border-radius: 22px;
 }
 
 /* Tone down the see-through on the main panel under Liquid Glass: layer a
@@ -415,139 +443,139 @@
    showing too much of whatever is behind us. The NSGlassEffectView still
    provides the live backdrop blur underneath; this is just a tint on top. */
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-shell {
-    background: oklch(100% 0 0 / 0.55);
+.cap-window-shell {
+	background: oklch(100% 0 0 / 0.55);
 }
 
 .dark[data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-shell {
-    background: oklch(17.8% 0 0 / 0.88);
+	.cap-window-shell {
+	background: oklch(17.8% 0 0 / 0.88);
 }
 
 [data-macos-visual-system="liquid-glass"] .cap-window-shell > * + * {
-    border-color: transparent;
+	border-color: transparent;
 }
 
 [data-macos-visual-system="liquid-glass"] .cap-window-header {
-    background: transparent;
-    border-bottom-color: transparent;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
+	background: transparent;
+	border-bottom-color: transparent;
+	-webkit-backdrop-filter: none;
+	backdrop-filter: none;
 }
 
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body {
-    color: var(--macos-settings-text);
+	.cap-window-body {
+	color: var(--macos-settings-text);
 }
 
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    .bg-gray-2,
+	.cap-window-body
+	.bg-gray-2,
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    .bg-gray-3 {
-    background-color: var(--macos-settings-control-fill);
+	.cap-window-body
+	.bg-gray-3 {
+	background-color: var(--macos-settings-control-fill);
 }
 
 .dark[data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    .dark\:bg-gray-3,
+	.cap-window-body
+	.dark\:bg-gray-3,
 .dark[data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    .dark\:bg-gray-4 {
-    background-color: var(--macos-settings-control-fill);
+	.cap-window-body
+	.dark\:bg-gray-4 {
+	background-color: var(--macos-settings-control-fill);
 }
 
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    .bg-gray-4 {
-    background-color: var(--macos-settings-control-hover);
+	.cap-window-body
+	.bg-gray-4 {
+	background-color: var(--macos-settings-control-hover);
 }
 
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    .bg-gray-5 {
-    background-color: var(--macos-settings-control-active);
+	.cap-window-body
+	.bg-gray-5 {
+	background-color: var(--macos-settings-control-active);
 }
 
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    .border-gray-4,
+	.cap-window-body
+	.border-gray-4,
 .dark[data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    .dark\:border-gray-5 {
-    border-color: var(--macos-settings-border);
+	.cap-window-body
+	.dark\:border-gray-5 {
+	border-color: var(--macos-settings-border);
 }
 
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    [class*="hover:bg-gray-4"]:hover:not(:disabled),
+	.cap-window-body
+	[class*="hover:bg-gray-4"]:hover:not(:disabled),
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    [class*="hover:bg-gray-5"]:hover:not(:disabled) {
-    background-color: var(--macos-settings-control-hover);
+	.cap-window-body
+	[class*="hover:bg-gray-5"]:hover:not(:disabled) {
+	background-color: var(--macos-settings-control-hover);
 }
 
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    [class*="hover:bg-gray-6"]:hover:not(:disabled),
+	.cap-window-body
+	[class*="hover:bg-gray-6"]:hover:not(:disabled),
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    [class*="hover:bg-gray-7"]:hover:not(:disabled) {
-    background-color: var(--macos-settings-selection);
+	.cap-window-body
+	[class*="hover:bg-gray-7"]:hover:not(:disabled) {
+	background-color: var(--macos-settings-selection);
 }
 
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    .border-gray-5,
+	.cap-window-body
+	.border-gray-5,
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    .border-gray-6 {
-    border-color: var(--macos-settings-border);
+	.cap-window-body
+	.border-gray-6 {
+	border-color: var(--macos-settings-border);
 }
 
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    [class*="hover:border-gray-6"]:hover:not(:disabled) {
-    border-color: var(--macos-settings-selection);
+	.cap-window-body
+	[class*="hover:border-gray-6"]:hover:not(:disabled) {
+	border-color: var(--macos-settings-selection);
 }
 
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    .ring-offset-gray-1 {
-    --tw-ring-offset-color: transparent;
+	.cap-window-body
+	.ring-offset-gray-1 {
+	--tw-ring-offset-color: transparent;
 }
 
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    button[data-variant="gray"],
+	.cap-window-body
+	button[data-variant="gray"],
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    button[data-variant="outline"],
+	.cap-window-body
+	button[data-variant="outline"],
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    button[data-variant="white"] {
-    color: var(--macos-settings-text);
-    background: var(--macos-settings-control-fill);
-    border-color: transparent;
+	.cap-window-body
+	button[data-variant="white"] {
+	color: var(--macos-settings-text);
+	background: var(--macos-settings-control-fill);
+	border-color: transparent;
 }
 
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    button[data-variant="gray"]:hover:not(:disabled),
+	.cap-window-body
+	button[data-variant="gray"]:hover:not(:disabled),
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    button[data-variant="outline"]:hover:not(:disabled),
+	.cap-window-body
+	button[data-variant="outline"]:hover:not(:disabled),
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    button[data-variant="white"]:hover:not(:disabled) {
-    background: var(--macos-settings-control-hover);
+	.cap-window-body
+	button[data-variant="white"]:hover:not(:disabled) {
+	background: var(--macos-settings-control-hover);
 }
 
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    .custom-scroll::-webkit-scrollbar-thumb {
-    background-color: oklch(59% 0 0 / 0.38);
+	.cap-window-body
+	.custom-scroll::-webkit-scrollbar-thumb {
+	background-color: oklch(59% 0 0 / 0.38);
 }
 
 /* Panel buttons under Liquid Glass: no inner highlight, no drop shadow. The
@@ -556,13 +584,13 @@
    bevels/shadows. Keep transition-property so hover/press fill changes
    animate smoothly. */
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    :is(button, [role="button"], div):not(
-        .rounded-full,
-        .rounded-none,
-        :focus-visible
-    ):is(.bg-gray-3, .bg-gray-4, .bg-gray-5) {
-    transition-property: background-color, border-color, color;
+	.cap-window-body
+	:is(button, [role="button"], div):not(
+		.rounded-full,
+		.rounded-none,
+		:focus-visible
+	):is(.bg-gray-3, .bg-gray-4, .bg-gray-5) {
+	transition-property: background-color, border-color, color;
 }
 
 /* Composed controls (Display/Window pairs) have a parent container with bg-gray-3
@@ -571,33 +599,33 @@
    child's fill so we don't get a double-layered ~83% white tile next to the
    single-layer ~58% Area / Camera-Only / device-row tiles. */
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    .rounded-none.bg-gray-3,
+	.cap-window-body
+	.rounded-none.bg-gray-3,
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    .rounded-none.bg-gray-4 {
-    background-color: transparent;
+	.cap-window-body
+	.rounded-none.bg-gray-4 {
+	background-color: transparent;
 }
 
 /* Press feedback: just darken the fill — Apple's Tahoe press state is a fill
    change, not an inset bevel. */
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    button:not(.rounded-full, .rounded-none, :focus-visible, :disabled):is(
-        .bg-gray-3,
-        .bg-gray-4,
-        .bg-gray-5
-    ):active {
-    background-color: var(--macos-settings-control-active);
+	.cap-window-body
+	button:not(.rounded-full, .rounded-none, :focus-visible, :disabled):is(
+		.bg-gray-3,
+		.bg-gray-4,
+		.bg-gray-5
+	):active {
+	background-color: var(--macos-settings-control-active);
 }
 
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    :is(button, [role="button"], div):not(
-        .rounded-full,
-        .rounded-none
-    ).rounded-lg:is(.bg-gray-3, .bg-gray-4, .bg-gray-5) {
-    border-radius: 10px;
+	.cap-window-body
+	:is(button, [role="button"], div):not(
+		.rounded-full,
+		.rounded-none
+	).rounded-lg:is(.bg-gray-3, .bg-gray-4, .bg-gray-5) {
+	border-radius: 10px;
 }
 
 /* Thumbnail/recording/screenshot cards: keep a visible border so they read as
@@ -606,41 +634,41 @@
    inner highlight — Apple's Tahoe cards rely on the material + a 1px
    hairline border, nothing more. */
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    [data-variant="display"],
+	.cap-window-body
+	[data-variant="display"],
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    [data-variant="window"],
+	.cap-window-body
+	[data-variant="window"],
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    [data-variant="recording"],
+	.cap-window-body
+	[data-variant="recording"],
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="panel"]
-    .cap-window-body
-    [data-variant="screenshot"] {
-    border-color: var(--macos-settings-border);
+	.cap-window-body
+	[data-variant="screenshot"] {
+	border-color: var(--macos-settings-border);
 }
 
 [data-macos-native-material="settings"] .cap-window-shell {
-    background: var(--macos-settings-window);
-    border-color: var(--macos-settings-border);
-    border-radius: var(--macos-settings-window-radius);
-    box-shadow: var(--macos-settings-shadow);
+	background: var(--macos-settings-window);
+	border-color: var(--macos-settings-border);
+	border-radius: var(--macos-settings-window-radius);
+	box-shadow: var(--macos-settings-shadow);
 }
 
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="settings"]
-    .cap-window-shell {
-    background: transparent;
-    border: 0;
-    overflow: hidden;
+	.cap-window-shell {
+	background: transparent;
+	border: 0;
+	overflow: hidden;
 }
 
 [data-macos-native-material="settings"] .cap-window-header {
-    display: none;
+	display: none;
 }
 
 [data-macos-native-material="settings"] .cap-settings-shell {
-    background: transparent;
-    border-color: transparent;
+	background: transparent;
+	border-color: transparent;
 }
 
 /* Use the Tahoe System Settings layout: sidebar and content fill the window
@@ -650,203 +678,199 @@
    panes (which would otherwise show as a visible "second border" inside the
    outer rounded edge). */
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="settings"]
-    .cap-settings-shell {
-    gap: 0;
-    padding: 0;
+.cap-settings-shell {
+	gap: 0;
+	padding: 0;
 }
 
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="settings"]
-    .cap-settings-shell
-    > *
-    + * {
-    border-color: var(--macos-settings-border);
+	.cap-settings-shell
+	> *
+	+ * {
+	border-color: var(--macos-settings-border);
 }
 
 [data-macos-native-material="settings"] .cap-settings-sidebar {
-    position: relative;
-    overflow: hidden;
-    width: var(--macos-settings-sidebar-width);
-    min-width: var(--macos-settings-sidebar-width);
-    max-width: var(--macos-settings-sidebar-width);
-    background: var(--macos-settings-sidebar);
-    border-radius: var(--macos-settings-sidebar-radius);
-    -webkit-backdrop-filter: blur(var(--macos-settings-blur-4)) saturate(1.8);
-    backdrop-filter: blur(var(--macos-settings-blur-4)) saturate(1.8);
-    border-right: 1px solid var(--macos-settings-border);
+	position: relative;
+	overflow: hidden;
+	width: var(--macos-settings-sidebar-width);
+	min-width: var(--macos-settings-sidebar-width);
+	max-width: var(--macos-settings-sidebar-width);
+	background: var(--macos-settings-sidebar);
+	border-radius: var(--macos-settings-sidebar-radius);
+	-webkit-backdrop-filter: blur(var(--macos-settings-blur-4)) saturate(1.8);
+	backdrop-filter: blur(var(--macos-settings-blur-4)) saturate(1.8);
+	border-right: 1px solid var(--macos-settings-border);
 }
 
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="settings"]
-    .cap-settings-sidebar {
-    height: 100%;
-    background: var(--macos-settings-sidebar);
-    border-right-color: transparent;
-    border-radius: 0;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
+	.cap-settings-sidebar {
+	height: 100%;
+	background: var(--macos-settings-sidebar);
+	border-right-color: transparent;
+	border-radius: 0;
+	-webkit-backdrop-filter: none;
+	backdrop-filter: none;
 }
 
 [data-macos-visual-system="liquid-glass"] .cap-settings-sidebar::before {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    content: "";
-    background:
-        linear-gradient(
-            100deg,
-            oklch(100% 0 0 / 0.36),
-            oklch(100% 0 0 / 0) 42%
-        ),
-        linear-gradient(180deg, oklch(100% 0 0 / 0.18), oklch(100% 0 0 / 0) 18%);
-    opacity: 0.66;
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	content: "";
+	background:
+		linear-gradient(100deg, oklch(100% 0 0 / 0.36), oklch(100% 0 0 / 0) 42%),
+		linear-gradient(180deg, oklch(100% 0 0 / 0.18), oklch(100% 0 0 / 0) 18%);
+	opacity: 0.66;
 }
 
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="settings"]
-    .cap-settings-sidebar::before {
-    display: none;
+	.cap-settings-sidebar::before {
+	display: none;
 }
 
 [data-macos-native-material="settings"] .cap-settings-sidebar > * {
-    position: relative;
-    z-index: 1;
+	position: relative;
+	z-index: 1;
 }
 
 [data-macos-native-material="settings"] .cap-settings-content {
-    background: var(--macos-settings-content);
-    -webkit-backdrop-filter: blur(var(--macos-settings-blur-3)) saturate(1.35);
-    backdrop-filter: blur(var(--macos-settings-blur-3)) saturate(1.35);
+	background: var(--macos-settings-content);
+	-webkit-backdrop-filter: blur(var(--macos-settings-blur-3)) saturate(1.35);
+	backdrop-filter: blur(var(--macos-settings-blur-3)) saturate(1.35);
 }
 
 [data-macos-visual-system="liquid-glass"][data-macos-native-material="settings"]
-    .cap-settings-content {
-    overflow: hidden;
-    background: var(--macos-settings-content);
-    border-radius: 0;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
+	.cap-settings-content {
+	overflow: hidden;
+	background: var(--macos-settings-content);
+	border-radius: 0;
+	-webkit-backdrop-filter: none;
+	backdrop-filter: none;
 }
 
 [data-macos-native-material="settings"] .cap-settings-page {
-    color: var(--macos-settings-text);
-    background: transparent;
+	color: var(--macos-settings-text);
+	background: transparent;
 }
 
 [data-macos-native-material="settings"] .cap-settings-window-spacer {
-    height: calc(
-        var(--macos-settings-window-header-height) -
-            var(--macos-settings-sidebar-wrapper-padding)
-    );
-    flex: 0 0
-        calc(
-            var(--macos-settings-window-header-height) -
-                var(--macos-settings-sidebar-wrapper-padding)
-        );
+	height: calc(
+		var(--macos-settings-window-header-height) -
+		var(--macos-settings-sidebar-wrapper-padding)
+	);
+	flex: 0 0
+		calc(
+			var(--macos-settings-window-header-height) -
+			var(--macos-settings-sidebar-wrapper-padding)
+		);
 }
 
 [data-macos-native-material="settings"] .cap-settings-profile {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    width: calc(100% - var(--macos-settings-sidebar-padding-x) * 2);
-    min-height: 44px;
-    margin: 0 var(--macos-settings-sidebar-padding-x) 16px;
-    padding: 6px 4px;
-    color: inherit;
-    text-align: left;
-    background: transparent;
-    border: 0;
-    border-radius: 8px;
-    transition-property: background-color;
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	width: calc(100% - var(--macos-settings-sidebar-padding-x) * 2);
+	min-height: 44px;
+	margin: 0 var(--macos-settings-sidebar-padding-x) 16px;
+	padding: 6px 4px;
+	color: inherit;
+	text-align: left;
+	background: transparent;
+	border: 0;
+	border-radius: 8px;
+	transition-property: background-color;
 }
 
 [data-macos-native-material="settings"] .cap-settings-profile:hover {
-    background: var(--macos-settings-hover);
+	background: var(--macos-settings-hover);
 }
 
 [data-macos-native-material="settings"] .cap-settings-profile:active {
-    background: var(--macos-settings-selection);
+	background: var(--macos-settings-selection);
 }
 
 [data-macos-native-material="settings"] .cap-settings-profile:focus-visible {
-    outline: 2px solid oklch(71.6% 0.171 53.4 / 0.58);
-    outline-offset: 1px;
+	outline: 2px solid oklch(71.6% 0.171 53.4 / 0.58);
+	outline-offset: 1px;
 }
 
 [data-macos-native-material="settings"] .cap-settings-profile-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    color: var(--macos-settings-muted);
-    background: var(--macos-settings-fill);
-    border-radius: 999px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	color: var(--macos-settings-muted);
+	background: var(--macos-settings-fill);
+	border-radius: 999px;
 }
 
 [data-macos-native-material="settings"] .cap-settings-profile-image {
-    width: 32px;
-    height: 32px;
-    flex: 0 0 32px;
-    object-fit: cover;
-    background: var(--macos-settings-fill);
-    border-radius: 999px;
+	width: 32px;
+	height: 32px;
+	flex: 0 0 32px;
+	object-fit: cover;
+	background: var(--macos-settings-fill);
+	border-radius: 999px;
 }
 
 [data-macos-native-material="settings"] .cap-settings-profile-copy {
-    display: flex;
-    min-width: 0;
-    flex-direction: column;
-    gap: 2px;
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 2px;
 }
 
 [data-macos-native-material="settings"] .cap-settings-profile-skeleton {
-    display: block;
-    background: linear-gradient(
-        90deg,
-        var(--macos-settings-fill),
-        var(--macos-settings-selection),
-        var(--macos-settings-fill)
-    );
-    background-size: 200% 100%;
-    border-radius: 999px;
-    animation: cap-settings-skeleton 1.2s ease-in-out infinite;
+	display: block;
+	background: linear-gradient(
+		90deg,
+		var(--macos-settings-fill),
+		var(--macos-settings-selection),
+		var(--macos-settings-fill)
+	);
+	background-size: 200% 100%;
+	border-radius: 999px;
+	animation: cap-settings-skeleton 1.2s ease-in-out infinite;
 }
 
 [data-macos-native-material="settings"] .cap-settings-profile-skeleton-avatar {
-    width: 32px;
-    height: 32px;
-    flex: 0 0 32px;
-    padding: 0;
+	width: 32px;
+	height: 32px;
+	flex: 0 0 32px;
+	padding: 0;
 }
 
 [data-macos-native-material="settings"] .cap-settings-profile-skeleton-title {
-    width: 96px;
-    height: 12px;
+	width: 96px;
+	height: 12px;
 }
 
 [data-macos-native-material="settings"]
-    .cap-settings-profile-skeleton-subtitle {
-    width: 52px;
-    height: 9px;
-    opacity: 0.72;
+	.cap-settings-profile-skeleton-subtitle {
+	width: 52px;
+	height: 9px;
+	opacity: 0.72;
 }
 
 [data-macos-native-material="settings"] .cap-settings-profile p,
 [data-macos-native-material="settings"] .cap-settings-page p,
 [data-macos-native-material="settings"] .cap-settings-page h2,
 [data-macos-native-material="settings"] .cap-settings-page h3 {
-    color: inherit;
+	color: inherit;
 }
 
 [data-macos-native-material="settings"] .cap-settings-profile p {
-    margin: 0;
-    line-height: 1.15;
+	margin: 0;
+	line-height: 1.15;
 }
 
 [data-macos-native-material="settings"] .cap-settings-page .text-gray-10,
 [data-macos-native-material="settings"] .cap-settings-page .text-gray-11,
 [data-macos-native-material="settings"] .cap-settings-profile .text-gray-10,
 [data-macos-native-material="settings"] .cap-settings-account .text-gray-11 {
-    color: var(--macos-settings-muted);
+	color: var(--macos-settings-muted);
 }
 
 /* Hover state on text buttons (e.g. "View previous versions", "Check for
@@ -854,96 +878,96 @@
    against the muted override above, so re-assert the brighter colour here
    under :hover with the same selector prefix. */
 [data-macos-native-material="settings"]
-    .cap-settings-account
-    button:hover:not(:disabled),
+	.cap-settings-account
+	button:hover:not(:disabled),
 [data-macos-native-material="settings"]
-    .cap-settings-account
-    a:hover:not(:disabled),
+	.cap-settings-account
+	a:hover:not(:disabled),
 [data-macos-native-material="settings"]
-    .cap-settings-page
-    button[class*="hover:text-gray-12"]:hover:not(:disabled),
+	.cap-settings-page
+	button[class*="hover:text-gray-12"]:hover:not(:disabled),
 [data-macos-native-material="settings"]
-    .cap-settings-page
-    a[class*="hover:text-gray-12"]:hover:not(:disabled) {
-    color: var(--macos-settings-text);
+	.cap-settings-page
+	a[class*="hover:text-gray-12"]:hover:not(:disabled) {
+	color: var(--macos-settings-text);
 }
 
 [data-macos-native-material="settings"] .cap-settings-nav {
-    width: 100%;
-    min-width: 0;
-    min-height: 0;
-    padding: 0 var(--macos-settings-sidebar-padding-x)
-        var(--macos-settings-sidebar-padding-x);
-    overflow-y: auto;
+	width: 100%;
+	min-width: 0;
+	min-height: 0;
+	padding: 0 var(--macos-settings-sidebar-padding-x)
+		var(--macos-settings-sidebar-padding-x);
+	overflow-y: auto;
 }
 
 [data-macos-native-material="settings"] .cap-settings-nav-item {
-    height: 32px;
-    padding: 6px;
-    border: 1px solid transparent;
-    color: var(--macos-settings-text);
-    border-radius: 8px;
-    transition-property: background-color, color;
+	height: 32px;
+	padding: 6px;
+	border: 1px solid transparent;
+	color: var(--macos-settings-text);
+	border-radius: 8px;
+	transition-property: background-color, color;
 }
 
 [data-macos-native-material="settings"] .cap-settings-nav-item:hover {
-    background: var(--macos-settings-hover);
+	background: var(--macos-settings-hover);
 }
 
 [data-macos-native-material="settings"] .cap-settings-nav-item.bg-gray-5 {
-    background: var(--macos-settings-selection);
-    border-color: transparent;
-    box-shadow: none;
+	background: var(--macos-settings-selection);
+	border-color: transparent;
+	box-shadow: none;
 }
 
 [data-macos-native-material="settings"] .cap-settings-nav-item svg {
-    box-sizing: border-box;
-    flex: 0 0 16px;
-    padding: 0;
-    width: 16px;
-    height: 16px;
-    color: var(--macos-settings-muted);
-    background: transparent;
-    border-radius: 0;
-    opacity: 1;
+	box-sizing: border-box;
+	flex: 0 0 16px;
+	padding: 0;
+	width: 16px;
+	height: 16px;
+	color: var(--macos-settings-muted);
+	background: transparent;
+	border-radius: 0;
+	opacity: 1;
 }
 
 [data-macos-native-material="settings"] .cap-settings-nav-item.bg-gray-5 svg {
-    color: var(--macos-settings-accent);
+	color: var(--macos-settings-accent);
 }
 
 [data-macos-native-material="settings"] .cap-settings-account {
-    padding: 8px var(--macos-settings-sidebar-padding-x)
-        var(--macos-settings-sidebar-padding-x);
-    border-top: 1px solid var(--macos-settings-border);
+	padding: 8px var(--macos-settings-sidebar-padding-x)
+		var(--macos-settings-sidebar-padding-x);
+	border-top: 1px solid var(--macos-settings-border);
 }
 
 [data-macos-native-material="settings"] .cap-settings-account .underline {
-    text-decoration: none;
+	text-decoration: none;
 }
 
 [data-macos-native-material="settings"] .cap-settings-page > .px-6 {
-    max-width: none;
-    padding: 18px var(--macos-settings-content-padding-x) 28px;
+	max-width: none;
+	padding: 18px var(--macos-settings-content-padding-x) 28px;
 }
 
 [data-macos-native-material="settings"] .cap-settings-page > .p-4,
 [data-macos-native-material="settings"] .cap-settings-page.p-4 {
-    padding: 18px var(--macos-settings-content-padding-x)
-        var(--macos-settings-content-padding-x);
+	padding: 18px var(--macos-settings-content-padding-x)
+		var(--macos-settings-content-padding-x);
 }
 
 [data-macos-native-material="settings"] .cap-settings-card,
 [data-macos-native-material="settings"] .cap-settings-content .bg-gray-2 {
-    background-color: var(--macos-settings-card);
-    border-color: transparent;
-    box-shadow: none;
+	background-color: var(--macos-settings-card);
+	border-color: transparent;
+	box-shadow: none;
 }
 
 [data-macos-native-material="settings"] .cap-settings-content .bg-gray-3,
 [data-macos-native-material="settings"] .cap-settings-content .bg-gray-4,
 [data-macos-native-material="settings"] .cap-settings-content .bg-gray-5 {
-    background-color: var(--macos-settings-fill);
+	background-color: var(--macos-settings-fill);
 }
 
 [data-macos-native-material="settings"] .cap-settings-content .border-gray-2,
@@ -951,49 +975,49 @@
 [data-macos-native-material="settings"] .cap-settings-content .border-gray-4,
 [data-macos-native-material="settings"] .cap-settings-content .border-gray-5,
 [data-macos-native-material="settings"] .cap-setting-row {
-    border-color: var(--macos-settings-border);
+	border-color: var(--macos-settings-border);
 }
 
 [data-macos-native-material="settings"] .cap-setting-row {
-    min-height: 46px;
-    padding: 12px;
+	min-height: 46px;
+	padding: 12px;
 }
 
 [data-macos-native-material="settings"] .cap-settings-content .rounded-xl {
-    border-radius: 10px;
+	border-radius: 10px;
 }
 
 [data-macos-native-material="settings"] .cap-settings-content button {
-    border-radius: 8px;
+	border-radius: 8px;
 }
 
 [data-macos-native-material="settings"] button[data-variant] {
-    border-color: transparent;
+	border-color: transparent;
 }
 
 [data-macos-native-material="settings"] button[data-variant="gray"],
 [data-macos-native-material="settings"] button[data-variant="outline"],
 [data-macos-native-material="settings"] button[data-variant="white"] {
-    color: var(--macos-settings-text);
-    background: var(--macos-settings-control-fill);
-    /* Override the skeuomorphic `gray-button-shadow` (inset top bevel) and
+	color: var(--macos-settings-text);
+	background: var(--macos-settings-control-fill);
+	/* Override the skeuomorphic `gray-button-shadow` (inset top bevel) and
 	   `gray-button-border` (heavy `border-gray-8`) utility classes baked into
 	   Cap UI's gray/white/outline variants — Tahoe surfaces are flat and use
 	   the standard --macos-settings-border hairline, not a bevel + dark line. */
-    box-shadow: none;
-    border-color: var(--macos-settings-border);
+	box-shadow: none;
+	border-color: var(--macos-settings-border);
 }
 
 [data-macos-native-material="settings"] button[data-variant="gray"]:hover,
 [data-macos-native-material="settings"] button[data-variant="outline"]:hover,
 [data-macos-native-material="settings"] button[data-variant="white"]:hover {
-    background: var(--macos-settings-control-hover);
+	background: var(--macos-settings-control-hover);
 }
 
 [data-macos-native-material="settings"] button[data-variant="gray"]:active,
 [data-macos-native-material="settings"] button[data-variant="outline"]:active,
 [data-macos-native-material="settings"] button[data-variant="white"]:active {
-    background: var(--macos-settings-control-active);
+	background: var(--macos-settings-control-active);
 }
 
 /* Blue/primary/dark buttons need an explicit white text color. WebKit doesn't
@@ -1005,303 +1029,303 @@
 [data-macos-native-material="settings"] button[data-variant="primary"],
 [data-macos-native-material="settings"] button[data-variant="blue"],
 [data-macos-native-material="settings"] button[data-variant="dark"] {
-    color: oklch(100% 0 0);
-    background: var(--macos-settings-accent);
+	color: oklch(100% 0 0);
+	background: var(--macos-settings-accent);
 }
 
 [data-macos-native-material="settings"] button[data-variant="primary"]:hover,
 [data-macos-native-material="settings"] button[data-variant="blue"]:hover,
 [data-macos-native-material="settings"] button[data-variant="dark"]:hover {
-    filter: brightness(1.04);
+	filter: brightness(1.04);
 }
 
 [data-macos-native-material="settings"] button[data-variant="destructive"] {
-    background: oklch(65.4% 0.232 28.7);
+	background: oklch(65.4% 0.232 28.7);
 }
 
 [data-macos-native-material="settings"] button[data-variant]:disabled {
-    color: var(--macos-settings-muted);
-    background: var(--macos-settings-fill);
-    box-shadow: none;
-    filter: none;
-    transform: none;
+	color: var(--macos-settings-muted);
+	background: var(--macos-settings-fill);
+	box-shadow: none;
+	filter: none;
+	transform: none;
 }
 
 [data-macos-native-material="settings"] .cap-settings-content .rounded-full {
-    border-radius: 999px;
+	border-radius: 999px;
 }
 
 [data-macos-native-material="settings"] .cap-toggle {
-    background: var(--macos-settings-control-fill);
-    box-shadow: inset 0 1px 2px oklch(0% 0 0 / 0.16);
+	background: var(--macos-settings-control-fill);
+	box-shadow: inset 0 1px 2px oklch(0% 0 0 / 0.16);
 }
 
 [data-macos-native-material="settings"] .cap-toggle[data-checked] {
-    background: var(--macos-settings-accent);
+	background: var(--macos-settings-accent);
 }
 
 [data-macos-native-material="settings"] .cap-toggle-thumb {
-    box-shadow:
-        0 1px 2px oklch(0% 0 0 / 0.22),
-        0 0 0 0.5px oklch(0% 0 0 / 0.08);
+	box-shadow:
+		0 1px 2px oklch(0% 0 0 / 0.22),
+		0 0 0 0.5px oklch(0% 0 0 / 0.08);
 }
 
 [data-macos-native-material="settings"]
-    .custom-scroll::-webkit-scrollbar-thumb {
-    background-color: oklch(59% 0 0 / 0.38);
+	.custom-scroll::-webkit-scrollbar-thumb {
+	background-color: oklch(59% 0 0 / 0.38);
 }
 
 @media (prefers-reduced-motion: reduce) {
-    [data-macos-native-material="settings"] .cap-settings-nav-item {
-        transition: none;
-    }
+	[data-macos-native-material="settings"] .cap-settings-nav-item {
+		transition: none;
+	}
 
-    [data-macos-native-material="settings"] .cap-settings-profile-skeleton {
-        animation: none;
-    }
+	[data-macos-native-material="settings"] .cap-settings-profile-skeleton {
+		animation: none;
+	}
 }
 
 .custom-scroll::-webkit-scrollbar-thumb {
-    background-color: var(--gray-300);
-    width: 4px;
-    border-radius: 500px;
+	background-color: var(--gray-300);
+	width: 4px;
+	border-radius: 500px;
 }
 
 @keyframes bounce {
-    0%,
-    100% {
-        transform: translateY(-15%);
-        animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
-    }
-    50% {
-        transform: none;
-        animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
-    }
+	0%,
+	100% {
+		transform: translateY(-15%);
+		animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+	}
+	50% {
+		transform: none;
+		animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+	}
 }
 
 .bounce {
-    animation: bounce 1s ease-in-out forwards;
-    animation-iteration-count: infinite;
+	animation: bounce 1s ease-in-out forwards;
+	animation-iteration-count: infinite;
 }
 
 @keyframes cap-settings-skeleton {
-    0% {
-        background-position: 100% 0;
-    }
-    100% {
-        background-position: -100% 0;
-    }
+	0% {
+		background-position: 100% 0;
+	}
+	100% {
+		background-position: -100% 0;
+	}
 }
 
 @keyframes settings-section-pulse {
-    0% {
-        box-shadow: 0 0 0 0 oklch(71.6% 0.171 53.4 / 0);
-    }
-    30% {
-        box-shadow: 0 0 0 4px oklch(71.6% 0.171 53.4 / 0.45);
-    }
-    100% {
-        box-shadow: 0 0 0 0 oklch(71.6% 0.171 53.4 / 0);
-    }
+	0% {
+		box-shadow: 0 0 0 0 oklch(71.6% 0.171 53.4 / 0);
+	}
+	30% {
+		box-shadow: 0 0 0 4px oklch(71.6% 0.171 53.4 / 0.45);
+	}
+	100% {
+		box-shadow: 0 0 0 0 oklch(71.6% 0.171 53.4 / 0);
+	}
 }
 
 .settings-section-pulse {
-    animation: settings-section-pulse 1.6s ease-out forwards;
-    border-radius: 0.75rem;
+	animation: settings-section-pulse 1.6s ease-out forwards;
+	border-radius: 0.75rem;
 }
 
 /* SVG path animation */
 
 @keyframes svgpathframes {
-    0% {
-        stroke-dasharray: 100;
-        stroke-dashoffset: 100;
-    }
-    100% {
-        stroke-dashoffset: 0;
-    }
+	0% {
+		stroke-dasharray: 100;
+		stroke-dashoffset: 100;
+	}
+	100% {
+		stroke-dashoffset: 0;
+	}
 }
 
 .svgpathanimation {
-    stroke-dasharray: 100;
-    stroke-dashoffset: 100;
-    animation: svgpathframes 1s ease-in-out forwards;
+	stroke-dasharray: 100;
+	stroke-dashoffset: 100;
+	animation: svgpathframes 1s ease-in-out forwards;
 }
 
 .svgpathanimationrepeat {
-    animation: svgpathframes 1s ease-in-out forwards;
-    animation-iteration-count: infinite;
+	animation: svgpathframes 1s ease-in-out forwards;
+	animation-iteration-count: infinite;
 }
 
 .cap-selection-hint-monitor {
-    position: relative;
-    width: 9.5rem;
-    height: 6.5rem;
+	position: relative;
+	width: 9.5rem;
+	height: 6.5rem;
 }
 
 .cap-selection-hint-screen-area {
-    position: absolute;
-    top: 4.4%;
-    left: 3%;
-    width: 94%;
-    height: 91%;
-    overflow: hidden;
+	position: absolute;
+	top: 4.4%;
+	left: 3%;
+	width: 94%;
+	height: 91%;
+	overflow: hidden;
 }
 
 .cap-selection-hint-selection {
-    position: absolute;
-    top: calc(50% - 26px);
-    left: calc(50% - 34px);
-    width: 68px;
-    height: 52px;
-    border-radius: 0;
-    border: 1px solid oklch(100% 0 0 / 0.82);
-    background: linear-gradient(
-        135deg,
-        oklch(80% 0.15 55 / 0.4),
-        oklch(55% 0.16 50 / 0.2)
-    );
-    box-shadow: 0 16px 35px oklch(0% 0 0 / 0.4);
-    opacity: 1;
-    transform-origin: top left;
-    animation: cap-selection-hint-selection 2.8s cubic-bezier(0.4, 0, 0.2, 1)
-        infinite;
+	position: absolute;
+	top: calc(50% - 26px);
+	left: calc(50% - 34px);
+	width: 68px;
+	height: 52px;
+	border-radius: 0;
+	border: 1px solid oklch(100% 0 0 / 0.82);
+	background: linear-gradient(
+		135deg,
+		oklch(80% 0.15 55 / 0.4),
+		oklch(55% 0.16 50 / 0.2)
+	);
+	box-shadow: 0 16px 35px oklch(0% 0 0 / 0.4);
+	opacity: 1;
+	transform-origin: top left;
+	animation: cap-selection-hint-selection 2.8s cubic-bezier(0.4, 0, 0.2, 1)
+		infinite;
 }
 
 .cap-selection-hint-cursor {
-    position: absolute;
-    top: calc(50% - 26px);
-    left: calc(50% - 34px);
-    width: 18px;
-    height: 26px;
-    filter: drop-shadow(0 12px 24px oklch(0% 0 0 / 0.6));
-    transform-origin: top left;
-    animation: cap-selection-hint-cursor 2.8s cubic-bezier(0.4, 0, 0.2, 1)
-        infinite;
+	position: absolute;
+	top: calc(50% - 26px);
+	left: calc(50% - 34px);
+	width: 18px;
+	height: 26px;
+	filter: drop-shadow(0 12px 24px oklch(0% 0 0 / 0.6));
+	transform-origin: top left;
+	animation: cap-selection-hint-cursor 2.8s cubic-bezier(0.4, 0, 0.2, 1)
+		infinite;
 }
 
 .cap-selection-hint-cursor::after {
-    content: "";
-    position: absolute;
-    left: 50%;
-    top: 55%;
-    width: 20px;
-    height: 20px;
-    border-radius: 999px;
-    border: 2px solid oklch(100% 0 0 / 0.85);
-    transform: translate(-50%, -50%) scale(0);
-    opacity: 0;
-    animation: cap-selection-hint-click 2.8s ease-out infinite;
+	content: "";
+	position: absolute;
+	left: 50%;
+	top: 55%;
+	width: 20px;
+	height: 20px;
+	border-radius: 999px;
+	border: 2px solid oklch(100% 0 0 / 0.85);
+	transform: translate(-50%, -50%) scale(0);
+	opacity: 0;
+	animation: cap-selection-hint-click 2.8s ease-out infinite;
 }
 
 @keyframes cap-selection-hint-selection {
-    0% {
-        width: 10px;
-        height: 8px;
-    }
-    50% {
-        width: 68px;
-        height: 52px;
-    }
-    100% {
-        width: 10px;
-        height: 8px;
-    }
+	0% {
+		width: 10px;
+		height: 8px;
+	}
+	50% {
+		width: 68px;
+		height: 52px;
+	}
+	100% {
+		width: 10px;
+		height: 8px;
+	}
 }
 
 @keyframes cap-selection-hint-cursor {
-    0% {
-        opacity: 1;
-        transform: translate3d(0px, 0px, 0) rotate(-6deg);
-    }
-    50% {
-        transform: translate3d(68px, 52px, 0) rotate(-4deg);
-    }
-    100% {
-        opacity: 1;
-        transform: translate3d(0px, 0px, 0) rotate(-6deg);
-    }
+	0% {
+		opacity: 1;
+		transform: translate3d(0px, 0px, 0) rotate(-6deg);
+	}
+	50% {
+		transform: translate3d(68px, 52px, 0) rotate(-4deg);
+	}
+	100% {
+		opacity: 1;
+		transform: translate3d(0px, 0px, 0) rotate(-6deg);
+	}
 }
 
 @keyframes cap-selection-hint-click {
-    0% {
-        opacity: 0;
-        transform: translate(-50%, -50%) scale(0);
-    }
-    10% {
-        opacity: 0;
-        transform: translate(-50%, -50%) scale(0);
-    }
-    12% {
-        opacity: 0.95;
-        transform: translate(-50%, -50%) scale(0.2);
-    }
-    18% {
-        opacity: 0;
-        transform: translate(-50%, -50%) scale(0.85);
-    }
-    100% {
-        opacity: 0;
-        transform: translate(-50%, -50%) scale(0);
-    }
+	0% {
+		opacity: 0;
+		transform: translate(-50%, -50%) scale(0);
+	}
+	10% {
+		opacity: 0;
+		transform: translate(-50%, -50%) scale(0);
+	}
+	12% {
+		opacity: 0.95;
+		transform: translate(-50%, -50%) scale(0.2);
+	}
+	18% {
+		opacity: 0;
+		transform: translate(-50%, -50%) scale(0.85);
+	}
+	100% {
+		opacity: 0;
+		transform: translate(-50%, -50%) scale(0);
+	}
 }
 
 /* Tabs container with mask-based fade-out effect */
 
 .tabs-mask-content {
-    -webkit-mask-image: linear-gradient(
-        to right,
-        transparent,
-        black 24px,
-        black calc(100% - 24px),
-        transparent
-    );
-    mask-image: linear-gradient(
-        to right,
-        transparent,
-        black 24px,
-        black calc(100% - 24px),
-        transparent
-    );
+	-webkit-mask-image: linear-gradient(
+		to right,
+		transparent,
+		black 24px,
+		black calc(100% - 24px),
+		transparent
+	);
+	mask-image: linear-gradient(
+		to right,
+		transparent,
+		black 24px,
+		black calc(100% - 24px),
+		transparent
+	);
 }
 
 @keyframes cap-audio-eq {
-    0%,
-    100% {
-        transform: scaleY(0.3);
-    }
-    50% {
-        transform: scaleY(1);
-    }
+	0%,
+	100% {
+		transform: scaleY(0.3);
+	}
+	50% {
+		transform: scaleY(1);
+	}
 }
 
 @layer utilities {
-    .platform-windows .overflow-y-auto {
-        @apply scrollbar-thin scrollbar-track-transparent scrollbar-thumb-black-transparent-40;
-    }
+	.platform-windows .overflow-y-auto {
+		@apply scrollbar-thin scrollbar-track-transparent scrollbar-thumb-black-transparent-40;
+	}
 }
 
 :root.platform-macos button:not(:disabled),
 :root.platform-windows button:not(:disabled),
 :root.platform-macos [role="button"]:not([aria-disabled="true"]),
 :root.platform-windows [role="button"]:not([aria-disabled="true"]) {
-    cursor: default;
+	cursor: default;
 }
 
 :root.platform-macos a:not([href]),
 :root.platform-windows a:not([href]) {
-    cursor: default;
+	cursor: default;
 }
 
 /* Preserve the same default border color from Tailwind 3 */
 @layer base {
-    *,
-    ::after,
-    ::before,
-    ::backdrop,
-    ::file-selector-button {
-        border-color: var(--color-gray-200, currentColor);
-    }
+	*,
+	::after,
+	::before,
+	::backdrop,
+	::file-selector-button {
+		border-color: var(--color-gray-200, currentColor);
+	}
 }
 
 /* --- Area-selection hint: miniature Quiro CRT ---------------------------
@@ -1312,16 +1336,16 @@
    Adapted from the Dell CRT enclosure study. */
 
 .quiro-crt-hint {
-  --crt-plastic-main: #e4decb;
-  --crt-plastic-light: #f6f3eb;
-  --crt-plastic-dark: #c4bca9;
-  --crt-plastic-shadow: #877f6e;
-  --crt-bezel-inset: #0a0b0d;
-  --crt-screen-glow: rgba(86, 154, 236, 0.3);
-  --crt-drag-x: 76px;
-  --crt-drag-y: 58px;
+	--crt-plastic-main: #e4decb;
+	--crt-plastic-light: #f6f3eb;
+	--crt-plastic-dark: #c4bca9;
+	--crt-plastic-shadow: #877f6e;
+	--crt-bezel-inset: #0a0b0d;
+	--crt-screen-glow: rgba(86, 154, 236, 0.3);
+	--crt-drag-x: 76px;
+	--crt-drag-y: 58px;
 
-  /* Shrinks the whole enclosure — plastic, bezel, glass, selection box,
+	/* Shrinks the whole enclosure — plastic, bezel, glass, selection box,
      cursor, chin — uniformly in one step, instead of hand-rescaling every
      absolute px value below (many of which are hand-tuned calc() offsets
      that only line up correctly relative to each other at a shared scale).
@@ -1330,192 +1354,196 @@
      leave the original, now-empty box size behind, pushing that text away.
      Supported in both Chromium (WebView2) and WebKit (Safari 15.4+ /
      WKWebView) — the two engines Tauri actually renders through. */
-  zoom: 0.75;
+	zoom: 0.75;
 
-  position: relative;
-  width: 13.5rem;
-  padding: 9px 11px 5px;
-  border-radius: 16px 16px 11px 11px;
-  background: linear-gradient(
-    160deg,
-    var(--crt-plastic-light) 0%,
-    var(--crt-plastic-main) 45%,
-    var(--crt-plastic-dark) 85%,
-    var(--crt-plastic-shadow) 100%
-  );
-  box-shadow:
-    inset 1px 1px 2px rgba(255, 255, 255, 0.95),
-    inset -2px -3px 6px var(--crt-plastic-shadow),
-    0 18px 34px rgba(0, 0, 0, 0.7),
-    0 5px 12px rgba(0, 0, 0, 0.45);
+	position: relative;
+	width: 13.5rem;
+	padding: 9px 11px 5px;
+	border-radius: 16px 16px 11px 11px;
+	background: linear-gradient(
+		160deg,
+		var(--crt-plastic-light) 0%,
+		var(--crt-plastic-main) 45%,
+		var(--crt-plastic-dark) 85%,
+		var(--crt-plastic-shadow) 100%
+	);
+	box-shadow:
+		inset 1px 1px 2px rgba(255, 255, 255, 0.95),
+		inset -2px -3px 6px var(--crt-plastic-shadow),
+		0 18px 34px rgba(0, 0, 0, 0.7),
+		0 5px 12px rgba(0, 0, 0, 0.45);
 }
 
 /* Curved top housing highlight. */
 .quiro-crt-hint__lip {
-  position: absolute;
-  top: 0;
-  left: 6%;
-  right: 6%;
-  height: 6px;
-  border-radius: 12px 12px 0 0;
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.6), transparent);
-  pointer-events: none;
+	position: absolute;
+	top: 0;
+	left: 6%;
+	right: 6%;
+	height: 6px;
+	border-radius: 12px 12px 0 0;
+	background: linear-gradient(to bottom, rgba(255, 255, 255, 0.6), transparent);
+	pointer-events: none;
 }
 
 /* Recessed cavity the tube sits in, with light spilling onto the rim. */
 .quiro-crt-hint__bezel {
-  position: relative;
-  padding: 5px;
-  border-radius: 13px / 10px;
-  background: var(--crt-bezel-inset);
-  box-shadow:
-    inset 5px 5px 11px rgba(0, 0, 0, 0.98),
-    inset -3px -3px 7px rgba(255, 255, 255, 0.22),
-    0 1px 1px rgba(255, 255, 255, 0.7);
+	position: relative;
+	padding: 5px;
+	border-radius: 13px / 10px;
+	background: var(--crt-bezel-inset);
+	box-shadow:
+		inset 5px 5px 11px rgba(0, 0, 0, 0.98),
+		inset -3px -3px 7px rgba(255, 255, 255, 0.22),
+		0 1px 1px rgba(255, 255, 255, 0.7);
 }
 
 .quiro-crt-hint__bezel::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  box-shadow: inset 0 0 20px var(--crt-screen-glow);
-  pointer-events: none;
-  z-index: 5;
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	box-shadow: inset 0 0 20px var(--crt-screen-glow);
+	pointer-events: none;
+	z-index: 5;
 }
 
 /* The glass bulb itself — 4:3, like the real thing. */
 .quiro-crt-hint__glass {
-  position: relative;
-  aspect-ratio: 4 / 3;
-  overflow: hidden;
-  border-radius: 11px / 8px;
-  background: #05070c;
-  box-shadow:
-    inset 0 0 14px rgba(0, 0, 0, 0.95),
-    inset 0 0 5px rgba(0, 0, 0, 1);
-  transform: scale(0.994);
+	position: relative;
+	aspect-ratio: 4 / 3;
+	overflow: hidden;
+	border-radius: 11px / 8px;
+	background: #05070c;
+	box-shadow:
+		inset 0 0 14px rgba(0, 0, 0, 0.95),
+		inset 0 0 5px rgba(0, 0, 0, 1);
+	transform: scale(0.994);
 }
 
 /* Faint desktop behind the demo, so the selection has something to sit on. */
 .quiro-crt-hint__screen {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse at 50% 120%, rgba(86, 154, 236, 0.5), transparent 70%),
-    linear-gradient(165deg, #16305c 0%, #0a1730 100%);
+	position: absolute;
+	inset: 0;
+	background:
+		radial-gradient(
+			ellipse at 50% 120%,
+			rgba(86, 154, 236, 0.5),
+			transparent 70%
+		),
+		linear-gradient(165deg, #16305c 0%, #0a1730 100%);
 }
 
 .quiro-crt-hint__selection {
-  position: absolute;
-  top: calc(50% - 29px);
-  left: calc(50% - 38px);
-  width: var(--crt-drag-x);
-  height: var(--crt-drag-y);
-  border: 1px solid rgba(255, 255, 255, 0.85);
-  background: linear-gradient(
-    135deg,
-    rgba(113, 205, 255, 0.42),
-    rgba(45, 97, 255, 0.22)
-  );
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.45);
-  transform-origin: top left;
-  animation: quiro-crt-hint-selection 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+	position: absolute;
+	top: calc(50% - 29px);
+	left: calc(50% - 38px);
+	width: var(--crt-drag-x);
+	height: var(--crt-drag-y);
+	border: 1px solid rgba(255, 255, 255, 0.85);
+	background: linear-gradient(
+		135deg,
+		rgba(113, 205, 255, 0.42),
+		rgba(45, 97, 255, 0.22)
+	);
+	box-shadow: 0 10px 22px rgba(0, 0, 0, 0.45);
+	transform-origin: top left;
+	animation: quiro-crt-hint-selection 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
 .quiro-crt-hint__cursor {
-  position: absolute;
-  top: calc(50% - 29px);
-  left: calc(50% - 38px);
-  width: 15px;
-  height: 21px;
-  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.65));
-  transform-origin: top left;
-  animation: quiro-crt-hint-cursor 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+	position: absolute;
+	top: calc(50% - 29px);
+	left: calc(50% - 38px);
+	width: 15px;
+	height: 21px;
+	filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.65));
+	transform-origin: top left;
+	animation: quiro-crt-hint-cursor 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
 /* The click ripple at the start of each loop. */
 .quiro-crt-hint__cursor::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 55%;
-  width: 18px;
-  height: 18px;
-  border-radius: 999px;
-  border: 2px solid rgba(255, 255, 255, 0.85);
-  transform: translate(-50%, -50%) scale(0);
-  opacity: 0;
-  animation: quiro-crt-hint-click 2.8s ease-out infinite;
+	content: "";
+	position: absolute;
+	left: 50%;
+	top: 55%;
+	width: 18px;
+	height: 18px;
+	border-radius: 999px;
+	border: 2px solid rgba(255, 255, 255, 0.85);
+	transform: translate(-50%, -50%) scale(0);
+	opacity: 0;
+	animation: quiro-crt-hint-click 2.8s ease-out infinite;
 }
 
 /* Display mode: the entire screen reads as the selection, breathing gently so
    it's clearly a live target rather than a static picture. */
 .quiro-crt-hint__fullscreen {
-  position: absolute;
-  inset: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.85);
-  background: linear-gradient(
-    135deg,
-    rgba(113, 205, 255, 0.34),
-    rgba(45, 97, 255, 0.18)
-  );
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.4);
-  animation: quiro-crt-hint-fullscreen 2.6s ease-in-out infinite;
+	position: absolute;
+	inset: 4px;
+	border: 1px solid rgba(255, 255, 255, 0.85);
+	background: linear-gradient(
+		135deg,
+		rgba(113, 205, 255, 0.34),
+		rgba(45, 97, 255, 0.18)
+	);
+	box-shadow: 0 8px 18px rgba(0, 0, 0, 0.4);
+	animation: quiro-crt-hint-fullscreen 2.6s ease-in-out infinite;
 }
 
 @keyframes quiro-crt-hint-fullscreen {
-  0%,
-  100% {
-    opacity: 0.72;
-  }
-  50% {
-    opacity: 1;
-  }
+	0%,
+	100% {
+		opacity: 0.72;
+	}
+	50% {
+		opacity: 1;
+	}
 }
 
 .quiro-crt-hint__scanlines {
-  position: absolute;
-  inset: 0;
-  z-index: 40;
-  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.45) 50%);
-  background-size: 100% 3px;
-  opacity: 0.2;
-  pointer-events: none;
+	position: absolute;
+	inset: 0;
+	z-index: 40;
+	background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.45) 50%);
+	background-size: 100% 3px;
+	opacity: 0.2;
+	pointer-events: none;
 }
 
 .quiro-crt-hint__phosphor {
-  position: absolute;
-  inset: 0;
-  z-index: 42;
-  background-image: linear-gradient(
-    90deg,
-    rgba(255, 0, 0, 0.08) 0px,
-    rgba(255, 0, 0, 0.08) 1px,
-    rgba(0, 255, 0, 0.08) 1px,
-    rgba(0, 255, 0, 0.08) 2px,
-    rgba(0, 0, 255, 0.08) 2px,
-    rgba(0, 0, 255, 0.08) 3px
-  );
-  background-size: 3px 100%;
-  opacity: 0.14;
-  pointer-events: none;
+	position: absolute;
+	inset: 0;
+	z-index: 42;
+	background-image: linear-gradient(
+		90deg,
+		rgba(255, 0, 0, 0.08) 0px,
+		rgba(255, 0, 0, 0.08) 1px,
+		rgba(0, 255, 0, 0.08) 1px,
+		rgba(0, 255, 0, 0.08) 2px,
+		rgba(0, 0, 255, 0.08) 2px,
+		rgba(0, 0, 255, 0.08) 3px
+	);
+	background-size: 3px 100%;
+	opacity: 0.14;
+	pointer-events: none;
 }
 
 /* Specular highlight off the curved glass. */
 .quiro-crt-hint__glare {
-  position: absolute;
-  inset: 0;
-  z-index: 45;
-  background:
-    radial-gradient(
-      ellipse at 25% 20%,
-      rgba(255, 255, 255, 0.2) 0%,
-      rgba(255, 255, 255, 0.07) 40%,
-      transparent 65%
-    ),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.14) 0%, transparent 30%);
-  pointer-events: none;
+	position: absolute;
+	inset: 0;
+	z-index: 45;
+	background:
+		radial-gradient(
+			ellipse at 25% 20%,
+			rgba(255, 255, 255, 0.2) 0%,
+			rgba(255, 255, 255, 0.07) 40%,
+			transparent 65%
+		),
+		linear-gradient(135deg, rgba(255, 255, 255, 0.14) 0%, transparent 30%);
+	pointer-events: none;
 }
 
 /* Chin: OSD buttons, badge, power LED.
@@ -1523,138 +1551,140 @@
    the dot cluster and the LED are different widths, so space-between would
    push the badge off the enclosure's centreline. */
 .quiro-crt-hint__chin {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  margin-top: 6px;
-  padding: 0 3px;
+	display: grid;
+	grid-template-columns: 1fr auto 1fr;
+	align-items: center;
+	margin-top: 6px;
+	padding: 0 3px;
 }
 
 .quiro-crt-hint__osd {
-  display: flex;
-  gap: 4px;
-  justify-self: start;
+	display: flex;
+	gap: 4px;
+	justify-self: start;
 }
 
 .quiro-crt-hint__osd span {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle at 35% 35%,
-    var(--crt-plastic-light),
-    var(--crt-plastic-dark)
-  );
-  box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.9),
-    0 1px 1px rgba(0, 0, 0, 0.35);
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	background: radial-gradient(
+		circle at 35% 35%,
+		var(--crt-plastic-light),
+		var(--crt-plastic-dark)
+	);
+	box-shadow:
+		inset 0 1px 1px rgba(255, 255, 255, 0.9),
+		0 1px 1px rgba(0, 0, 0, 0.35);
 }
 
 .quiro-crt-hint__badge {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 42px;
-  height: 15px;
-  border: 1px solid #7c7c7c;
-  border-radius: 50%;
-  background: linear-gradient(
-    135deg,
-    #e8e8e8 0%,
-    #b0b0b0 40%,
-    #ffffff 55%,
-    #888888 100%
-  );
-  box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.9),
-    inset 0 -1px 1px rgba(0, 0, 0, 0.55),
-    0 1px 2px rgba(0, 0, 0, 0.3);
-  font-family: inherit;
-  font-size: 7px;
-  font-weight: 900;
-  letter-spacing: 0.02em;
-  /* Offsets the trailing letter-space after the final glyph, which would
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 42px;
+	height: 15px;
+	border: 1px solid #7c7c7c;
+	border-radius: 50%;
+	background: linear-gradient(
+		135deg,
+		#e8e8e8 0%,
+		#b0b0b0 40%,
+		#ffffff 55%,
+		#888888 100%
+	);
+	box-shadow:
+		inset 0 1px 1px rgba(255, 255, 255, 0.9),
+		inset 0 -1px 1px rgba(0, 0, 0, 0.55),
+		0 1px 2px rgba(0, 0, 0, 0.3);
+	font-family: inherit;
+	font-size: 7px;
+	font-weight: 900;
+	letter-spacing: 0.02em;
+	/* Offsets the trailing letter-space after the final glyph, which would
      otherwise sit the word fractionally left of the oval's centre. */
-  text-indent: 0.02em;
-  color: #12284c;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
-  transform: scaleY(0.92);
+	text-indent: 0.02em;
+	color: #12284c;
+	text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
+	transform: scaleY(0.92);
 }
 
 .quiro-crt-hint__led {
-  width: 5px;
-  height: 5px;
-  justify-self: end;
-  border-radius: 50%;
-  background-color: #3aff2b;
-  box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.9),
-    0 0 5px rgba(58, 255, 43, 0.85),
-    0 0 10px rgba(58, 255, 43, 0.6);
+	width: 5px;
+	height: 5px;
+	justify-self: end;
+	border-radius: 50%;
+	background-color: #3aff2b;
+	box-shadow:
+		inset 0 1px 1px rgba(255, 255, 255, 0.9),
+		0 0 5px rgba(58, 255, 43, 0.85),
+		0 0 10px rgba(58, 255, 43, 0.6);
 }
 
 @keyframes quiro-crt-hint-selection {
-  0% {
-    width: 11px;
-    height: 8px;
-  }
-  50% {
-    width: var(--crt-drag-x);
-    height: var(--crt-drag-y);
-  }
-  100% {
-    width: 11px;
-    height: 8px;
-  }
+	0% {
+		width: 11px;
+		height: 8px;
+	}
+	50% {
+		width: var(--crt-drag-x);
+		height: var(--crt-drag-y);
+	}
+	100% {
+		width: 11px;
+		height: 8px;
+	}
 }
 
 @keyframes quiro-crt-hint-cursor {
-  0% {
-    opacity: 1;
-    transform: translate3d(0, 0, 0) rotate(-6deg);
-  }
-  50% {
-    transform: translate3d(var(--crt-drag-x), var(--crt-drag-y), 0) rotate(-4deg);
-  }
-  100% {
-    opacity: 1;
-    transform: translate3d(0, 0, 0) rotate(-6deg);
-  }
+	0% {
+		opacity: 1;
+		transform: translate3d(0, 0, 0) rotate(-6deg);
+	}
+	50% {
+		transform: translate3d(var(--crt-drag-x), var(--crt-drag-y), 0)
+			rotate(-4deg);
+	}
+	100% {
+		opacity: 1;
+		transform: translate3d(0, 0, 0) rotate(-6deg);
+	}
 }
 
 @keyframes quiro-crt-hint-click {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0);
-  }
-  10% {
-    opacity: 0.9;
-    transform: translate(-50%, -50%) scale(0.4);
-  }
-  30% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(1.1);
-  }
-  100% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(1.1);
-  }
+	0% {
+		opacity: 0;
+		transform: translate(-50%, -50%) scale(0);
+	}
+	10% {
+		opacity: 0.9;
+		transform: translate(-50%, -50%) scale(0.4);
+	}
+	30% {
+		opacity: 0;
+		transform: translate(-50%, -50%) scale(1.1);
+	}
+	100% {
+		opacity: 0;
+		transform: translate(-50%, -50%) scale(1.1);
+	}
 }
 
 /* The loop is decorative; hold it on the fully-drawn frame instead. */
 @media (prefers-reduced-motion: reduce) {
-  .quiro-crt-hint__selection,
-  .quiro-crt-hint__cursor,
-  .quiro-crt-hint__cursor::after,
-  .quiro-crt-hint__fullscreen {
-    animation: none;
-  }
-  .quiro-crt-hint__cursor::after {
-    opacity: 0;
-  }
-  .quiro-crt-hint__cursor {
-    transform: translate3d(var(--crt-drag-x), var(--crt-drag-y), 0) rotate(-4deg);
-  }
+	.quiro-crt-hint__selection,
+	.quiro-crt-hint__cursor,
+	.quiro-crt-hint__cursor::after,
+	.quiro-crt-hint__fullscreen {
+		animation: none;
+	}
+	.quiro-crt-hint__cursor::after {
+		opacity: 0;
+	}
+	.quiro-crt-hint__cursor {
+		transform: translate3d(var(--crt-drag-x), var(--crt-drag-y), 0)
+			rotate(-4deg);
+	}
 }
 
 /* --- react-aria colour picker (screenshot editor Style panel) -----------
@@ -1663,57 +1693,57 @@
    sets geometry, the hairline border, and the thumb. `forced-color-adjust`
    keeps the gradients from being flattened in Windows High Contrast. */
 .cap-color-area {
-  width: 100%;
-  aspect-ratio: 1 / 0.82;
-  border-radius: 10px;
-  border: 1px solid var(--gray-5);
-  forced-color-adjust: none;
+	width: 100%;
+	aspect-ratio: 1 / 0.82;
+	border-radius: 10px;
+	border: 1px solid var(--gray-5);
+	forced-color-adjust: none;
 }
 
 .cap-color-slider {
-  width: 100%;
-  forced-color-adjust: none;
+	width: 100%;
+	forced-color-adjust: none;
 }
 
 .cap-color-slider-track {
-  height: 12px;
-  border-radius: 999px;
-  border: 1px solid var(--gray-a5);
+	height: 12px;
+	border-radius: 999px;
+	border: 1px solid var(--gray-a5);
 }
 
 /* Checkerboard sits on a real parent element; the track's transparent→colour
    gradient on top lets it show through where the colour is see-through. */
 .cap-color-alpha-bg {
-  border-radius: 999px;
-  background-image: repeating-conic-gradient(
-    var(--gray-7) 0% 25%,
-    var(--gray-1) 0% 50%
-  );
-  background-size: 10px 10px;
+	border-radius: 999px;
+	background-image: repeating-conic-gradient(
+		var(--gray-7) 0% 25%,
+		var(--gray-1) 0% 50%
+	);
+	background-size: 10px 10px;
 }
 
 /* Checkerboard behind a translucent swatch on the popover trigger. */
 .cap-color-swatch-bg {
-  background-image: repeating-conic-gradient(
-    var(--gray-7) 0% 25%,
-    var(--gray-1) 0% 50%
-  );
-  background-size: 8px 8px;
+	background-image: repeating-conic-gradient(
+		var(--gray-7) 0% 25%,
+		var(--gray-1) 0% 50%
+	);
+	background-size: 8px 8px;
 }
 
 .cap-color-thumb {
-  width: 16px;
-  height: 16px;
-  border-radius: 999px;
-  border: 2px solid var(--solid-white);
-  box-shadow:
-    0 0 0 1px var(--gray-a8),
-    0 1px 3px var(--gray-a8);
+	width: 16px;
+	height: 16px;
+	border-radius: 999px;
+	border: 2px solid var(--solid-white);
+	box-shadow:
+		0 0 0 1px var(--gray-a8),
+		0 1px 3px var(--gray-a8);
 }
 
 .cap-color-thumb[data-focus-visible] {
-  outline: 2px solid var(--accent-300);
-  outline-offset: 2px;
+	outline: 2px solid var(--accent-300);
+	outline-offset: 2px;
 }
 
 /* --- Inline file-name editor (screenshot editor titlebar) --------------- */
@@ -1722,48 +1752,48 @@
    one-shot reveal, so a keyframe (not a transition): it never needs to be
    interrupted or reversed — the field just closes. */
 @keyframes file-name-rule-draw {
-  from {
-    transform: scaleX(0);
-  }
-  to {
-    transform: scaleX(1);
-  }
+	from {
+		transform: scaleX(0);
+	}
+	to {
+		transform: scaleX(1);
+	}
 }
 
 .file-name-rule {
-  transform-origin: left center;
-  animation: file-name-rule-draw 180ms cubic-bezier(0.23, 1, 0.32, 1) both;
+	transform-origin: left center;
+	animation: file-name-rule-draw 180ms cubic-bezier(0.23, 1, 0.32, 1) both;
 }
 
 /* Rejected (blank) name: a tight horizontal shake, then the draft reverts. */
 @keyframes file-name-shake {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-  20% {
-    transform: translateX(-2px);
-  }
-  40% {
-    transform: translateX(2px);
-  }
-  60% {
-    transform: translateX(-2px);
-  }
-  80% {
-    transform: translateX(1px);
-  }
+	0%,
+	100% {
+		transform: translateX(0);
+	}
+	20% {
+		transform: translateX(-2px);
+	}
+	40% {
+		transform: translateX(2px);
+	}
+	60% {
+		transform: translateX(-2px);
+	}
+	80% {
+		transform: translateX(1px);
+	}
 }
 
 .file-name-shake {
-  animation: file-name-shake 240ms ease-in-out;
+	animation: file-name-shake 240ms ease-in-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .file-name-rule,
-  .file-name-shake {
-    animation: none;
-  }
+	.file-name-rule,
+	.file-name-shake {
+		animation: none;
+	}
 }
 
 /* Panel reveal — transitions.dev's recipe, with the axis and the layout
@@ -1799,59 +1829,58 @@
    panel is revealed rather than reflowed — its own inner layout never changes,
    which is what keeps the text inside from re-wrapping mid-animation. */
 :root {
-    --panel-open-dur: 280ms;
-    --panel-close-dur: 220ms;
-    --panel-blur: 2px;
-    --panel-ease: cubic-bezier(0.22, 1, 0.36, 1);
+	--panel-open-dur: 280ms;
+	--panel-close-dur: 220ms;
+	--panel-blur: 2px;
+	--panel-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .t-panel-slide {
-    --panel-translate-x: 0px;
-    --panel-translate-y: 0px;
-    width: 0;
-    overflow: hidden;
-    flex-shrink: 0;
-    /* Belt-and-braces. A flex item's `min-width: auto` would otherwise floor
+	--panel-translate-x: 0px;
+	--panel-translate-y: 0px;
+	width: 0;
+	overflow: hidden;
+	flex-shrink: 0;
+	/* Belt-and-braces. A flex item's `min-width: auto` would otherwise floor
        this at its content's min-content width, and a panel that cannot reach
        width 0 never reflows the canvas and never fires the `width`
        transitionend `SidePanel` unmounts on. The `overflow: hidden` above
        already zeroes that automatic minimum, so this is redundant today —
        it is here so the collapse does not quietly break if the clipping
        ever moves to a parent. */
-    min-width: 0;
-    transform: translate(var(--panel-translate-x), var(--panel-translate-y));
-    opacity: 0;
-    filter: blur(var(--panel-blur));
-    pointer-events: none;
-    transition:
-        width var(--panel-close-dur) var(--panel-ease),
-        transform var(--panel-close-dur) var(--panel-ease),
-        opacity var(--panel-close-dur) var(--panel-ease),
-        filter var(--panel-close-dur) var(--panel-ease);
-    will-change: transform, opacity, filter;
+	min-width: 0;
+	transform: translate(var(--panel-translate-x), var(--panel-translate-y));
+	opacity: 0;
+	filter: blur(var(--panel-blur));
+	pointer-events: none;
+	transition:
+		width var(--panel-close-dur) var(--panel-ease),
+		transform var(--panel-close-dur) var(--panel-ease),
+		opacity var(--panel-close-dur) var(--panel-ease),
+		filter var(--panel-close-dur) var(--panel-ease);
+	will-change: transform, opacity, filter;
 }
 
 .t-panel-slide[data-open="true"] {
-    width: var(--panel-width);
-    transform: translate(0, 0);
-    opacity: 1;
-    filter: blur(0);
-    pointer-events: auto;
-    transition:
-        width var(--panel-open-dur) var(--panel-ease),
-        transform var(--panel-open-dur) var(--panel-ease),
-        opacity var(--panel-open-dur) var(--panel-ease),
-        filter var(--panel-open-dur) var(--panel-ease);
+	width: var(--panel-width);
+	transform: translate(0, 0);
+	opacity: 1;
+	filter: blur(0);
+	pointer-events: auto;
+	transition:
+		width var(--panel-open-dur) var(--panel-ease),
+		transform var(--panel-open-dur) var(--panel-ease),
+		opacity var(--panel-open-dur) var(--panel-ease),
+		filter var(--panel-open-dur) var(--panel-ease);
 }
 
 @media (prefers-reduced-motion: reduce) {
-    /* Both selectors, matching the specificity of the `[data-open]` rule
+	/* Both selectors, matching the specificity of the `[data-open]` rule
        above rather than reaching for `!important` to outrank it — the open
        state carries its own `transition`, so a bare `.t-panel-slide` here
        would lose to it and the panel would still animate. */
-    .t-panel-slide,
-    .t-panel-slide[data-open="true"] {
-        transition: none;
-    }
+	.t-panel-slide,
+	.t-panel-slide[data-open="true"] {
+		transition: none;
+	}
 }
-

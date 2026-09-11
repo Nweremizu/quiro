@@ -4312,38 +4312,37 @@ impl ProjectUniforms {
         if let Some(prepared) = annotations.iter().find(|prepared| {
             prepared.annotation.annotation_type == quiro_project::AnnotationType::Focus
                 && prepared.annotation.focus.is_some()
-        }) {
-            if let Some(focus) = prepared.annotation.focus {
-                let depth = (focus.depth as f32 / 100.0).clamp(0.0, 1.0);
-                display.focus_region = [
-                    focus.x as f32,
-                    focus.y as f32,
-                    focus.radius_x.max(0.001) as f32,
-                    focus.radius_y.max(0.001) as f32,
-                ];
-                display.focus_optics = [
-                    focus.rotation.to_radians() as f32,
-                    (focus.blur as f32 / 100.0).clamp(0.0, 1.0) * 0.06,
-                    0.75 + depth * 3.0,
-                    0.75 - depth * 0.5,
-                ];
-                display.focus_style = [
-                    focus.near_blur.max(0.0) as f32,
-                    focus.far_blur.max(0.0) as f32,
-                    (focus.lens as f32 / 100.0).clamp(0.0, 1.0),
-                    (focus.lens as f32 / 100.0).clamp(0.0, 1.0) * 0.6,
-                ];
-                display.focus_state = [
-                    if focus.shape == quiro_project::FocusShape::Rectangle {
-                        6.0
-                    } else {
-                        2.0
-                    },
-                    prepared.alpha.clamp(0.0, 1.0),
-                    0.0,
-                    0.0,
-                ];
-            }
+        }) && let Some(focus) = prepared.annotation.focus
+        {
+            let depth = (focus.depth as f32 / 100.0).clamp(0.0, 1.0);
+            display.focus_region = [
+                focus.x as f32,
+                focus.y as f32,
+                focus.radius_x.max(0.001) as f32,
+                focus.radius_y.max(0.001) as f32,
+            ];
+            display.focus_optics = [
+                focus.rotation.to_radians() as f32,
+                (focus.blur as f32 / 100.0).clamp(0.0, 1.0) * 0.06,
+                0.75 + depth * 3.0,
+                0.75 - depth * 0.5,
+            ];
+            display.focus_style = [
+                focus.near_blur.max(0.0) as f32,
+                focus.far_blur.max(0.0) as f32,
+                (focus.lens as f32 / 100.0).clamp(0.0, 1.0),
+                (focus.lens as f32 / 100.0).clamp(0.0, 1.0) * 0.6,
+            ];
+            display.focus_state = [
+                if focus.shape == quiro_project::FocusShape::Rectangle {
+                    6.0
+                } else {
+                    2.0
+                },
+                prepared.alpha.clamp(0.0, 1.0),
+                0.0,
+                0.0,
+            ];
         }
 
         // Text and mask annotations draw through the layers those types already

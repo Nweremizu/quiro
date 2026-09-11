@@ -26,7 +26,6 @@
 @import "@fontsource/geist-sans/latin-600.css";
 @import "@fontsource/geist-sans/latin-700.css";
 
-
 @source "../../../apps/*/src/**/*.{js,ts,jsx,tsx,mdx}";
 @source "../../*/src/**/*.{ts,tsx,html,stories.tsx}";
 
@@ -35,73 +34,73 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-    --track-clip: oklch(71.6% 0.171 53.4); /* brand accent */
-    --track-zoom: oklch(42.8% 0.022 268.8); /* slate */
-    --track-caption: oklch(55.8% 0.015 262.3);
-    --track-keyboard: oklch(65.6% 0.146 53.1); /* orange, distinct from brand */
-    --track-text: oklch(62.8% 0.1 212.6); /* teal */
-    --track-mask: oklch(59% 0.178 21.8); /* red */
-    --track-scene: oklch(62% 0.224 296.4); /* purple */
-    --track-audio: oklch(62% 0.13 165); /* green */
+	--track-clip: oklch(71.6% 0.171 53.4); /* brand accent */
+	--track-zoom: oklch(42.8% 0.022 268.8); /* slate */
+	--track-caption: oklch(55.8% 0.015 262.3);
+	--track-keyboard: oklch(65.6% 0.146 53.1); /* orange, distinct from brand */
+	--track-text: oklch(62.8% 0.1 212.6); /* teal */
+	--track-mask: oklch(59% 0.178 21.8); /* red */
+	--track-scene: oklch(62% 0.224 296.4); /* purple */
+	--track-audio: oklch(62% 0.13 165); /* green */
 }
 
 :root {
-    /* Light theme variables */
-    --gray-50: oklch(100% 0 0);
-    --gray-100: oklch(98.2% 0.003 264.5);
-    --gray-200: oklch(92.5% 0.01 273.4);
-    --gray-300: oklch(84.6% 0.02 270.2);
-    --gray-400: oklch(64.6% 0.027 265.5);
-    --gray-450: oklch(40.9% 0 0);
-    --gray-500: oklch(22.2% 0.023 265.6);
+	/* Light theme variables */
+	--gray-50: oklch(100% 0 0);
+	--gray-100: oklch(98.2% 0.003 264.5);
+	--gray-200: oklch(92.5% 0.01 273.4);
+	--gray-300: oklch(84.6% 0.02 270.2);
+	--gray-400: oklch(64.6% 0.027 265.5);
+	--gray-450: oklch(40.9% 0 0);
+	--gray-500: oklch(22.2% 0.023 265.6);
 
-    --gray-50-transparent-50: oklch(100% 0 0 / 0.5);
-    --gray-100-transparent-50: oklch(98.2% 0.003 264.5 / 0.5);
-    --gray-200-transparent-50: oklch(92.5% 0.01 273.4 / 0.5);
-    --gray-300-transparent-50: oklch(86.3% 0.006 255.5 / 0.5);
-    --gray-400-transparent-50: oklch(63.2% 0.009 253.9 / 0.5);
-    --gray-450-transparent-50: oklch(94.2% 0.005 258.3 / 0.5);
-    --gray-500-transparent-50: oklch(22.2% 0.023 265.6 / 0.5);
+	--gray-50-transparent-50: oklch(100% 0 0 / 0.5);
+	--gray-100-transparent-50: oklch(98.2% 0.003 264.5 / 0.5);
+	--gray-200-transparent-50: oklch(92.5% 0.01 273.4 / 0.5);
+	--gray-300-transparent-50: oklch(86.3% 0.006 255.5 / 0.5);
+	--gray-400-transparent-50: oklch(63.2% 0.009 253.9 / 0.5);
+	--gray-450-transparent-50: oklch(94.2% 0.005 258.3 / 0.5);
+	--gray-500-transparent-50: oklch(22.2% 0.023 265.6 / 0.5);
 
-    /* Full 1-12 neutral ramp: what the .bg-gray-N / .border-gray-N /
+	/* Full 1-12 neutral ramp: what the .bg-gray-N / .border-gray-N /
      * .text-gray-N utility classes used by components resolve against.
      * Near-zero chroma with a faint cool tint. */
-    --gray-1: oklch(99.5% 0.001 255);
-    --gray-2: oklch(97.6% 0.002 255);
-    --gray-3: oklch(95.3% 0.003 255);
-    --gray-4: oklch(93% 0.004 255);
-    --gray-5: oklch(90.6% 0.005 255);
-    --gray-6: oklch(87.8% 0.006 255);
-    --gray-7: oklch(83.8% 0.007 255);
-    --gray-8: oklch(76.5% 0.008 255);
-    --gray-9: oklch(61.8% 0.01 255);
-    --gray-10: oklch(56.7% 0.01 255);
-    --gray-11: oklch(46.8% 0.01 255);
-    --gray-12: oklch(20.5% 0.012 255);
+	--gray-1: oklch(99.5% 0.001 255);
+	--gray-2: oklch(97.6% 0.002 255);
+	--gray-3: oklch(95.3% 0.003 255);
+	--gray-4: oklch(93% 0.004 255);
+	--gray-5: oklch(90.6% 0.005 255);
+	--gray-6: oklch(87.8% 0.006 255);
+	--gray-7: oklch(83.8% 0.007 255);
+	--gray-8: oklch(76.5% 0.008 255);
+	--gray-9: oklch(61.8% 0.01 255);
+	--gray-10: oklch(56.7% 0.01 255);
+	--gray-11: oklch(46.8% 0.01 255);
+	--gray-12: oklch(20.5% 0.012 255);
 
-    --transparent-window: oklch(100% 0 0 / 0.7);
+	--transparent-window: oklch(100% 0 0 / 0.7);
 
-    --text-primary: oklch(20% 0.019 266 / 0.95);
-    --text-secondary: oklch(20% 0.019 266 / 0.85);
-    --text-tertiary: oklch(20% 0.019 266 / 0.65);
+	--text-primary: oklch(20% 0.019 266 / 0.95);
+	--text-secondary: oklch(20% 0.019 266 / 0.85);
+	--text-tertiary: oklch(20% 0.019 266 / 0.65);
 
-    --black-transparent-5: oklch(20% 0.019 266 / 0.05);
-    --black-transparent-10: oklch(20% 0.019 266 / 0.1);
-    --black-transparent-20: oklch(20% 0.019 266 / 0.2);
-    --black-transparent-40: oklch(20% 0.019 266 / 0.4);
-    --black-transparent-60: oklch(20% 0.019 266 / 0.6);
-    --black-transparent-80: oklch(20% 0.019 266 / 0.8);
+	--black-transparent-5: oklch(20% 0.019 266 / 0.05);
+	--black-transparent-10: oklch(20% 0.019 266 / 0.1);
+	--black-transparent-20: oklch(20% 0.019 266 / 0.2);
+	--black-transparent-40: oklch(20% 0.019 266 / 0.4);
+	--black-transparent-60: oklch(20% 0.019 266 / 0.6);
+	--black-transparent-80: oklch(20% 0.019 266 / 0.8);
 
-    --white-transparent-5: oklch(100% 0 0 / 0.05);
-    --white-transparent-10: oklch(100% 0 0 / 0.1);
-    --white-transparent-20: oklch(100% 0 0 / 0.2);
-    --white-transparent-40: oklch(100% 0 0 / 0.4);
-    --white-transparent-60: oklch(100% 0 0 / 0.6);
-    --white-transparent-80: oklch(100% 0 0 / 0.8);
+	--white-transparent-5: oklch(100% 0 0 / 0.05);
+	--white-transparent-10: oklch(100% 0 0 / 0.1);
+	--white-transparent-20: oklch(100% 0 0 / 0.2);
+	--white-transparent-40: oklch(100% 0 0 / 0.4);
+	--white-transparent-60: oklch(100% 0 0 / 0.6);
+	--white-transparent-80: oklch(100% 0 0 / 0.8);
 
-    --solid-white: oklch(100% 0 0);
+	--solid-white: oklch(100% 0 0);
 
-    /* Brand accent (Cloudflare orange). --accent-400 is the exact brand
+	/* Brand accent (Cloudflare orange). --accent-400 is the exact brand
      * value — oklch(71.6% 0.171 53.4) === #F38020 — and is pinned to it in
      * BOTH themes; it's the fixed point the rest of the scale is built
      * around. Below 400 each theme descends toward its own ground, above it
@@ -113,19 +112,19 @@
      * red as it darkens, which keeps the dark end reading as deep orange
      * instead of mud. Every value is inside the sRGB gamut — verified by
      * oklch -> linear sRGB conversion, not by eye. */
-    --accent-50: oklch(97.5% 0.013 58);
-    --accent-100: oklch(94.5% 0.033 57);
-    --accent-200: oklch(89.6% 0.056 56);
-    --accent-300: oklch(81.8% 0.112 55);
-    --accent-400: oklch(71.6% 0.171 53.4); /* brand — #F38020 */
-    --accent-500: oklch(65.4% 0.166 51);
-    --accent-600: oklch(57.8% 0.15 48.5);
-    --accent-700: oklch(49.8% 0.13 46.5);
-    --accent-800: oklch(42.2% 0.11 45);
-    --accent-900: oklch(34.8% 0.098 43.5);
-    --accent-950: oklch(24.5% 0.066 42);
+	--accent-50: oklch(97.5% 0.013 58);
+	--accent-100: oklch(94.5% 0.033 57);
+	--accent-200: oklch(89.6% 0.056 56);
+	--accent-300: oklch(81.8% 0.112 55);
+	--accent-400: oklch(71.6% 0.171 53.4); /* brand — #F38020 */
+	--accent-500: oklch(65.4% 0.166 51);
+	--accent-600: oklch(57.8% 0.15 48.5);
+	--accent-700: oklch(49.8% 0.13 46.5);
+	--accent-800: oklch(42.2% 0.11 45);
+	--accent-900: oklch(34.8% 0.098 43.5);
+	--accent-950: oklch(24.5% 0.066 42);
 
-    /* Semantic accent roles. Components ask for a job (a surface, a border,
+	/* Semantic accent roles. Components ask for a job (a surface, a border,
      * a solid, a piece of text), never for a numbered step — that's what
      * stops the editor's selection-outline needs from dictating the weight
      * of a menu chip, which is how accent-700/800 ended up on both.
@@ -135,336 +134,336 @@
      * 2.6:1 against a light canvas (under the 3:1 a meaningful boundary
      * needs) while hitting 7.1:1 against a dark one. The role is fixed, the
      * step bends to the theme. */
-    --accent-surface: var(--accent-50);
-    --accent-surface-hover: var(--accent-100);
-    --accent-border: var(--accent-200);
-    --accent-border-selected: var(--accent-500);
-    --accent-solid: var(--accent-400);
-    --accent-solid-hover: var(--accent-500);
-    --accent-solid-active: var(--accent-600);
-    --accent-text: var(--accent-700);
-    --accent-text-strong: var(--accent-800);
-    --accent-focus-ring: var(--accent-500);
+	--accent-surface: var(--accent-50);
+	--accent-surface-hover: var(--accent-100);
+	--accent-border: var(--accent-200);
+	--accent-border-selected: var(--accent-500);
+	--accent-solid: var(--accent-400);
+	--accent-solid-hover: var(--accent-500);
+	--accent-solid-active: var(--accent-600);
+	--accent-text: var(--accent-700);
+	--accent-text-strong: var(--accent-800);
+	--accent-focus-ring: var(--accent-500);
 
-    /* Text/icons on --accent-solid. The brand orange is light (71.6%), so
+	/* Text/icons on --accent-solid. The brand orange is light (71.6%), so
      * white on it is 2.66:1 — a fail at any text size. This deep warm
      * near-black is 6.27:1 on the solid and 4.94:1 on solid-hover. It is
      * pinned to the same value in BOTH themes precisely because the solid
      * it sits on is also the same in both. */
-    --accent-on-solid: oklch(24% 0.05 45);
+	--accent-on-solid: oklch(24% 0.05 45);
 
-    --accent-transparent-0: oklch(71.6% 0.171 53.4 / 0);
-    --accent-transparent-10: oklch(71.6% 0.171 53.4 / 0.1);
-    --accent-transparent-20: oklch(71.6% 0.171 53.4 / 0.2);
+	--accent-transparent-0: oklch(71.6% 0.171 53.4 / 0);
+	--accent-transparent-10: oklch(71.6% 0.171 53.4 / 0.1);
+	--accent-transparent-20: oklch(71.6% 0.171 53.4 / 0.2);
 
-    --red-50: oklch(95.7% 0.022 7.2);
-    --red-100: oklch(83% 0.097 8.2);
-    --red-200: oklch(75.8% 0.149 10.9);
-    --red-300: oklch(67.2% 0.219 16.1);
-    --red-400: oklch(61.1% 0.197 15.9);
+	--red-50: oklch(95.7% 0.022 7.2);
+	--red-100: oklch(83% 0.097 8.2);
+	--red-200: oklch(75.8% 0.149 10.9);
+	--red-300: oklch(67.2% 0.219 16.1);
+	--red-400: oklch(61.1% 0.197 15.9);
 
-    --red-transparent-20: oklch(67.2% 0.219 16.1 / 0.2);
+	--red-transparent-20: oklch(67.2% 0.219 16.1 / 0.2);
 
-    /* Full 1-12 ramps for red plus three more semantic hues (info blue,
+	/* Full 1-12 ramps for red plus three more semantic hues (info blue,
      * success emerald, indigo) — same lightness curve as --gray-1..12 above,
      * hand-authored oklch (no Radix Colors package), step 9 is the "solid"
      * step each 5-step scale's mid value (red-300, blue-300) is pinned to,
      * for consistency between the two representations of the same color. */
-    --red-1: oklch(99.3% 0.002 16);
-    --red-2: oklch(97.5% 0.006 16);
-    --red-3: oklch(94.7% 0.02 16);
-    --red-4: oklch(91.3% 0.05 16);
-    --red-5: oklch(87.5% 0.09 16);
-    --red-6: oklch(82% 0.13 16);
-    --red-7: oklch(75.5% 0.17 16);
-    --red-8: oklch(67% 0.2 16);
-    --red-9: oklch(67.2% 0.219 16.1); /* = --red-300 */
-    --red-10: oklch(61.1% 0.197 15.9); /* = --red-400 */
-    --red-11: oklch(50% 0.17 16);
-    --red-12: oklch(28% 0.09 16);
+	--red-1: oklch(99.3% 0.002 16);
+	--red-2: oklch(97.5% 0.006 16);
+	--red-3: oklch(94.7% 0.02 16);
+	--red-4: oklch(91.3% 0.05 16);
+	--red-5: oklch(87.5% 0.09 16);
+	--red-6: oklch(82% 0.13 16);
+	--red-7: oklch(75.5% 0.17 16);
+	--red-8: oklch(67% 0.2 16);
+	--red-9: oklch(67.2% 0.219 16.1); /* = --red-300 */
+	--red-10: oklch(61.1% 0.197 15.9); /* = --red-400 */
+	--red-11: oklch(50% 0.17 16);
+	--red-12: oklch(28% 0.09 16);
 
-    --blue-1: oklch(99.4% 0.002 250);
-    --blue-2: oklch(97.8% 0.006 250);
-    --blue-3: oklch(95% 0.018 250);
-    --blue-4: oklch(91.8% 0.04 250);
-    --blue-5: oklch(88% 0.06 250);
-    --blue-6: oklch(83% 0.08 250);
-    --blue-7: oklch(76.5% 0.1 250);
-    --blue-8: oklch(68% 0.13 250);
-    --blue-9: oklch(58% 0.19 250);
-    --blue-10: oklch(53% 0.18 250);
-    --blue-11: oklch(45% 0.14 250);
-    --blue-12: oklch(28% 0.09 250);
+	--blue-1: oklch(99.4% 0.002 250);
+	--blue-2: oklch(97.8% 0.006 250);
+	--blue-3: oklch(95% 0.018 250);
+	--blue-4: oklch(91.8% 0.04 250);
+	--blue-5: oklch(88% 0.06 250);
+	--blue-6: oklch(83% 0.08 250);
+	--blue-7: oklch(76.5% 0.1 250);
+	--blue-8: oklch(68% 0.13 250);
+	--blue-9: oklch(58% 0.19 250);
+	--blue-10: oklch(53% 0.18 250);
+	--blue-11: oklch(45% 0.14 250);
+	--blue-12: oklch(28% 0.09 250);
 
-    --blue-50: oklch(96% 0.02 250);
-    --blue-100: oklch(89% 0.06 250);
-    --blue-200: oklch(80% 0.11 250);
-    --blue-300: oklch(58% 0.19 250); /* = --blue-9 */
-    --blue-400: oklch(53% 0.18 250); /* = --blue-10 */
+	--blue-50: oklch(96% 0.02 250);
+	--blue-100: oklch(89% 0.06 250);
+	--blue-200: oklch(80% 0.11 250);
+	--blue-300: oklch(58% 0.19 250); /* = --blue-9 */
+	--blue-400: oklch(53% 0.18 250); /* = --blue-10 */
 
-    --blue-transparent-0: oklch(50% 0.15 250 / 0);
-    --blue-transparent-10: oklch(50% 0.15 250 / 0.1);
-    --blue-transparent-20: oklch(50% 0.15 250 / 0.2);
+	--blue-transparent-0: oklch(50% 0.15 250 / 0);
+	--blue-transparent-10: oklch(50% 0.15 250 / 0.1);
+	--blue-transparent-20: oklch(50% 0.15 250 / 0.2);
 
-    --jade-1: oklch(99.3% 0.002 155);
-    --jade-2: oklch(97.6% 0.006 155);
-    --jade-3: oklch(94.8% 0.018 155);
-    --jade-4: oklch(91.5% 0.038 155);
-    --jade-5: oklch(87.8% 0.05 155);
-    --jade-6: oklch(82.5% 0.07 155);
-    --jade-7: oklch(76% 0.09 155);
-    --jade-8: oklch(67.5% 0.115 155);
-    --jade-9: oklch(55% 0.16 155);
-    --jade-10: oklch(50% 0.155 155);
-    --jade-11: oklch(42% 0.12 155);
-    --jade-12: oklch(26% 0.075 155);
+	--jade-1: oklch(99.3% 0.002 155);
+	--jade-2: oklch(97.6% 0.006 155);
+	--jade-3: oklch(94.8% 0.018 155);
+	--jade-4: oklch(91.5% 0.038 155);
+	--jade-5: oklch(87.8% 0.05 155);
+	--jade-6: oklch(82.5% 0.07 155);
+	--jade-7: oklch(76% 0.09 155);
+	--jade-8: oklch(67.5% 0.115 155);
+	--jade-9: oklch(55% 0.16 155);
+	--jade-10: oklch(50% 0.155 155);
+	--jade-11: oklch(42% 0.12 155);
+	--jade-12: oklch(26% 0.075 155);
 
-    --indigo-1: oklch(99.4% 0.003 275);
-    --indigo-2: oklch(97.7% 0.008 275);
-    --indigo-3: oklch(94.9% 0.02 275);
-    --indigo-4: oklch(91.6% 0.045 275);
-    --indigo-5: oklch(87.9% 0.06 275);
-    --indigo-6: oklch(82.8% 0.08 275);
-    --indigo-7: oklch(76.2% 0.11 275);
-    --indigo-8: oklch(67.8% 0.14 275);
-    --indigo-9: oklch(55.5% 0.18 275);
-    --indigo-10: oklch(50.5% 0.17 275);
-    --indigo-11: oklch(42.5% 0.135 275);
-    --indigo-12: oklch(26.5% 0.085 275);
+	--indigo-1: oklch(99.4% 0.003 275);
+	--indigo-2: oklch(97.7% 0.008 275);
+	--indigo-3: oklch(94.9% 0.02 275);
+	--indigo-4: oklch(91.6% 0.045 275);
+	--indigo-5: oklch(87.9% 0.06 275);
+	--indigo-6: oklch(82.8% 0.08 275);
+	--indigo-7: oklch(76.2% 0.11 275);
+	--indigo-8: oklch(67.8% 0.14 275);
+	--indigo-9: oklch(55.5% 0.18 275);
+	--indigo-10: oklch(50.5% 0.17 275);
+	--indigo-11: oklch(42.5% 0.135 275);
+	--indigo-12: oklch(26.5% 0.085 275);
 
-    /* Black-based alpha ramp: unlike --gray-N (which assumes a specific
+	/* Black-based alpha ramp: unlike --gray-N (which assumes a specific
      * light-mode background), these work as overlays over anything —
      * light mode uses black alphas, dark mode (below) uses white alphas. */
-    --gray-a1: oklch(0% 0 0 / 0.02);
-    --gray-a2: oklch(0% 0 0 / 0.04);
-    --gray-a3: oklch(0% 0 0 / 0.06);
-    --gray-a4: oklch(0% 0 0 / 0.08);
-    --gray-a5: oklch(0% 0 0 / 0.1);
-    --gray-a6: oklch(0% 0 0 / 0.13);
-    --gray-a7: oklch(0% 0 0 / 0.17);
-    --gray-a8: oklch(0% 0 0 / 0.24);
-    --gray-a9: oklch(0% 0 0 / 0.4);
-    --gray-a10: oklch(0% 0 0 / 0.45);
-    --gray-a11: oklch(0% 0 0 / 0.55);
-    --gray-a12: oklch(0% 0 0 / 0.85);
+	--gray-a1: oklch(0% 0 0 / 0.02);
+	--gray-a2: oklch(0% 0 0 / 0.04);
+	--gray-a3: oklch(0% 0 0 / 0.06);
+	--gray-a4: oklch(0% 0 0 / 0.08);
+	--gray-a5: oklch(0% 0 0 / 0.1);
+	--gray-a6: oklch(0% 0 0 / 0.13);
+	--gray-a7: oklch(0% 0 0 / 0.17);
+	--gray-a8: oklch(0% 0 0 / 0.24);
+	--gray-a9: oklch(0% 0 0 / 0.4);
+	--gray-a10: oklch(0% 0 0 / 0.45);
+	--gray-a11: oklch(0% 0 0 / 0.55);
+	--gray-a12: oklch(0% 0 0 / 0.85);
 
-    --shadow-s: 0px 8px 16px 0px oklch(20% 0.019 266 / 0.04);
+	--shadow-s: 0px 8px 16px 0px oklch(20% 0.019 266 / 0.04);
 
-    /* Elevation for floating surfaces (popover, menu). Layered: a tight
+	/* Elevation for floating surfaces (popover, menu). Layered: a tight
      * contact shadow, two soft ambient spreads, and a faint inset top
      * highlight so the surface catches light from above. */
-    --shadow-overlay:
-        0 1px 2px oklch(20% 0.02 266 / 0.06),
-        0 8px 20px -6px oklch(20% 0.02 266 / 0.12),
-        0 24px 48px -12px oklch(20% 0.02 266 / 0.14),
-        inset 0 1px 0 oklch(100% 0 0 / 0.7);
+	--shadow-overlay:
+		0 1px 2px oklch(20% 0.02 266 / 0.06),
+		0 8px 20px -6px oklch(20% 0.02 266 / 0.12),
+		0 24px 48px -12px oklch(20% 0.02 266 / 0.14),
+		inset 0 1px 0 oklch(100% 0 0 / 0.7);
 
-    /* Overshoot ("back-out") curve for enter transforms — a restrained
+	/* Overshoot ("back-out") curve for enter transforms — a restrained
      * bounce that still reads as springy. */
-    --ease-spring-out: cubic-bezier(0.34, 1.56, 0.64, 1);
+	--ease-spring-out: cubic-bezier(0.34, 1.56, 0.64, 1);
 
-    /* Strong ease-out for UI that enters, exits, or answers a press. The
+	/* Strong ease-out for UI that enters, exits, or answers a press. The
      * built-in CSS easings are too weak to read as deliberate.
      *
      * Deliberately not named --ease-out: Tailwind v4 ships --ease-out and
      * --ease-in-out as theme variables, so redefining those names here would
      * silently retarget every `ease-out` utility in the app. */
-    --ease-snappy: cubic-bezier(0.23, 1, 0.32, 1);
+	--ease-snappy: cubic-bezier(0.23, 1, 0.32, 1);
 
-    /* Strong ease-in-out, for elements moving between two on-screen positions
+	/* Strong ease-in-out, for elements moving between two on-screen positions
      * rather than entering or leaving. */
-    --ease-smooth: cubic-bezier(0.77, 0, 0.175, 1);
+	--ease-smooth: cubic-bezier(0.77, 0, 0.175, 1);
 }
 
 /* Dark theme variables */
 :root.dark {
-    color-scheme: dark;
-    --gray-50: oklch(17.8% 0 0);
-    --gray-100: oklch(22.6% 0 0);
-    --gray-200: oklch(27.7% 0 0);
-    --gray-300: oklch(31.7% 0 0);
-    --gray-400: oklch(70.9% 0 0);
-    --gray-450: oklch(93.7% 0 0);
-    --gray-500: oklch(100% 0 0);
+	color-scheme: dark;
+	--gray-50: oklch(17.8% 0 0);
+	--gray-100: oklch(22.6% 0 0);
+	--gray-200: oklch(27.7% 0 0);
+	--gray-300: oklch(31.7% 0 0);
+	--gray-400: oklch(70.9% 0 0);
+	--gray-450: oklch(93.7% 0 0);
+	--gray-500: oklch(100% 0 0);
 
-    --gray-50-transparent-50: oklch(17.8% 0 0 / 0.5);
-    --gray-100-transparent-50: oklch(22.6% 0 0 / 0.5);
-    --gray-200-transparent-50: oklch(27.7% 0 0 / 0.5);
-    --gray-300-transparent-50: oklch(31.7% 0 0 / 0.5);
-    --gray-400-transparent-50: oklch(70.9% 0 0 / 0.5);
-    --gray-450-transparent-50: oklch(93.7% 0 0 / 0.5);
-    --gray-500-transparent-50: oklch(100% 0 0 / 0.5);
+	--gray-50-transparent-50: oklch(17.8% 0 0 / 0.5);
+	--gray-100-transparent-50: oklch(22.6% 0 0 / 0.5);
+	--gray-200-transparent-50: oklch(27.7% 0 0 / 0.5);
+	--gray-300-transparent-50: oklch(31.7% 0 0 / 0.5);
+	--gray-400-transparent-50: oklch(70.9% 0 0 / 0.5);
+	--gray-450-transparent-50: oklch(93.7% 0 0 / 0.5);
+	--gray-500-transparent-50: oklch(100% 0 0 / 0.5);
 
-    --transparent-window: oklch(22.6% 0 0 / 0.85);
+	--transparent-window: oklch(22.6% 0 0 / 0.85);
 
-    --text-primary: oklch(100% 0 0 / 0.95);
-    --text-secondary: oklch(100% 0 0 / 0.85);
-    --text-tertiary: oklch(100% 0 0 / 0.65);
+	--text-primary: oklch(100% 0 0 / 0.95);
+	--text-secondary: oklch(100% 0 0 / 0.85);
+	--text-tertiary: oklch(100% 0 0 / 0.65);
 
-    --black-transparent-5: oklch(100% 0 0 / 0.05);
-    --black-transparent-10: oklch(100% 0 0 / 0.1);
-    --black-transparent-20: oklch(100% 0 0 / 0.2);
-    --black-transparent-40: oklch(100% 0 0 / 0.4);
-    --black-transparent-60: oklch(100% 0 0 / 0.6);
-    --black-transparent-80: oklch(100% 0 0 / 0.8);
+	--black-transparent-5: oklch(100% 0 0 / 0.05);
+	--black-transparent-10: oklch(100% 0 0 / 0.1);
+	--black-transparent-20: oklch(100% 0 0 / 0.2);
+	--black-transparent-40: oklch(100% 0 0 / 0.4);
+	--black-transparent-60: oklch(100% 0 0 / 0.6);
+	--black-transparent-80: oklch(100% 0 0 / 0.8);
 
-    --white-transparent-5: oklch(20% 0.019 266 / 0.05);
-    --white-transparent-10: oklch(20% 0.019 266 / 0.1);
-    --white-transparent-20: oklch(20% 0.019 266 / 0.2);
-    --white-transparent-40: oklch(20% 0.019 266 / 0.4);
-    --white-transparent-60: oklch(20% 0.019 266 / 0.6);
-    --white-transparent-80: oklch(20% 0.019 266 / 0.8);
+	--white-transparent-5: oklch(20% 0.019 266 / 0.05);
+	--white-transparent-10: oklch(20% 0.019 266 / 0.1);
+	--white-transparent-20: oklch(20% 0.019 266 / 0.2);
+	--white-transparent-40: oklch(20% 0.019 266 / 0.4);
+	--white-transparent-60: oklch(20% 0.019 266 / 0.6);
+	--white-transparent-80: oklch(20% 0.019 266 / 0.8);
 
-    --solid-white: oklch(100% 0 0);
+	--solid-white: oklch(100% 0 0);
 
-    /* Dark accent ramp — its own curve, not light's reversed. Step 400 holds
+	/* Dark accent ramp — its own curve, not light's reversed. Step 400 holds
      * the identical brand value so #F38020 is literally the same colour in
      * both themes; below it the steps descend to a near-black warm tint that
      * sits just above --gray-1, above it they climb to a pale wash used for
      * text. See the light-mode block for the full rationale. */
-    --accent-50: oklch(23% 0.03 47);
-    --accent-100: oklch(31% 0.055 48.5);
-    --accent-200: oklch(42% 0.09 50);
-    --accent-300: oklch(56% 0.14 52);
-    --accent-400: oklch(71.6% 0.171 53.4); /* brand — #F38020, same as light */
-    --accent-500: oklch(76.5% 0.15 55);
-    --accent-600: oklch(81.5% 0.11 57);
-    --accent-700: oklch(86.5% 0.084 59);
-    --accent-800: oklch(90.5% 0.06 61);
-    --accent-900: oklch(94.2% 0.038 63);
-    --accent-950: oklch(97.4% 0.016 65);
+	--accent-50: oklch(23% 0.03 47);
+	--accent-100: oklch(31% 0.055 48.5);
+	--accent-200: oklch(42% 0.09 50);
+	--accent-300: oklch(56% 0.14 52);
+	--accent-400: oklch(71.6% 0.171 53.4); /* brand — #F38020, same as light */
+	--accent-500: oklch(76.5% 0.15 55);
+	--accent-600: oklch(81.5% 0.11 57);
+	--accent-700: oklch(86.5% 0.084 59);
+	--accent-800: oklch(90.5% 0.06 61);
+	--accent-900: oklch(94.2% 0.038 63);
+	--accent-950: oklch(97.4% 0.016 65);
 
-    /* Same roles, dark-appropriate steps. Only three differ from light:
+	/* Same roles, dark-appropriate steps. Only three differ from light:
      * border-selected (400 — already 7.1:1 here, no need to darken),
      * solid-active (300, so a press still darkens against a light solid),
      * and focus-ring (400, for the same reason as border-selected). */
-    --accent-surface: var(--accent-50);
-    --accent-surface-hover: var(--accent-100);
-    --accent-border: var(--accent-200);
-    --accent-border-selected: var(--accent-400);
-    --accent-solid: var(--accent-400);
-    --accent-solid-hover: var(--accent-500);
-    --accent-solid-active: var(--accent-300);
-    --accent-text: var(--accent-700);
-    --accent-text-strong: var(--accent-800);
-    --accent-focus-ring: var(--accent-400);
+	--accent-surface: var(--accent-50);
+	--accent-surface-hover: var(--accent-100);
+	--accent-border: var(--accent-200);
+	--accent-border-selected: var(--accent-400);
+	--accent-solid: var(--accent-400);
+	--accent-solid-hover: var(--accent-500);
+	--accent-solid-active: var(--accent-300);
+	--accent-text: var(--accent-700);
+	--accent-text-strong: var(--accent-800);
+	--accent-focus-ring: var(--accent-400);
 
-    /* Unchanged from light on purpose — it sits on the same brand orange. */
-    --accent-on-solid: oklch(24% 0.05 45);
+	/* Unchanged from light on purpose — it sits on the same brand orange. */
+	--accent-on-solid: oklch(24% 0.05 45);
 
-    --accent-transparent-0: oklch(71.6% 0.171 53.4 / 0);
-    --accent-transparent-10: oklch(71.6% 0.171 53.4 / 0.1);
-    --accent-transparent-20: oklch(71.6% 0.171 53.4 / 0.2);
+	--accent-transparent-0: oklch(71.6% 0.171 53.4 / 0);
+	--accent-transparent-10: oklch(71.6% 0.171 53.4 / 0.1);
+	--accent-transparent-20: oklch(71.6% 0.171 53.4 / 0.2);
 
-    --red-50: oklch(24.3% 0.029 4.9);
-    --red-100: oklch(32.6% 0.071 9.8);
-    --red-200: oklch(38.5% 0.091 9.5);
-    --red-300: oklch(67.2% 0.219 16.1);
-    --red-400: oklch(69.7% 0.198 12.9);
+	--red-50: oklch(24.3% 0.029 4.9);
+	--red-100: oklch(32.6% 0.071 9.8);
+	--red-200: oklch(38.5% 0.091 9.5);
+	--red-300: oklch(67.2% 0.219 16.1);
+	--red-400: oklch(69.7% 0.198 12.9);
 
-    --red-transparent-20: oklch(67.2% 0.219 16.1 / 0.2);
+	--red-transparent-20: oklch(67.2% 0.219 16.1 / 0.2);
 
-    /* Dark-mode ramps: lightness curve inverted from light mode (dark
+	/* Dark-mode ramps: lightness curve inverted from light mode (dark
      * backgrounds, bright text), chroma raised slightly so hues stay
      * visible against a dark backdrop. Step 9 ("solid") kept close to the
      * light-mode value on purpose, same as --accent-300 above, so a brand-
      * adjacent color doesn't shift hue between themes. */
-    --red-1: oklch(15% 0.02 16);
-    --red-2: oklch(19% 0.04 16);
-    --red-3: oklch(23% 0.06 16);
-    --red-4: oklch(27% 0.08 16);
-    --red-5: oklch(32% 0.11 16);
-    --red-6: oklch(38% 0.14 16);
-    --red-7: oklch(45% 0.17 16);
-    --red-8: oklch(54% 0.2 16);
-    --red-9: oklch(67.2% 0.219 16.1);
-    --red-10: oklch(69.7% 0.198 12.9);
-    --red-11: oklch(80% 0.15 16);
-    --red-12: oklch(92% 0.04 16);
+	--red-1: oklch(15% 0.02 16);
+	--red-2: oklch(19% 0.04 16);
+	--red-3: oklch(23% 0.06 16);
+	--red-4: oklch(27% 0.08 16);
+	--red-5: oklch(32% 0.11 16);
+	--red-6: oklch(38% 0.14 16);
+	--red-7: oklch(45% 0.17 16);
+	--red-8: oklch(54% 0.2 16);
+	--red-9: oklch(67.2% 0.219 16.1);
+	--red-10: oklch(69.7% 0.198 12.9);
+	--red-11: oklch(80% 0.15 16);
+	--red-12: oklch(92% 0.04 16);
 
-    --blue-1: oklch(16% 0.025 250);
-    --blue-2: oklch(20% 0.04 250);
-    --blue-3: oklch(24% 0.06 250);
-    --blue-4: oklch(28% 0.08 250);
-    --blue-5: oklch(33% 0.1 250);
-    --blue-6: oklch(39% 0.12 250);
-    --blue-7: oklch(46% 0.14 250);
-    --blue-8: oklch(55% 0.16 250);
-    --blue-9: oklch(65% 0.17 250);
-    --blue-10: oklch(70% 0.16 250);
-    --blue-11: oklch(80% 0.1 250);
-    --blue-12: oklch(92% 0.04 250);
+	--blue-1: oklch(16% 0.025 250);
+	--blue-2: oklch(20% 0.04 250);
+	--blue-3: oklch(24% 0.06 250);
+	--blue-4: oklch(28% 0.08 250);
+	--blue-5: oklch(33% 0.1 250);
+	--blue-6: oklch(39% 0.12 250);
+	--blue-7: oklch(46% 0.14 250);
+	--blue-8: oklch(55% 0.16 250);
+	--blue-9: oklch(65% 0.17 250);
+	--blue-10: oklch(70% 0.16 250);
+	--blue-11: oklch(80% 0.1 250);
+	--blue-12: oklch(92% 0.04 250);
 
-    --blue-50: oklch(30% 0.06 250);
-    --blue-100: oklch(38% 0.1 250);
-    --blue-200: oklch(48% 0.14 250);
-    --blue-300: oklch(65% 0.17 250); /* = --blue-9 */
-    --blue-400: oklch(70% 0.16 250); /* = --blue-10 */
+	--blue-50: oklch(30% 0.06 250);
+	--blue-100: oklch(38% 0.1 250);
+	--blue-200: oklch(48% 0.14 250);
+	--blue-300: oklch(65% 0.17 250); /* = --blue-9 */
+	--blue-400: oklch(70% 0.16 250); /* = --blue-10 */
 
-    --blue-transparent-0: oklch(70% 0.16 250 / 0);
-    --blue-transparent-10: oklch(70% 0.16 250 / 0.1);
-    --blue-transparent-20: oklch(70% 0.16 250 / 0.2);
+	--blue-transparent-0: oklch(70% 0.16 250 / 0);
+	--blue-transparent-10: oklch(70% 0.16 250 / 0.1);
+	--blue-transparent-20: oklch(70% 0.16 250 / 0.2);
 
-    --jade-1: oklch(15% 0.02 155);
-    --jade-2: oklch(19% 0.035 155);
-    --jade-3: oklch(23% 0.05 155);
-    --jade-4: oklch(27% 0.065 155);
-    --jade-5: oklch(32% 0.085 155);
-    --jade-6: oklch(38% 0.1 155);
-    --jade-7: oklch(45% 0.12 155);
-    --jade-8: oklch(54% 0.135 155);
-    --jade-9: oklch(62% 0.145 155);
-    --jade-10: oklch(67% 0.135 155);
-    --jade-11: oklch(78% 0.09 155);
-    --jade-12: oklch(91% 0.035 155);
+	--jade-1: oklch(15% 0.02 155);
+	--jade-2: oklch(19% 0.035 155);
+	--jade-3: oklch(23% 0.05 155);
+	--jade-4: oklch(27% 0.065 155);
+	--jade-5: oklch(32% 0.085 155);
+	--jade-6: oklch(38% 0.1 155);
+	--jade-7: oklch(45% 0.12 155);
+	--jade-8: oklch(54% 0.135 155);
+	--jade-9: oklch(62% 0.145 155);
+	--jade-10: oklch(67% 0.135 155);
+	--jade-11: oklch(78% 0.09 155);
+	--jade-12: oklch(91% 0.035 155);
 
-    --indigo-1: oklch(16% 0.03 275);
-    --indigo-2: oklch(20% 0.045 275);
-    --indigo-3: oklch(24% 0.065 275);
-    --indigo-4: oklch(28% 0.09 275);
-    --indigo-5: oklch(33% 0.11 275);
-    --indigo-6: oklch(39% 0.13 275);
-    --indigo-7: oklch(46% 0.15 275);
-    --indigo-8: oklch(55% 0.17 275);
-    --indigo-9: oklch(64% 0.18 275);
-    --indigo-10: oklch(69% 0.17 275);
-    --indigo-11: oklch(79% 0.11 275);
-    --indigo-12: oklch(91% 0.045 275);
+	--indigo-1: oklch(16% 0.03 275);
+	--indigo-2: oklch(20% 0.045 275);
+	--indigo-3: oklch(24% 0.065 275);
+	--indigo-4: oklch(28% 0.09 275);
+	--indigo-5: oklch(33% 0.11 275);
+	--indigo-6: oklch(39% 0.13 275);
+	--indigo-7: oklch(46% 0.15 275);
+	--indigo-8: oklch(55% 0.17 275);
+	--indigo-9: oklch(64% 0.18 275);
+	--indigo-10: oklch(69% 0.17 275);
+	--indigo-11: oklch(79% 0.11 275);
+	--indigo-12: oklch(91% 0.045 275);
 
-    /* White-based alpha ramp — dark mode's version of --gray-a*. */
-    --gray-a1: oklch(100% 0 0 / 0.03);
-    --gray-a2: oklch(100% 0 0 / 0.06);
-    --gray-a3: oklch(100% 0 0 / 0.09);
-    --gray-a4: oklch(100% 0 0 / 0.11);
-    --gray-a5: oklch(100% 0 0 / 0.14);
-    --gray-a6: oklch(100% 0 0 / 0.17);
-    --gray-a7: oklch(100% 0 0 / 0.21);
-    --gray-a8: oklch(100% 0 0 / 0.28);
-    --gray-a9: oklch(100% 0 0 / 0.45);
-    --gray-a10: oklch(100% 0 0 / 0.5);
-    --gray-a11: oklch(100% 0 0 / 0.62);
-    --gray-a12: oklch(100% 0 0 / 0.9);
+	/* White-based alpha ramp — dark mode's version of --gray-a*. */
+	--gray-a1: oklch(100% 0 0 / 0.03);
+	--gray-a2: oklch(100% 0 0 / 0.06);
+	--gray-a3: oklch(100% 0 0 / 0.09);
+	--gray-a4: oklch(100% 0 0 / 0.11);
+	--gray-a5: oklch(100% 0 0 / 0.14);
+	--gray-a6: oklch(100% 0 0 / 0.17);
+	--gray-a7: oklch(100% 0 0 / 0.21);
+	--gray-a8: oklch(100% 0 0 / 0.28);
+	--gray-a9: oklch(100% 0 0 / 0.45);
+	--gray-a10: oklch(100% 0 0 / 0.5);
+	--gray-a11: oklch(100% 0 0 / 0.62);
+	--gray-a12: oklch(100% 0 0 / 0.9);
 
-    --shadow-s: 0px 8px 16px 0px oklch(0% 0 0 / 0.4);
+	--shadow-s: 0px 8px 16px 0px oklch(0% 0 0 / 0.4);
 
-    --shadow-overlay:
-        0 1px 2px oklch(0% 0 0 / 0.4),
-        0 8px 20px -6px oklch(0% 0 0 / 0.5),
-        0 24px 48px -12px oklch(0% 0 0 / 0.55),
-        inset 0 1px 0 oklch(100% 0 0 / 0.06);
+	--shadow-overlay:
+		0 1px 2px oklch(0% 0 0 / 0.4),
+		0 8px 20px -6px oklch(0% 0 0 / 0.5),
+		0 24px 48px -12px oklch(0% 0 0 / 0.55),
+		inset 0 1px 0 oklch(100% 0 0 / 0.06);
 
-    --gray-1: oklch(17.8% 0 0);
-    --gray-2: oklch(22.6% 0 0);
-    --gray-3: oklch(27.7% 0 0);
-    --gray-4: oklch(31.7% 0 0);
-    --gray-5: oklch(34.8% 0 0);
-    --gray-6: oklch(38.7% 0 0);
-    --gray-7: oklch(42% 0 0);
-    --gray-8: oklch(47.5% 0 0);
-    --gray-9: oklch(53.8% 0 0);
-    --gray-10: oklch(58.6% 0 0);
-    --gray-11: oklch(70.9% 0 0);
-    --gray-12: oklch(94.9% 0 0);
+	--gray-1: oklch(17.8% 0 0);
+	--gray-2: oklch(22.6% 0 0);
+	--gray-3: oklch(27.7% 0 0);
+	--gray-4: oklch(31.7% 0 0);
+	--gray-5: oklch(34.8% 0 0);
+	--gray-6: oklch(38.7% 0 0);
+	--gray-7: oklch(42% 0 0);
+	--gray-8: oklch(47.5% 0 0);
+	--gray-9: oklch(53.8% 0 0);
+	--gray-10: oklch(58.6% 0 0);
+	--gray-11: oklch(70.9% 0 0);
+	--gray-12: oklch(94.9% 0 0);
 }
 
 /* Tailwind v4 only generates utility classes (bg-gray-3, text-accent-300,
@@ -474,148 +473,147 @@
  * value, which is what keeps :root.dark's overrides working (a hard-coded
  * @theme value would freeze at light-mode's value forever). */
 
- 
 @theme inline {
-    --color-gray-1: var(--gray-1);
-    --color-gray-2: var(--gray-2);
-    --color-gray-3: var(--gray-3);
-    --color-gray-4: var(--gray-4);
-    --color-gray-5: var(--gray-5);
-    --color-gray-6: var(--gray-6);
-    --color-gray-7: var(--gray-7);
-    --color-gray-8: var(--gray-8);
-    --color-gray-9: var(--gray-9);
-    --color-gray-10: var(--gray-10);
-    --color-gray-11: var(--gray-11);
-    --color-gray-12: var(--gray-12);
+	--color-gray-1: var(--gray-1);
+	--color-gray-2: var(--gray-2);
+	--color-gray-3: var(--gray-3);
+	--color-gray-4: var(--gray-4);
+	--color-gray-5: var(--gray-5);
+	--color-gray-6: var(--gray-6);
+	--color-gray-7: var(--gray-7);
+	--color-gray-8: var(--gray-8);
+	--color-gray-9: var(--gray-9);
+	--color-gray-10: var(--gray-10);
+	--color-gray-11: var(--gray-11);
+	--color-gray-12: var(--gray-12);
 
-    --color-accent-50: var(--accent-50);
-    --color-accent-100: var(--accent-100);
-    --color-accent-200: var(--accent-200);
-    --color-accent-300: var(--accent-300);
-    --color-accent-400: var(--accent-400);
-    --color-accent-500: var(--accent-500);
-    --color-accent-600: var(--accent-600);
-    --color-accent-700: var(--accent-700);
-    --color-accent-800: var(--accent-800);  
-    --color-accent-900: var(--accent-900);
-    --color-accent-950: var(--accent-950);
+	--color-accent-50: var(--accent-50);
+	--color-accent-100: var(--accent-100);
+	--color-accent-200: var(--accent-200);
+	--color-accent-300: var(--accent-300);
+	--color-accent-400: var(--accent-400);
+	--color-accent-500: var(--accent-500);
+	--color-accent-600: var(--accent-600);
+	--color-accent-700: var(--accent-700);
+	--color-accent-800: var(--accent-800);
+	--color-accent-900: var(--accent-900);
+	--color-accent-950: var(--accent-950);
 
-    /* Role tokens need their own entries here for the same reason the
+	/* Role tokens need their own entries here for the same reason the
      * numbered steps do — without them Tailwind never generates
      * bg-accent-solid / border-accent-border-selected / text-accent-text
      * and the classes silently no-op. */
-    --color-accent-surface: var(--accent-surface);
-    --color-accent-surface-hover: var(--accent-surface-hover);
-    --color-accent-border: var(--accent-border);
-    --color-accent-border-selected: var(--accent-border-selected);
-    --color-accent-solid: var(--accent-solid);
-    --color-accent-solid-hover: var(--accent-solid-hover);
-    --color-accent-solid-active: var(--accent-solid-active);
-    --color-accent-on-solid: var(--accent-on-solid);
-    --color-accent-text: var(--accent-text);
-    --color-accent-text-strong: var(--accent-text-strong);
-    --color-accent-focus-ring: var(--accent-focus-ring);
+	--color-accent-surface: var(--accent-surface);
+	--color-accent-surface-hover: var(--accent-surface-hover);
+	--color-accent-border: var(--accent-border);
+	--color-accent-border-selected: var(--accent-border-selected);
+	--color-accent-solid: var(--accent-solid);
+	--color-accent-solid-hover: var(--accent-solid-hover);
+	--color-accent-solid-active: var(--accent-solid-active);
+	--color-accent-on-solid: var(--accent-on-solid);
+	--color-accent-text: var(--accent-text);
+	--color-accent-text-strong: var(--accent-text-strong);
+	--color-accent-focus-ring: var(--accent-focus-ring);
 
-    --color-accent-transparent-0: var(--accent-transparent-0);
-    --color-accent-transparent-10: var(--accent-transparent-10);
-    --color-accent-transparent-20: var(--accent-transparent-20);
+	--color-accent-transparent-0: var(--accent-transparent-0);
+	--color-accent-transparent-10: var(--accent-transparent-10);
+	--color-accent-transparent-20: var(--accent-transparent-20);
 
-    --color-red-50: var(--red-50);
-    --color-red-100: var(--red-100);
-    --color-red-200: var(--red-200);
-    --color-red-300: var(--red-300);
-    --color-red-400: var(--red-400);
-    --color-red-1: var(--red-1);
-    --color-red-2: var(--red-2);
-    --color-red-3: var(--red-3);
-    --color-red-4: var(--red-4);
-    --color-red-5: var(--red-5);
-    --color-red-6: var(--red-6);
-    --color-red-7: var(--red-7);
-    --color-red-8: var(--red-8);
-    --color-red-9: var(--red-9);
-    --color-red-10: var(--red-10);
-    --color-red-11: var(--red-11);
-    --color-red-12: var(--red-12);
+	--color-red-50: var(--red-50);
+	--color-red-100: var(--red-100);
+	--color-red-200: var(--red-200);
+	--color-red-300: var(--red-300);
+	--color-red-400: var(--red-400);
+	--color-red-1: var(--red-1);
+	--color-red-2: var(--red-2);
+	--color-red-3: var(--red-3);
+	--color-red-4: var(--red-4);
+	--color-red-5: var(--red-5);
+	--color-red-6: var(--red-6);
+	--color-red-7: var(--red-7);
+	--color-red-8: var(--red-8);
+	--color-red-9: var(--red-9);
+	--color-red-10: var(--red-10);
+	--color-red-11: var(--red-11);
+	--color-red-12: var(--red-12);
 
-    --color-blue-1: var(--blue-1);
-    --color-blue-2: var(--blue-2);
-    --color-blue-3: var(--blue-3);
-    --color-blue-4: var(--blue-4);
-    --color-blue-5: var(--blue-5);
-    --color-blue-6: var(--blue-6);
-    --color-blue-7: var(--blue-7);
-    --color-blue-8: var(--blue-8);
-    --color-blue-9: var(--blue-9);
-    --color-blue-10: var(--blue-10);
-    --color-blue-11: var(--blue-11);
-    --color-blue-12: var(--blue-12);
-    --color-blue-50: var(--blue-50);
-    --color-blue-100: var(--blue-100);
-    --color-blue-200: var(--blue-200);
-    --color-blue-300: var(--blue-300);
-    --color-blue-400: var(--blue-400);
+	--color-blue-1: var(--blue-1);
+	--color-blue-2: var(--blue-2);
+	--color-blue-3: var(--blue-3);
+	--color-blue-4: var(--blue-4);
+	--color-blue-5: var(--blue-5);
+	--color-blue-6: var(--blue-6);
+	--color-blue-7: var(--blue-7);
+	--color-blue-8: var(--blue-8);
+	--color-blue-9: var(--blue-9);
+	--color-blue-10: var(--blue-10);
+	--color-blue-11: var(--blue-11);
+	--color-blue-12: var(--blue-12);
+	--color-blue-50: var(--blue-50);
+	--color-blue-100: var(--blue-100);
+	--color-blue-200: var(--blue-200);
+	--color-blue-300: var(--blue-300);
+	--color-blue-400: var(--blue-400);
 
-    /* "emerald" is the public utility-class name; --jade-* is the source
+	/* "emerald" is the public utility-class name; --jade-* is the source
      * variable name, kept as-is from the design this was adapted from. */
-    --color-emerald-1: var(--jade-1);
-    --color-emerald-2: var(--jade-2);
-    --color-emerald-3: var(--jade-3);
-    --color-emerald-4: var(--jade-4);
-    --color-emerald-5: var(--jade-5);
-    --color-emerald-6: var(--jade-6);
-    --color-emerald-7: var(--jade-7);
-    --color-emerald-8: var(--jade-8);
-    --color-emerald-9: var(--jade-9);
-    --color-emerald-10: var(--jade-10);
-    --color-emerald-11: var(--jade-11);
-    --color-emerald-12: var(--jade-12);
+	--color-emerald-1: var(--jade-1);
+	--color-emerald-2: var(--jade-2);
+	--color-emerald-3: var(--jade-3);
+	--color-emerald-4: var(--jade-4);
+	--color-emerald-5: var(--jade-5);
+	--color-emerald-6: var(--jade-6);
+	--color-emerald-7: var(--jade-7);
+	--color-emerald-8: var(--jade-8);
+	--color-emerald-9: var(--jade-9);
+	--color-emerald-10: var(--jade-10);
+	--color-emerald-11: var(--jade-11);
+	--color-emerald-12: var(--jade-12);
 
-    --color-indigo-1: var(--indigo-1);
-    --color-indigo-2: var(--indigo-2);
-    --color-indigo-3: var(--indigo-3);
-    --color-indigo-4: var(--indigo-4);
-    --color-indigo-5: var(--indigo-5);
-    --color-indigo-6: var(--indigo-6);
-    --color-indigo-7: var(--indigo-7);
-    --color-indigo-8: var(--indigo-8);
-    --color-indigo-9: var(--indigo-9);
-    --color-indigo-10: var(--indigo-10);
-    --color-indigo-11: var(--indigo-11);
-    --color-indigo-12: var(--indigo-12);
+	--color-indigo-1: var(--indigo-1);
+	--color-indigo-2: var(--indigo-2);
+	--color-indigo-3: var(--indigo-3);
+	--color-indigo-4: var(--indigo-4);
+	--color-indigo-5: var(--indigo-5);
+	--color-indigo-6: var(--indigo-6);
+	--color-indigo-7: var(--indigo-7);
+	--color-indigo-8: var(--indigo-8);
+	--color-indigo-9: var(--indigo-9);
+	--color-indigo-10: var(--indigo-10);
+	--color-indigo-11: var(--indigo-11);
+	--color-indigo-12: var(--indigo-12);
 
-    --color-gray-a1: var(--gray-a1);
-    --color-gray-a2: var(--gray-a2);
-    --color-gray-a3: var(--gray-a3);
-    --color-gray-a4: var(--gray-a4);
-    --color-gray-a5: var(--gray-a5);
-    --color-gray-a6: var(--gray-a6);
-    --color-gray-a7: var(--gray-a7);
-    --color-gray-a8: var(--gray-a8);
-    --color-gray-a9: var(--gray-a9);
-    --color-gray-a10: var(--gray-a10);
-    --color-gray-a11: var(--gray-a11);
-    --color-gray-a12: var(--gray-a12);
+	--color-gray-a1: var(--gray-a1);
+	--color-gray-a2: var(--gray-a2);
+	--color-gray-a3: var(--gray-a3);
+	--color-gray-a4: var(--gray-a4);
+	--color-gray-a5: var(--gray-a5);
+	--color-gray-a6: var(--gray-a6);
+	--color-gray-a7: var(--gray-a7);
+	--color-gray-a8: var(--gray-a8);
+	--color-gray-a9: var(--gray-a9);
+	--color-gray-a10: var(--gray-a10);
+	--color-gray-a11: var(--gray-a11);
+	--color-gray-a12: var(--gray-a12);
 
-    --color-solid-white: var(--solid-white);
-    --color-transparent-window: var(--transparent-window);
-    --shadow-s: var(--shadow-s);
-    --shadow-overlay: var(--shadow-overlay);
+	--color-solid-white: var(--solid-white);
+	--color-transparent-window: var(--transparent-window);
+	--shadow-s: var(--shadow-s);
+	--shadow-overlay: var(--shadow-overlay);
 
-    --color-black-transparent-5: var(--black-transparent-5);
-    --color-black-transparent-10: var(--black-transparent-10);
-    --color-black-transparent-20: var(--black-transparent-20);
-    --color-black-transparent-40: var(--black-transparent-40);
-    --color-black-transparent-60: var(--black-transparent-60);
-    --color-black-transparent-80: var(--black-transparent-80);
+	--color-black-transparent-5: var(--black-transparent-5);
+	--color-black-transparent-10: var(--black-transparent-10);
+	--color-black-transparent-20: var(--black-transparent-20);
+	--color-black-transparent-40: var(--black-transparent-40);
+	--color-black-transparent-60: var(--black-transparent-60);
+	--color-black-transparent-80: var(--black-transparent-80);
 
-    --color-white-transparent-5: var(--white-transparent-5);
-    --color-white-transparent-10: var(--white-transparent-10);
-    --color-white-transparent-20: var(--white-transparent-20);
-    --color-white-transparent-40: var(--white-transparent-40);
-    --color-white-transparent-60: var(--white-transparent-60);
-    --color-white-transparent-80: var(--white-transparent-80);
+	--color-white-transparent-5: var(--white-transparent-5);
+	--color-white-transparent-10: var(--white-transparent-10);
+	--color-white-transparent-20: var(--white-transparent-20);
+	--color-white-transparent-40: var(--white-transparent-40);
+	--color-white-transparent-60: var(--white-transparent-60);
+	--color-white-transparent-80: var(--white-transparent-80);
 }
 
 /* Static (non-theme-switchable) utilities: animation keyframes. Note Cap's
@@ -623,69 +621,74 @@
  * --kb-collapsible-content-height — that's a SolidJS/Kobalte-specific
  * mechanism, not applicable to Base UI. Skipped rather than ported dead. */
 @theme {
-    /* Points both the `font-sans` utility and Tailwind's document default
+	/* Points both the `font-sans` utility and Tailwind's document default
      * (`--default-font-family` derives from this) at Geist Sans. */
-    --font-sans: "Geist Sans", ui-sans-serif, system-ui, -apple-system,
-        "Segoe UI", sans-serif;
+	--font-sans:
+		"Geist Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+		sans-serif;
 
-    --animate-shimmer: shimmer 2s ease-in-out infinite;
+	--animate-shimmer: shimmer 2s ease-in-out infinite;
 
-    @keyframes shimmer {
-        0% {
-            transform: translateX(-100%);
-        }
-        100% {
-            transform: translateX(100%);
-        }
-    }
+	@keyframes shimmer {
+		0% {
+			transform: translateX(-100%);
+		}
+		100% {
+			transform: translateX(100%);
+		}
+	}
 }
 
 :root {
-    @apply antialiased;
+	@apply antialiased;
 }
 
 /* Family now comes from --font-sans (@theme, above) via Tailwind's
  * --default-font-family. Weight 500 is the app's baseline UI weight;
  * font-medium / font-semibold step up from it for hierarchy. */
 body {
-    font-weight: 500;
+	font-weight: 500;
 }
 
 /* Cap's source hardcoded a literal blue gradient (#3b82f6 → #2563eb) here —
  * swapped to the accent (Cloudflare orange) scale for brand consistency
  * with the rest of this file. */
 .custom-bg {
-    background: linear-gradient(180deg, var(--accent-200) 0%, var(--accent-400) 100%);
+	background: linear-gradient(
+		180deg,
+		var(--accent-200) 0%,
+		var(--accent-400) 100%
+	);
 }
 
 /* Base UI setup requirement: correct popup stacking contexts. */
 :root {
-    isolation: isolate;
+	isolation: isolate;
 }
 body {
-    position: relative;
+	position: relative;
 }
 
 /* Custom scrollbar, used by scrollable component parts (Select popup, Menu
  * popup, Cmdk list, Table body, etc). */
 .custom-scroll {
-    overflow-y: scroll;
+	overflow-y: scroll;
 }
 
 .custom-scroll::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
-    background-color: transparent;
+	width: 4px;
+	height: 4px;
+	background-color: transparent;
 }
 
 .custom-scroll::-webkit-scrollbar-thumb {
-    background-color: var(--gray-6);
-    width: 4px;
-    border-radius: 500px;
+	background-color: var(--gray-6);
+	width: 4px;
+	border-radius: 500px;
 }
 
 .hide-scroll::-webkit-scrollbar {
-    display: none;
+	display: none;
 }
 
 /* Floating-surface open/close (Base UI Popup). Origin-aware — it grows from
@@ -694,48 +697,48 @@ body {
  * overshoot from the trigger. Exit: quicker and calmer, no bounce. CSS
  * transitions (not keyframes) so a fast open→close retargets mid-flight. */
 .ui-popover {
-    transform-origin: var(--transform-origin);
-    transition: opacity 160ms ease-out;
+	transform-origin: var(--transform-origin);
+	transition: opacity 160ms ease-out;
 }
 
 .ui-popover[data-starting-style],
 .ui-popover[data-ending-style] {
-    opacity: 0;
+	opacity: 0;
 }
 
 /* Base UI flags programmatic opens/closes so they skip the animation. */
 .ui-popover[data-instant] {
-    transition-duration: 0s;
+	transition-duration: 0s;
 }
 
 @media (prefers-reduced-motion: no-preference) {
-    .ui-popover {
-        transition:
-            opacity 160ms ease-out,
-            transform 260ms var(--ease-spring-out);
-        will-change: transform, opacity;
-    }
+	.ui-popover {
+		transition:
+			opacity 160ms ease-out,
+			transform 260ms var(--ease-spring-out);
+		will-change: transform, opacity;
+	}
 
-    .ui-popover[data-starting-style] {
-        transform: scale(0.88);
-    }
-    .ui-popover[data-side="top"][data-starting-style] {
-        transform: scale(0.88) translateY(-8px);
-    }
-    .ui-popover[data-side="bottom"][data-starting-style] {
-        transform: scale(0.88) translateY(8px);
-    }
-    .ui-popover[data-side="left"][data-starting-style] {
-        transform: scale(0.88) translateX(-8px);
-    }
-    .ui-popover[data-side="right"][data-starting-style] {
-        transform: scale(0.88) translateX(8px);
-    }
+	.ui-popover[data-starting-style] {
+		transform: scale(0.88);
+	}
+	.ui-popover[data-side="top"][data-starting-style] {
+		transform: scale(0.88) translateY(-8px);
+	}
+	.ui-popover[data-side="bottom"][data-starting-style] {
+		transform: scale(0.88) translateY(8px);
+	}
+	.ui-popover[data-side="left"][data-starting-style] {
+		transform: scale(0.88) translateX(-8px);
+	}
+	.ui-popover[data-side="right"][data-starting-style] {
+		transform: scale(0.88) translateX(8px);
+	}
 
-    .ui-popover[data-ending-style] {
-        transform: scale(0.97);
-        transition:
-            opacity 130ms ease-out,
-            transform 130ms ease-out;
-    }
+	.ui-popover[data-ending-style] {
+		transform: scale(0.97);
+		transition:
+			opacity 130ms ease-out,
+			transform 130ms ease-out;
+	}
 }

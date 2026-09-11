@@ -1437,6 +1437,17 @@ impl Playback {
     }
 }
 
+impl PlaybackHandle {
+    pub fn stop(&self) {
+        self.stop_tx.send(true).ok();
+    }
+
+    pub async fn receive_event(&mut self) -> watch::Ref<'_, PlaybackEvent> {
+        self.event_rx.changed().await.ok();
+        self.event_rx.borrow_and_update()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1457,16 +1468,5 @@ mod tests {
 
         next.cursor.tension += 1.0;
         assert!(cursor_timeline_inputs_changed(&previous, &next));
-    }
-}
-
-impl PlaybackHandle {
-    pub fn stop(&self) {
-        self.stop_tx.send(true).ok();
-    }
-
-    pub async fn receive_event(&mut self) -> watch::Ref<'_, PlaybackEvent> {
-        self.event_rx.changed().await.ok();
-        self.event_rx.borrow_and_update()
     }
 }

@@ -602,7 +602,7 @@ export default function Home() {
 							? "Unfiled"
 							: view.startsWith("folder:")
 								? (state.folders.find((folder) => folder.id === view.slice(7))
-									?.name ?? "Folder")
+										?.name ?? "Folder")
 								: (state.tags.find((tag) => tag.id === view.slice(4))?.name ??
 									"Tag");
 

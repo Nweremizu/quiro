@@ -240,30 +240,28 @@ for (const [name, rect] of RECTS) {
 // 9. An identity transform resolves to `null`, so a capture returned to its
 //    laid-out position takes the renderer's untransformed path again rather
 //    than carrying a no-op matrix for the rest of the project's life.
-{
-	ok("null resolves to null", resolveTransform(null) === null);
-	ok(
-		"an identity transform resolves to null",
-		resolveTransform(IDENTITY_TRANSFORM) === null,
-	);
-	ok(
-		"a transform clamped back to identity resolves to null",
-		resolveTransform({
-			offset: { x: 0, y: 0 },
-			scale: 1,
-			scaleOrigin: { x: 0.5, y: 0.5 },
-			rotation: 720,
-		}) === null,
-	);
-	ok(
-		"a real transform survives resolution",
-		resolveTransform({ ...IDENTITY_TRANSFORM, scale: 1.5 })?.scale === 1.5,
-	);
-	ok(
-		"isIdentityTransform agrees with the constant",
-		isIdentityTransform(IDENTITY_TRANSFORM),
-	);
-}
+ok("null resolves to null", resolveTransform(null) === null);
+ok(
+	"an identity transform resolves to null",
+	resolveTransform(IDENTITY_TRANSFORM) === null,
+);
+ok(
+	"a transform clamped back to identity resolves to null",
+	resolveTransform({
+		offset: { x: 0, y: 0 },
+		scale: 1,
+		scaleOrigin: { x: 0.5, y: 0.5 },
+		rotation: 720,
+	}) === null,
+);
+ok(
+	"a real transform survives resolution",
+	resolveTransform({ ...IDENTITY_TRANSFORM, scale: 1.5 })?.scale === 1.5,
+);
+ok(
+	"isIdentityTransform agrees with the constant",
+	isIdentityTransform(IDENTITY_TRANSFORM),
+);
 
 // 10. A flat capture emits no SVG transform at all, rather than an identity
 //     one — some compositors promote any transformed group to its own layer.
@@ -473,73 +471,71 @@ for (const [name, rect] of RECTS) {
 //     was given. If the two disagree, clicks land on the wrong pixel — and the
 //     error grows with the transform, so a heavily scaled or spun capture
 //     becomes the hardest one to grab.
-{
-	for (const [name, rect] of RECTS) {
-		for (const transform of [
-			{
-				offset: { x: 0.2, y: -0.1 },
-				scale: 1,
-				scaleOrigin: { x: 0.5, y: 0.5 },
-				rotation: 0,
-			},
-			{
-				offset: { x: 0, y: 0 },
-				scale: 2.5,
-				scaleOrigin: { x: 0.5, y: 0.5 },
-				rotation: 0,
-			},
-			{
-				offset: { x: -0.3, y: 0.25 },
-				scale: 0.6,
-				scaleOrigin: { x: 0.5, y: 0.5 },
-				rotation: 35,
-			},
-			{
-				offset: { x: 0.4, y: 0.4 },
-				scale: 1.8,
-				scaleOrigin: { x: 0.5, y: 0.5 },
-				rotation: -120,
-			},
+for (const [name, rect] of RECTS) {
+	for (const transform of [
+		{
+			offset: { x: 0.2, y: -0.1 },
+			scale: 1,
+			scaleOrigin: { x: 0.5, y: 0.5 },
+			rotation: 0,
+		},
+		{
+			offset: { x: 0, y: 0 },
+			scale: 2.5,
+			scaleOrigin: { x: 0.5, y: 0.5 },
+			rotation: 0,
+		},
+		{
+			offset: { x: -0.3, y: 0.25 },
+			scale: 0.6,
+			scaleOrigin: { x: 0.5, y: 0.5 },
+			rotation: 35,
+		},
+		{
+			offset: { x: 0.4, y: 0.4 },
+			scale: 1.8,
+			scaleOrigin: { x: 0.5, y: 0.5 },
+			rotation: -120,
+		},
+	]) {
+		const centre = rectCentre(rect);
+		const translate = {
+			x: transform.offset.x * CANVAS.width,
+			y: transform.offset.y * CANVAS.height,
+		};
+		const radians = (transform.rotation * Math.PI) / 180;
+		const cos = Math.cos(radians);
+		const sin = Math.sin(radians);
+
+		// Forward: what `cardLayerPlacement` tells the browser to do —
+		// rotate, scale, translate, all about the laid-out centre.
+		const forward = (point: { x: number; y: number }) => {
+			const dx = (point.x - centre.x) * transform.scale;
+			const dy = (point.y - centre.y) * transform.scale;
+			return {
+				x: centre.x + dx * cos - dy * sin + translate.x,
+				y: centre.y + dx * sin + dy * cos + translate.y,
+			};
+		};
+
+		for (const probe of [
+			{ x: rect.x, y: rect.y },
+			{ x: rect.x + rect.width, y: rect.y + rect.height },
+			{ x: centre.x, y: centre.y },
+			{ x: rect.x + 13, y: rect.y + rect.height - 7 },
 		]) {
-			const centre = rectCentre(rect);
-			const translate = {
-				x: transform.offset.x * CANVAS.width,
-				y: transform.offset.y * CANVAS.height,
-			};
-			const radians = (transform.rotation * Math.PI) / 180;
-			const cos = Math.cos(radians);
-			const sin = Math.sin(radians);
-
-			// Forward: what `cardLayerPlacement` tells the browser to do —
-			// rotate, scale, translate, all about the laid-out centre.
-			const forward = (point: { x: number; y: number }) => {
-				const dx = (point.x - centre.x) * transform.scale;
-				const dy = (point.y - centre.y) * transform.scale;
-				return {
-					x: centre.x + dx * cos - dy * sin + translate.x,
-					y: centre.y + dx * sin + dy * cos + translate.y,
-				};
-			};
-
-			for (const probe of [
-				{ x: rect.x, y: rect.y },
-				{ x: rect.x + rect.width, y: rect.y + rect.height },
-				{ x: centre.x, y: centre.y },
-				{ x: rect.x + 13, y: rect.y + rect.height - 7 },
-			]) {
-				const roundTrip = frameToCardPoint(
-					forward(probe),
-					transform,
-					rect,
-					CANVAS,
-					transform.rotation,
-				);
-				ok(
-					`${name} round-trips through the placement at scale ${transform.scale} / ${transform.rotation}deg`,
-					near(roundTrip.x, probe.x, 1e-6) && near(roundTrip.y, probe.y, 1e-6),
-					`${roundTrip.x},${roundTrip.y} vs ${probe.x},${probe.y}`,
-				);
-			}
+			const roundTrip = frameToCardPoint(
+				forward(probe),
+				transform,
+				rect,
+				CANVAS,
+				transform.rotation,
+			);
+			ok(
+				`${name} round-trips through the placement at scale ${transform.scale} / ${transform.rotation}deg`,
+				near(roundTrip.x, probe.x, 1e-6) && near(roundTrip.y, probe.y, 1e-6),
+				`${roundTrip.x},${roundTrip.y} vs ${probe.x},${probe.y}`,
+			);
 		}
 	}
 }

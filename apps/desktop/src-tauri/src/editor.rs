@@ -124,6 +124,14 @@ impl EditorPaths {
     }
 }
 
+/// `(sender, receiver, offered_counter, dropped_counter)`.
+type PreviewEncoderHandles = (
+    flume::Sender<Arc<WSFrame>>,
+    flume::Receiver<Arc<WSFrame>>,
+    Arc<std::sync::atomic::AtomicU64>,
+    Arc<std::sync::atomic::AtomicU64>,
+);
+
 /// Encodes preview frames on a thread of their own and republishes them.
 ///
 /// Encoding is blocking CPU work, so it must not run on the render callback
@@ -133,14 +141,7 @@ impl EditorPaths {
 /// The queue holds one frame and drops rather than blocking, matching the
 /// `watch` channel downstream: a live preview wants the newest frame, not a
 /// backlog. All-intra encoding makes those drops harmless.
-fn spawn_preview_encoder(
-    frame_tx: watch::Sender<Option<Arc<WSFrame>>>,
-) -> (
-    flume::Sender<Arc<WSFrame>>,
-    flume::Receiver<Arc<WSFrame>>,
-    Arc<std::sync::atomic::AtomicU64>,
-    Arc<std::sync::atomic::AtomicU64>,
-) {
+fn spawn_preview_encoder(frame_tx: watch::Sender<Option<Arc<WSFrame>>>) -> PreviewEncoderHandles {
     use std::sync::atomic::{AtomicU64, Ordering};
 
     let (raw_tx, raw_rx) = flume::bounded::<Arc<WSFrame>>(1);

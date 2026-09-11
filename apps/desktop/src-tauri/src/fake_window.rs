@@ -72,13 +72,6 @@ impl FakeWindowListeners {
         }
     }
 
-    pub fn cancel(&self, label: &str) {
-        let mut guard = self.tokens.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(entry) = guard.remove(label) {
-            entry.token.cancel();
-        }
-    }
-
     pub fn cancel_all(&self) {
         let mut guard = self.tokens.lock().unwrap_or_else(|e| e.into_inner());
         for (_, entry) in guard.drain() {
@@ -510,12 +503,6 @@ pub fn spawn_fake_window_listener(app: AppHandle, window: WebviewWindow) {
             map.remove(&label);
         }
     });
-}
-
-pub fn cancel_fake_window_listener(app: &AppHandle, label: &str) {
-    if let Some(listeners) = app.try_state::<FakeWindowListeners>() {
-        listeners.cancel(label);
-    }
 }
 
 pub fn cancel_all_fake_window_listeners(app: &AppHandle) {

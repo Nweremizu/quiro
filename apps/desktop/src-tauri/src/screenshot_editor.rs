@@ -1,10 +1,7 @@
 use crate::frame_ws::{WSFrame, create_watch_frame_ws};
 use crate::gpu_context;
-use crate::gpu_context::PendingScreenshots;
 use crate::windows::WindowId;
-use image::{
-    GenericImageView, ImageEncoder, RgbImage, buffer::ConvertBuffer, codecs::png::PngEncoder,
-};
+use image::{GenericImageView, ImageEncoder, codecs::png::PngEncoder};
 use quiro_project::{
     ProjectConfiguration, RecordingMeta, RecordingMetaInner, SingleSegment, StudioRecordingMeta,
     TextContent, VideoMeta,
@@ -238,7 +235,6 @@ impl<'de, R: Runtime> CommandArg<'de, R> for WindowScreenshotEditorInstance {
 
 impl ScreenshotEditorInstances {
     async fn create_standalone_instance(
-        app_handle: &AppHandle,
         path: PathBuf,
     ) -> Result<Arc<ScreenshotEditorInstance>, String> {
         let create_started = Instant::now();
@@ -261,84 +257,38 @@ impl ScreenshotEditorInstances {
         }
 
         let (data, width, height) = {
-            let key = path
-                .parent()
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_default();
-            let pending = app_handle.try_state::<PendingScreenshots>();
-            let pending_frame = pending.and_then(|p| p.remove(&key));
-
-            if let Some(frame) = pending_frame {
-                let width = frame.width;
-                let height = frame.height;
-                let channels = frame.channels;
-
-                if width > MAX_DIMENSION || height > MAX_DIMENSION {
-                    return Err(format!("Image dimensions exceed maximum: {width}x{height}"));
-                }
-
-                let expected_len = width
-                    .checked_mul(height)
-                    .and_then(|p| p.checked_mul(channels))
-                    .ok_or_else(|| format!("Image dimensions overflow: {width}x{height}"))?;
-                let expected_len = usize::try_from(expected_len)
-                    .map_err(|_| format!("Image size too large: {width}x{height}"))?;
-
-                let data = frame.data;
-
-                if data.len() != expected_len {
-                    return Err(format!(
-                        "Image data length mismatch: expected {expected_len} bytes for {width}x{height}x{channels} frame, got {}",
-                        data.len()
-                    ));
-                }
-
-                let rgba_data = if channels == 4 {
-                    let rgba_img = image::RgbaImage::from_raw(width, height, data)
-                        .ok_or_else(|| format!("Invalid RGBA data for {width}x{height} frame"))?;
-                    rgba_img.into_raw()
+            let image_path = if path.is_dir() {
+                let original = path.join("original.png");
+                if original.exists() {
+                    original
                 } else {
-                    let rgb_img = RgbImage::from_raw(width, height, data)
-                        .ok_or_else(|| format!("Invalid RGB data for {width}x{height} frame"))?;
-                    let rgba_img: image::RgbaImage = rgb_img.convert();
-                    rgba_img.into_raw()
-                };
-                (rgba_data, width, height)
+                    std::fs::read_dir(&path)
+                        .ok()
+                        .and_then(|dir| {
+                            dir.flatten()
+                                .find(|e| {
+                                    e.path().extension().and_then(|s| s.to_str()) == Some("png")
+                                })
+                                .map(|e| e.path())
+                        })
+                        .ok_or_else(|| format!("No PNG file found in directory: {path:?}"))?
+                }
             } else {
-                let image_path = if path.is_dir() {
-                    let original = path.join("original.png");
-                    if original.exists() {
-                        original
-                    } else {
-                        std::fs::read_dir(&path)
-                            .ok()
-                            .and_then(|dir| {
-                                dir.flatten()
-                                    .find(|e| {
-                                        e.path().extension().and_then(|s| s.to_str()) == Some("png")
-                                    })
-                                    .map(|e| e.path())
-                            })
-                            .ok_or_else(|| format!("No PNG file found in directory: {path:?}"))?
-                    }
-                } else {
-                    path.clone()
-                };
+                path.clone()
+            };
 
-                let img =
-                    image::open(&image_path).map_err(|e| format!("Failed to open image: {e}"))?;
-                let (w, h) = img.dimensions();
+            let img = image::open(&image_path).map_err(|e| format!("Failed to open image: {e}"))?;
+            let (w, h) = img.dimensions();
 
-                if w > MAX_DIMENSION || h > MAX_DIMENSION {
-                    return Err(format!("Image dimensions exceed maximum: {w}x{h}"));
-                }
-
-                w.checked_mul(h)
-                    .and_then(|p| p.checked_mul(4))
-                    .ok_or_else(|| format!("Image dimensions overflow: {w}x{h}"))?;
-
-                (img.to_rgba8().into_raw(), w, h)
+            if w > MAX_DIMENSION || h > MAX_DIMENSION {
+                return Err(format!("Image dimensions exceed maximum: {w}x{h}"));
             }
+
+            w.checked_mul(h)
+                .and_then(|p| p.checked_mul(4))
+                .ok_or_else(|| format!("Image dimensions overflow: {w}x{h}"))?;
+
+            (img.to_rgba8().into_raw(), w, h)
         };
 
         tracing::info!(
@@ -765,7 +715,7 @@ impl ScreenshotEditorInstances {
                     }
                 }
 
-                let instance = Self::create_standalone_instance(window.app_handle(), path).await?;
+                let instance = Self::create_standalone_instance(path).await?;
                 entry.insert(instance.clone());
                 Ok(instance)
             }
@@ -828,7 +778,6 @@ impl PendingScreenshotEditorInstances {
 
     pub async fn start_prewarm(app: &AppHandle, window_label: String, path: PathBuf) {
         let pending = Self::get(app);
-        let app = app.clone();
 
         {
             let instances = pending.0.read().await;
@@ -845,7 +794,7 @@ impl PendingScreenshotEditorInstances {
         }
 
         tokio::spawn(async move {
-            let result = ScreenshotEditorInstances::create_standalone_instance(&app, path).await;
+            let result = ScreenshotEditorInstances::create_standalone_instance(path).await;
             tx.send(Some(result)).ok();
         });
     }
@@ -1402,35 +1351,6 @@ pub async fn recognize_screenshot_text(
     Ok(result)
 }
 
-pub async fn recognize_text_from_image_path(path: &std::path::Path) -> Result<String, String> {
-    let dynamic = image::open(path).map_err(|e| format!("Failed to open image for OCR: {e}"))?;
-    let rgba = dynamic.to_rgba8();
-    let width = rgba.width();
-    let height = rgba.height();
-
-    if width == 0 || height == 0 {
-        return Err("Image is empty".to_string());
-    }
-
-    let rgba_bytes = rgba.into_raw();
-    let mut bgra = vec![0u8; rgba_bytes.len()];
-    for (src, dst) in rgba_bytes.chunks_exact(4).zip(bgra.chunks_exact_mut(4)) {
-        dst[0] = src[2];
-        dst[1] = src[1];
-        dst[2] = src[0];
-        dst[3] = src[3];
-    }
-
-    let image = ScreenshotOcrImage {
-        bgra,
-        width,
-        height,
-    };
-
-    let result = recognize_screenshot_ocr_image(image).await?;
-    Ok(result.text)
-}
-
 fn clamp_screenshot_ocr_region(
     region: ScreenshotOcrRegion,
     image_width: u32,
@@ -1879,10 +1799,9 @@ pub async fn render_screenshot_for_export(
 #[tauri::command]
 #[specta::specta]
 pub async fn render_screenshot_project_for_export(
-    app: AppHandle,
     path: PathBuf,
 ) -> Result<ScreenshotProjectExport, String> {
-    let instance = ScreenshotEditorInstances::create_standalone_instance(&app, path).await?;
+    let instance = ScreenshotEditorInstances::create_standalone_instance(path).await?;
     let config = instance.config_tx.borrow().config.clone();
     let image_width = instance.image_width;
     let image_height = instance.image_height;

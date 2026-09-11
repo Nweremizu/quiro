@@ -531,60 +531,6 @@ pub async fn create_frame_ws(frame_tx: broadcast::Sender<WSFrame>) -> (u16, Canc
     (port, cancel_token_child)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn frame(format: WSFrameFormat) -> WSFrame {
-        WSFrame {
-            data: Arc::new(vec![1, 2, 3, 4, 5, 6]),
-            width: 2,
-            height: 2,
-            stride: 2,
-            frame_number: 7,
-            target_time_ns: 8,
-            format,
-            created_at: Instant::now(),
-        }
-    }
-
-    #[test]
-    fn packs_rgba_frame_with_legacy_metadata_shape() {
-        let packed = pack_ws_frame(&frame(WSFrameFormat::Rgba));
-
-        assert_eq!(packed.len(), 30);
-        assert_eq!(&packed[..6], &[1, 2, 3, 4, 5, 6]);
-        assert_eq!(u32::from_le_bytes(packed[6..10].try_into().unwrap()), 2);
-        assert_eq!(u32::from_le_bytes(packed[18..22].try_into().unwrap()), 7);
-        assert_eq!(u64::from_le_bytes(packed[22..30].try_into().unwrap()), 8);
-    }
-
-    #[test]
-    fn packs_nv12_frame_with_video_range_marker() {
-        let packed = pack_ws_frame(&frame(WSFrameFormat::Nv12 { full_range: false }));
-
-        assert_eq!(packed.len(), 34);
-        assert_eq!(
-            u32::from_le_bytes(packed[30..34].try_into().unwrap()),
-            NV12_VIDEO_FORMAT_MAGIC
-        );
-    }
-
-    #[test]
-    fn subscriber_guard_decrements_both_counts() {
-        let subscribers = Arc::new(AtomicUsize::new(1));
-        let instant_subscribers = Arc::new(AtomicUsize::new(1));
-
-        drop(SubscriberCountGuard {
-            subscribers: subscribers.clone(),
-            instant_subscribers: Some(instant_subscribers.clone()),
-        });
-
-        assert_eq!(subscribers.load(Ordering::Acquire), 0);
-        assert_eq!(instant_subscribers.load(Ordering::Acquire), 0);
-    }
-}
-
 /// A frame socket for sequential streaming rather than scrubbing.
 ///
 /// The preview socket is built on a `watch` channel: last value wins, stale
@@ -690,4 +636,58 @@ pub async fn create_stream_frame_ws(
     });
 
     (port, token)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn frame(format: WSFrameFormat) -> WSFrame {
+        WSFrame {
+            data: Arc::new(vec![1, 2, 3, 4, 5, 6]),
+            width: 2,
+            height: 2,
+            stride: 2,
+            frame_number: 7,
+            target_time_ns: 8,
+            format,
+            created_at: Instant::now(),
+        }
+    }
+
+    #[test]
+    fn packs_rgba_frame_with_legacy_metadata_shape() {
+        let packed = pack_ws_frame(&frame(WSFrameFormat::Rgba));
+
+        assert_eq!(packed.len(), 30);
+        assert_eq!(&packed[..6], &[1, 2, 3, 4, 5, 6]);
+        assert_eq!(u32::from_le_bytes(packed[6..10].try_into().unwrap()), 2);
+        assert_eq!(u32::from_le_bytes(packed[18..22].try_into().unwrap()), 7);
+        assert_eq!(u64::from_le_bytes(packed[22..30].try_into().unwrap()), 8);
+    }
+
+    #[test]
+    fn packs_nv12_frame_with_video_range_marker() {
+        let packed = pack_ws_frame(&frame(WSFrameFormat::Nv12 { full_range: false }));
+
+        assert_eq!(packed.len(), 34);
+        assert_eq!(
+            u32::from_le_bytes(packed[30..34].try_into().unwrap()),
+            NV12_VIDEO_FORMAT_MAGIC
+        );
+    }
+
+    #[test]
+    fn subscriber_guard_decrements_both_counts() {
+        let subscribers = Arc::new(AtomicUsize::new(1));
+        let instant_subscribers = Arc::new(AtomicUsize::new(1));
+
+        drop(SubscriberCountGuard {
+            subscribers: subscribers.clone(),
+            instant_subscribers: Some(instant_subscribers.clone()),
+        });
+
+        assert_eq!(subscribers.load(Ordering::Acquire), 0);
+        assert_eq!(instant_subscribers.load(Ordering::Acquire), 0);
+    }
 }

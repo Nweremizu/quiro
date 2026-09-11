@@ -235,7 +235,7 @@ pub fn mask_from_annotation(
                 annotation.mask_feather.unwrap_or(0.0).max(0.0) as f32
             }
         },
-        opacity: opacity as f32,
+        opacity,
         effect_size: scaled_effect_size(output_size, effect_amount),
         darkness: annotation.mask_darkness.unwrap_or(0.0).clamp(0.0, 1.0) as f32,
         mode: render_mode,

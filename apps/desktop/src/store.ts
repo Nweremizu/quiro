@@ -125,6 +125,7 @@ function declareStore<T extends object>(name: string, defaults?: T) {
 			queryFn: async () => (await get()) ?? null,
 		});
 
+		// biome-ignore lint/correctness/useExhaustiveDependencies: intentional mount-only subscription — query.refetch is stable per query instance, and re-subscribing on every refetch would tear down and re-attach the store listener for no reason.
 		useEffect(() => {
 			let cancelled = false;
 			let unlisten: (() => void) | undefined;
@@ -141,7 +142,6 @@ function declareStore<T extends object>(name: string, defaults?: T) {
 				cancelled = true;
 				unlisten?.();
 			};
-			// eslint-disable-next-line react-hooks/exhaustive-deps
 		}, []);
 
 		return query;

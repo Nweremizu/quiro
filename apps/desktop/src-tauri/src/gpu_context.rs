@@ -1,42 +1,5 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, RwLock},
-    time::Instant,
-};
+use std::sync::Arc;
 use tokio::sync::OnceCell;
-
-#[derive(Clone)]
-pub struct PendingScreenshot {
-    pub data: Vec<u8>,
-    pub width: u32,
-    pub height: u32,
-    pub channels: u32,
-    pub created_at: Instant,
-}
-
-pub struct PendingScreenshots(pub Arc<RwLock<HashMap<String, PendingScreenshot>>>);
-
-impl Default for PendingScreenshots {
-    fn default() -> Self {
-        Self(Arc::new(RwLock::new(HashMap::new())))
-    }
-}
-
-impl PendingScreenshots {
-    pub fn insert(&self, key: String, screenshot: PendingScreenshot) {
-        let mut guard = self.0.write().unwrap();
-        guard.retain(|_, v| v.created_at.elapsed() < std::time::Duration::from_secs(10));
-        guard.insert(key, screenshot);
-    }
-
-    pub fn remove(&self, key: &str) -> Option<PendingScreenshot> {
-        self.0.write().unwrap().remove(key)
-    }
-
-    pub fn get(&self, key: &str) -> Option<PendingScreenshot> {
-        self.0.read().unwrap().get(key).cloned()
-    }
-}
 
 pub struct SharedGpuContext {
     pub device: Arc<wgpu::Device>,

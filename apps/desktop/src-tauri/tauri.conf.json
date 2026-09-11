@@ -30,13 +30,7 @@
 	},
 	"bundle": {
 		"active": true,
-		"targets": [
-			"nsis",
-			"app",
-			"dmg",
-			"appimage",
-			"deb"
-		],
+		"targets": ["nsis", "app", "dmg", "appimage", "deb"],
 		"createUpdaterArtifacts": true,
 		"publisher": "Bronx",
 		"category": "Productivity",
@@ -70,10 +64,7 @@
 		},
 		"linux": {
 			"deb": {
-				"depends": [
-					"libwebkit2gtk-4.1-0",
-					"libgtk-3-0"
-				]
+				"depends": ["libwebkit2gtk-4.1-0", "libgtk-3-0"]
 			}
 		}
 	},

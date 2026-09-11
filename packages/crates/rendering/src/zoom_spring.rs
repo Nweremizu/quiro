@@ -1103,35 +1103,37 @@ mod tests {
     /// nothing, so this is the assertion that was missing.
     #[test]
     fn resolved_project_carries_the_motion_state() {
-        let mut project = ProjectConfiguration::default();
-        project.timeline = Some(TimelineConfiguration {
-            segments: vec![TimelineSegment {
-                recording_clip: 0,
-                timescale: 1.0,
-                start: 0.0,
-                end: 12.0,
-                name: None,
-                speed_audio_mode: None,
-                transform: None,
-                perspective: None,
-            }],
-            transitions: vec![],
-            zoom_segments: vec![motion_segment(
-                2.0,
-                5.0,
-                MotionState {
-                    tilt_x: 20.0,
-                    offset_x: 0.25,
-                    ..Default::default()
-                },
-            )],
-            scene_segments: vec![],
-            mask_segments: vec![],
-            text_segments: vec![],
-            caption_segments: vec![],
-            keyboard_segments: vec![],
-            audio_segments: vec![],
-        });
+        let project = ProjectConfiguration {
+            timeline: Some(TimelineConfiguration {
+                segments: vec![TimelineSegment {
+                    recording_clip: 0,
+                    timescale: 1.0,
+                    start: 0.0,
+                    end: 12.0,
+                    name: None,
+                    speed_audio_mode: None,
+                    transform: None,
+                    perspective: None,
+                }],
+                transitions: vec![],
+                zoom_segments: vec![motion_segment(
+                    2.0,
+                    5.0,
+                    MotionState {
+                        tilt_x: 20.0,
+                        offset_x: 0.25,
+                        ..Default::default()
+                    },
+                )],
+                scene_segments: vec![],
+                mask_segments: vec![],
+                text_segments: vec![],
+                caption_segments: vec![],
+                keyboard_segments: vec![],
+                audio_segments: vec![],
+            }),
+            ..Default::default()
+        };
 
         let mut timeline = ZoomTransformTimeline::from_project(
             &project,
@@ -1176,34 +1178,36 @@ mod tests {
     /// can never again pass while the product does nothing.
     #[test]
     fn motion_survives_the_from_project_construction_path() {
-        let mut project = ProjectConfiguration::default();
-        project.timeline = Some(TimelineConfiguration {
-            segments: vec![TimelineSegment {
-                recording_clip: 0,
-                timescale: 1.0,
-                start: 0.0,
-                end: 12.0,
-                name: None,
-                speed_audio_mode: None,
-                transform: None,
-                perspective: None,
-            }],
-            transitions: vec![],
-            zoom_segments: vec![motion_segment(
-                2.0,
-                5.0,
-                MotionState {
-                    tilt_x: 20.0,
-                    ..Default::default()
-                },
-            )],
-            scene_segments: vec![],
-            mask_segments: vec![],
-            text_segments: vec![],
-            caption_segments: vec![],
-            keyboard_segments: vec![],
-            audio_segments: vec![],
-        });
+        let project = ProjectConfiguration {
+            timeline: Some(TimelineConfiguration {
+                segments: vec![TimelineSegment {
+                    recording_clip: 0,
+                    timescale: 1.0,
+                    start: 0.0,
+                    end: 12.0,
+                    name: None,
+                    speed_audio_mode: None,
+                    transform: None,
+                    perspective: None,
+                }],
+                transitions: vec![],
+                zoom_segments: vec![motion_segment(
+                    2.0,
+                    5.0,
+                    MotionState {
+                        tilt_x: 20.0,
+                        ..Default::default()
+                    },
+                )],
+                scene_segments: vec![],
+                mask_segments: vec![],
+                text_segments: vec![],
+                caption_segments: vec![],
+                keyboard_segments: vec![],
+                audio_segments: vec![],
+            }),
+            ..Default::default()
+        };
 
         let mut timeline = ZoomTransformTimeline::from_project(
             &project,

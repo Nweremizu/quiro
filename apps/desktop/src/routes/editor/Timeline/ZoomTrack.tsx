@@ -137,9 +137,9 @@ export function ZoomTrack() {
 		setProject((current) =>
 			current.timeline
 				? {
-					...current,
-					timeline: { ...current.timeline, zoomSegments: next },
-				}
+						...current,
+						timeline: { ...current.timeline, zoomSegments: next },
+					}
 				: current,
 		);
 
@@ -244,7 +244,6 @@ export function ZoomTrack() {
 							selected={selected}
 							left={timeline.xOf(segment.start)}
 							width={width}
-
 							role="group"
 							aria-label={`Zoom ${index + 1}: ${segment.amount.toFixed(1)} times, ${focusLabel}`}
 							handles={

@@ -60,6 +60,9 @@ impl AnchorRects {
 /// dividing by zero, so a duration a user has dragged to 0 means "no
 /// animation" instead of a NaN that silently blanks the frame.
 fn envelope_progress(elapsed: f64, duration: f64) -> f32 {
+    // Deliberately catches NaN too (see doc comment above) — `duration <= 0.0`
+    // would not, since every comparison with NaN is false.
+    #[allow(clippy::neg_cmp_op_on_partial_ord)]
     if !(duration > 0.0) {
         return 1.0;
     }

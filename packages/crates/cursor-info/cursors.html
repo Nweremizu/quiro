@@ -599,8 +599,8 @@
           svg.addEventListener("load", () => {
             if (cursor.hotspot) {
               const rect = container.getBoundingClientRect();
-              hotspotDiv.style.left = cursor.hotspot[0] * 100 + "%";
-              hotspotDiv.style.top = cursor.hotspot[1] * 100 + "%";
+              hotspotDiv.style.left = `${cursor.hotspot[0] * 100}%`;
+              hotspotDiv.style.top = `${cursor.hotspot[1] * 100}%`;
             }
           });
         }

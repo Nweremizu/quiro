@@ -110,14 +110,12 @@ const ok = (name: string, cond: boolean, extra = "") => {
 
 // 6. `decorationCss` maps every Rust-side variant to a real CSS value —
 //    `lineThrough` is the one name that isn't already a CSS keyword.
-{
-	ok("none maps through", decorationCss("none") === "none");
-	ok("underline maps through", decorationCss("underline") === "underline");
-	ok(
-		"lineThrough becomes line-through",
-		decorationCss("lineThrough") === "line-through",
-	);
-}
+ok("none maps through", decorationCss("none") === "none");
+ok("underline maps through", decorationCss("underline") === "underline");
+ok(
+	"lineThrough becomes line-through",
+	decorationCss("lineThrough") === "line-through",
+);
 
 // 7. Paragraph-level: reads back the annotation migration's own default
 //    (left, 1.2) and patches without disturbing the run underneath it.

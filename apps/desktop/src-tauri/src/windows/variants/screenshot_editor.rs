@@ -57,9 +57,19 @@ pub(crate) async fn show_screenshot_editor(
     // label -> path mapping has to exist before the webview loads.
     crate::screenshot_editor::ScreenshotEditorPaths::set(app, label.clone(), path.to_path_buf());
 
+    // Overlaps building the instance with the webview boot, same as the
+    // video editor — `create_standalone_instance`'s cache claims whatever
+    // this produced.
+    crate::screenshot_editor::PendingScreenshotEditorInstances::start_prewarm(
+        app,
+        label.clone(),
+        path.to_path_buf(),
+    )
+    .await;
+
     let encoded_path = percent_encode(&path.to_string_lossy());
 
-    let window = this
+    let window = match this
         .window_builder_with_label(
             app,
             format!("/screenshot-editor?path={encoded_path}"),
@@ -72,7 +82,16 @@ pub(crate) async fn show_screenshot_editor(
         .inner_size(960.0, 680.0)
         .min_inner_size(560.0, 400.0)
         .visible(true)
-        .build()?;
+        .build()
+    {
+        Ok(window) => window,
+        Err(error) => {
+            crate::screenshot_editor::PendingScreenshotEditorInstances::get(app)
+                .cancel_prewarm(&label)
+                .await;
+            return Err(error);
+        }
+    };
 
     lock_window_text_scale(&window);
 

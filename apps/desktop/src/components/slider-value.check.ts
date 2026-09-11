@@ -30,13 +30,11 @@ const seconds = (v: number) => `${v.toFixed(2)}s`;
 const plain = (v: number) => `${v}`;
 
 // 1. Numbers come out of whatever the format wrapped them in.
-{
-	ok("percent suffix", numericPart("40%") === 40);
-	ok("multiplier suffix", numericPart("1.6x") === 1.6);
-	ok("degree suffix", numericPart("-5°") === -5);
-	ok("bare number", numericPart("701") === 701);
-	ok("no number at all", numericPart("auto") === null);
-}
+ok("percent suffix", numericPart("40%") === 40);
+ok("multiplier suffix", numericPart("1.6x") === 1.6);
+ok("degree suffix", numericPart("-5°") === -5);
+ok("bare number", numericPart("701") === 701);
+ok("no number at all", numericPart("auto") === null);
 
 // 2. THE ONE THAT MATTERS. Typing "40" into a percentage slider must store
 //    0.4, not 40.
@@ -55,21 +53,16 @@ const plain = (v: number) => `${v}`;
 }
 
 // 3. Identity formats round-trip unchanged.
-{
-	ok(
-		"degrees round-trip",
-		close(valueFromDisplay(28, -90, 90, 1, degrees), 28),
-	);
-	ok(
-		"negative degrees round-trip",
-		close(valueFromDisplay(-45, -90, 90, 1, degrees), -45),
-	);
-	ok("plain round-trips", close(valueFromDisplay(701, 0, 2000, 1, plain), 701));
-	ok(
-		"seconds round-trip",
-		close(valueFromDisplay(0.35, 0, 2, 0.05, seconds), 0.35, 1e-6),
-	);
-}
+ok("degrees round-trip", close(valueFromDisplay(28, -90, 90, 1, degrees), 28));
+ok(
+	"negative degrees round-trip",
+	close(valueFromDisplay(-45, -90, 90, 1, degrees), -45),
+);
+ok("plain round-trips", close(valueFromDisplay(701, 0, 2000, 1, plain), 701));
+ok(
+	"seconds round-trip",
+	close(valueFromDisplay(0.35, 0, 2, 0.05, seconds), 0.35, 1e-6),
+);
 
 // 4. A typed value that falls between step grid points lands on the nearer
 //    one, not merely the next one up — 1.6 on a 0.5 grid is 1.5.
@@ -108,20 +101,18 @@ const plain = (v: number) => `${v}`;
 // 6. A format the search cannot reason about is refused rather than guessed
 //    at — returning a confidently wrong value is the failure mode this whole
 //    approach exists to avoid.
-{
-	ok(
-		"a format with no digits is refused",
-		valueFromDisplay(1, 0, 10, 1, () => "auto") === null,
-	);
-	ok(
-		"a descending format is refused",
-		valueFromDisplay(5, 0, 10, 1, (v) => `${10 - v}`) === null,
-	);
-	ok(
-		"a constant format is refused",
-		valueFromDisplay(5, 0, 10, 1, () => "7") === null,
-	);
-}
+ok(
+	"a format with no digits is refused",
+	valueFromDisplay(1, 0, 10, 1, () => "auto") === null,
+);
+ok(
+	"a descending format is refused",
+	valueFromDisplay(5, 0, 10, 1, (v) => `${10 - v}`) === null,
+);
+ok(
+	"a constant format is refused",
+	valueFromDisplay(5, 0, 10, 1, () => "7") === null,
+);
 
 // 7. A wide range stays cheap: the search is over grid indices, so a
 //    400,000-step slider costs about twenty format calls, not 400,000.

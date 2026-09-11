@@ -149,7 +149,7 @@ fn get_microphone_info_blocking(name: String) -> Option<MicrophoneInfo> {
                 .collect()
         })
         .unwrap_or_default();
-    formats.sort_by(|a, b| (b.sample_rate, b.channels).cmp(&(a.sample_rate, a.channels)));
+    formats.sort_by_key(|b| std::cmp::Reverse((b.sample_rate, b.channels)));
     formats.dedup_by(|a, b| a.sample_rate == b.sample_rate && a.channels == b.channels);
 
     Some(MicrophoneInfo {

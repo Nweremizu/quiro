@@ -115,6 +115,100 @@ pub(crate) fn should_show_onboarding(app: &AppHandle) -> bool {
         || !permissions::do_permissions_check(false).necessary_granted()
 }
 
+fn should_engage_graphics_recovery(
+    previous_termination: Option<crash_sentinel::UnexpectedTermination>,
+) -> bool {
+    previous_termination.is_some_and(|prev| prev.during_gpu_init && !prev.in_graphics_recovery)
+}
+
+#[cfg(target_os = "windows")]
+fn configure_windows_graphics_recovery(
+    previous_termination: Option<crash_sentinel::UnexpectedTermination>,
+) {
+    if should_engage_graphics_recovery(previous_termination) {
+        quiro_rendering::set_force_software_wgpu_adapter(true);
+        crash_sentinel::mark_graphics_recovery();
+        warn!(
+            "Previous Quiro session terminated during GPU initialisation; using Windows software graphics recovery mode for this launch"
+        );
+    } else if previous_termination.is_some() {
+        info!(
+            "Previous session terminated unexpectedly, but not during first-time GPU initialisation; keeping hardware graphics"
+        );
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn configure_windows_graphics_recovery(
+    _previous_termination: Option<crash_sentinel::UnexpectedTermination>,
+) {
+}
+
+/// Decides what `camera_blur_disabled_by_crash` should hold for this launch: a
+/// death with the blur pipeline active disables blur at the current version
+/// (fresh crash evidence beats version optimism), an existing disable carries
+/// over within the same app version, and an app update clears it so the new
+/// ort/wgpu/driver stack gets one retry.
+fn next_camera_blur_disabled_version(
+    stored: Option<&str>,
+    previous_termination: Option<crash_sentinel::UnexpectedTermination>,
+    current_version: &str,
+) -> Option<String> {
+    if previous_termination.is_some_and(|prev| prev.blur_active) {
+        return Some(current_version.to_string());
+    }
+    stored.filter(|v| *v == current_version).map(String::from)
+}
+
+/// Breaks the camera-background-blur crash loop: a native DirectML/driver crash
+/// never reaches a panic handler, and the blur toggle is persisted frontend-side,
+/// so without this the next camera open repeats the crash forever. Blur init is
+/// lazy (first camera frame / editor render), so running this during setup is
+/// early enough. Windows-only at runtime (matching graphics recovery) but
+/// compiled everywhere so non-Windows builds keep it honest.
+fn configure_camera_blur_recovery(
+    app: &AppHandle,
+    previous_termination: Option<crash_sentinel::UnexpectedTermination>,
+) {
+    if !cfg!(target_os = "windows") {
+        return;
+    }
+
+    let current_version = env!("CARGO_PKG_VERSION");
+    let stored = general_settings::GeneralSettingsStore::get(app)
+        .ok()
+        .flatten()
+        .and_then(|settings| settings.camera_blur_disabled_by_crash);
+    let next =
+        next_camera_blur_disabled_version(stored.as_deref(), previous_termination, current_version);
+
+    if next != stored {
+        let value = next.clone();
+        if let Err(error) = general_settings::GeneralSettingsStore::update(app, |settings| {
+            settings.camera_blur_disabled_by_crash = value;
+        }) {
+            warn!(%error, "Failed to persist camera blur crash-recovery state");
+        }
+    }
+
+    if next.is_some() {
+        quiro_camera_effects::set_blur_disabled(true);
+        crash_sentinel::mark_blur_recovery();
+        if stored.is_none() {
+            error!(
+                "Previous Quiro session died with camera background blur active; disabling blur until the next app update"
+            );
+        } else {
+            warn!("Camera background blur remains disabled by crash recovery for this launch");
+        }
+    } else if stored.is_some() {
+        info!(
+            prev_version = stored.as_deref(),
+            "App version changed; re-enabling camera background blur for one retry"
+        );
+    }
+}
+
 impl Default for AppExitState {
     fn default() -> Self {
         Self(AtomicBool::new(false))
@@ -239,7 +333,7 @@ pub(crate) fn notify_user(app: &AppHandle, title: &str, body: &str, is_error: bo
     let enabled = general_settings::GeneralSettingsStore::get(app)
         .ok()
         .flatten()
-        .map_or(true, |settings| settings.enable_notifications);
+        .is_none_or(|settings| settings.enable_notifications);
     if !enabled {
         return;
     }
@@ -1339,7 +1433,9 @@ pub fn run() {
                 .app_log_dir()
                 .unwrap_or_else(|_| std::env::temp_dir());
             let _ = std::fs::create_dir_all(&logs_dir);
-            crash_sentinel::init(&logs_dir, env!("CARGO_PKG_VERSION"));
+            let previous_termination = crash_sentinel::init(&logs_dir, env!("CARGO_PKG_VERSION"));
+            configure_windows_graphics_recovery(previous_termination);
+            configure_camera_blur_recovery(&app, previous_termination);
 
             camera::init_preview_profile(total_system_memory());
 
@@ -1406,7 +1502,6 @@ pub fn run() {
                 fake_window::init(&app);
                 app.manage(camera_session_id_handle);
                 app.manage(CameraWindowCloseGate::default());
-                app.manage(gpu_context::PendingScreenshots::default());
                 app.manage(screenshot_editor::ScreenshotEditorPaths::default());
                 // Before any window opens: a project referencing a
                 // previously downloaded family has to render with it on the
@@ -1437,6 +1532,7 @@ pub fn run() {
                 move |_| {
                     app.state::<MainWindowReadyState>().set_ready(true);
                     gpu_context::prewarm_gpu();
+                    tauri::async_runtime::spawn(screenshot_editor::prewarm_screenshot_renderer());
                 }
             });
 
@@ -1507,7 +1603,8 @@ pub fn run() {
                 exit_shutdown::ExitRequestDecision::StartCleanup => {
                     exit_state.begin();
                     crash_sentinel::mark_clean_exit();
-                    power_observer::uninstall(&app_handle);
+                    power_observer::uninstall(app_handle);
+                    fake_window::cancel_all_fake_window_listeners(app_handle);
                     tauri::async_runtime::spawn(captions::release_ml_models());
                     tauri::async_runtime::spawn({
                         let app_handle = app_handle.clone();
@@ -1539,8 +1636,6 @@ fn total_system_memory() -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     /// Regenerates `../src/utils/tauri.ts` without launching the app.
     ///
     /// **Prefer `cargo run -p quiro-desktop --bin export-bindings`.** This

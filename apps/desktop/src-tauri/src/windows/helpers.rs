@@ -534,10 +534,10 @@ pub(crate) fn restore_main_window_after_settings(app: &AppHandle) {
         return;
     }
 
-    if let Some(window) = origin.and_then(|label| app.get_webview_window(&label)) {
-        if let Err(err) = window.show().and_then(|()| window.set_focus()) {
-            error!(?err, "Failed to restore window after closing settings");
-        }
+    if let Some(window) = origin.and_then(|label| app.get_webview_window(&label))
+        && let Err(err) = window.show().and_then(|()| window.set_focus())
+    {
+        error!(?err, "Failed to restore window after closing settings");
     }
 }
 

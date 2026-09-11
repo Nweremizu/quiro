@@ -13,6 +13,7 @@ export function SkeletonRows({ count = 6 }: SkeletonRowsProps) {
 		<div className="flex flex-col gap-3">
 			{Array.from({ length: count }, (_, index) => (
 				<div
+					// biome-ignore lint/suspicious/noArrayIndexKey: static placeholder count, never reordered/filtered/inserted — no identity to key by.
 					key={index}
 					className="flex items-center gap-3 rounded-lg border border-gray-3 p-3"
 				>

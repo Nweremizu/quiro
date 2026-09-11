@@ -1,70 +1,77 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.2.0/schema.json",
-  "vcs": {
-    "enabled": true,
-    "clientKind": "git",
-    "useIgnoreFile": true
-  },
-  "files": {
-    "includes": [
-      "**",
-      "!**/tauri.ts",
-      "!**/queries.ts",
-      "!apps/desktop/src/utils/tauri.ts",
-      "!apps/desktop/src/global.d.ts",
-      "!apps/web/public/gif.worker.js",
-      "!packages/ui-solid/src/auto-imports.d.ts"
-    ],
-    "ignoreUnknown": false
-  },
-  "formatter": {
-    "enabled": true,
-    "indentStyle": "tab"
-  },
-  "linter": {
-    "enabled": true,
-    "rules": {
-      "recommended": true,
-      "suspicious": {
-        "noShadowRestrictedNames": "off"
-      }
-    }
-  },
-  "javascript": {
-    "formatter": {
-      "quoteStyle": "double"
-    }
-  },
-  "assist": {
-    "enabled": true,
-    "actions": {
-      "source": {
-        "organizeImports": "on"
-      }
-    }
-  },
-  "overrides": [
-    {
-      "includes": ["apps/desktop/**/*"],
-      "linter": {
-        "rules": { "a11y": "off" }
-      }
-    },
-    {
-      "includes": ["**/*.css"],
-      "linter": {
-        "rules": {
-          "suspicious": {
-            "noUnknownAtRules": "off"
-          },
-          "correctness": {
-            "noUnknownTypeSelector": "off"
-          },
-          "style": {
-            "noDescendingSpecificity": "off"
-          }
-        }
-      }
-    }
-  ]
+	"$schema": "https://biomejs.dev/schemas/2.5.9/schema.json",
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true
+	},
+	"files": {
+		"includes": [
+			"**",
+			"!**/tauri.ts",
+			"!**/queries.ts",
+			"!apps/desktop/src/utils/tauri.ts",
+			"!apps/desktop/src/global.d.ts",
+			"!apps/desktop/auto-imports.d.ts",
+			"!apps/web/public/gif.worker.js",
+			"!packages/ui-solid/src/auto-imports.d.ts",
+			"!packages/crates/**/assets"
+		],
+		"ignoreUnknown": false
+	},
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab"
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"preset": "recommended",
+			"suspicious": {
+				"noShadowRestrictedNames": "off"
+			}
+		}
+	},
+	"javascript": {
+		"formatter": {
+			"quoteStyle": "double"
+		}
+	},
+	"css": {
+		"parser": {
+			"tailwindDirectives": true
+		}
+	},
+	"assist": {
+		"enabled": true,
+		"actions": {
+			"source": {
+				"organizeImports": "on"
+			}
+		}
+	},
+	"overrides": [
+		{
+			"includes": ["apps/desktop/**/*"],
+			"linter": {
+				"rules": { "a11y": "off" }
+			}
+		},
+		{
+			"includes": ["**/*.css"],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noUnknownAtRules": "off"
+					},
+					"correctness": {
+						"noUnknownTypeSelector": "off"
+					},
+					"style": {
+						"noDescendingSpecificity": "off"
+					}
+				}
+			}
+		}
+	]
 }
