@@ -1606,6 +1606,26 @@ async fn check_permissions() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(not(any(target_os = "macos", windows)))]
+async fn check_permissions() -> anyhow::Result<()> {
+    println!("\nChecking device availability...\n");
+
+    if MicrophoneFeed::default_device().is_some() {
+        println!("  Microphone: AVAILABLE");
+    } else {
+        println!("  Microphone: NO DEVICE FOUND");
+    }
+
+    if quiro_camera::list_cameras().next().is_some() {
+        println!("  Camera: AVAILABLE");
+    } else {
+        println!("  Camera: NO DEVICE FOUND");
+    }
+
+    println!();
+    Ok(())
+}
+
 fn print_summary(reports: &[TestReport]) {
     println!("\n{}", "=".repeat(70));
     println!("CAP REAL-DEVICE RECORDING TEST RESULTS");
