@@ -61,7 +61,7 @@ mod windows {
                 f,
                 "{:?} ({})",
                 self.0.name(),
-                &match self.0.is_mf() {
+                match self.0.is_mf() {
                     true => "Media Foundation",
                     false => "DirectShow",
                 },

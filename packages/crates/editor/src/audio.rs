@@ -905,9 +905,11 @@ fn mix_transition_audio(
 ) {
     let progress_per_sample = 1.0 / (duration * AudioData::SAMPLE_RATE as f64);
     for (sample_index, ((outgoing_frame, incoming_frame), output_frame)) in outgoing
-        .chunks_exact(2)
-        .zip(incoming.chunks_exact(2))
-        .zip(output.chunks_exact_mut(2))
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .zip(incoming.as_chunks::<2>().0)
+        .zip(output.as_chunks_mut::<2>().0)
         .enumerate()
     {
         let progress = (progress + sample_index as f64 * progress_per_sample).clamp(0.0, 1.0);
@@ -1590,7 +1592,7 @@ fn store_progressive_samples(
     mut out_idx: usize,
     limit: usize,
 ) -> usize {
-    for chunk in bytes.chunks_exact(f32::BYTE_SIZE) {
+    for chunk in bytes.as_chunks::<{ f32::BYTE_SIZE }>().0 {
         if out_idx >= limit {
             break;
         }

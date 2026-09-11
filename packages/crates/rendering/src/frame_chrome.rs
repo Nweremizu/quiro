@@ -703,7 +703,7 @@ mod tests {
                 let rgba = rgba.expect("chrome should rasterize");
                 assert_eq!(rgba.len(), 640 * 420 * 4);
                 // Something visible must have been drawn.
-                assert!(rgba.chunks_exact(4).any(|px| px[3] > 0));
+                assert!(rgba.as_chunks::<4>().0.iter().any(|px| px[3] > 0));
             }
         }
     }

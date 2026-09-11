@@ -1443,8 +1443,10 @@ fn create_screenshot_ocr_image(
             .ok_or_else(|| "OCR output region is invalid".to_string())?;
 
         for (source_pixel, output_pixel) in source_row
-            .chunks_exact(4)
-            .zip(output_row.chunks_exact_mut(4))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(output_row.as_chunks_mut::<4>().0)
         {
             output_pixel[0] = source_pixel[2];
             output_pixel[1] = source_pixel[1];

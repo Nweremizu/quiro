@@ -725,7 +725,7 @@ mod tests {
         frame.set_rate(48000);
         frame.set_pts(Some(sample_num as i64));
         let data = frame.data_mut(0);
-        for (i, chunk) in data.chunks_exact_mut(4).enumerate() {
+        for (i, chunk) in data.as_chunks_mut::<4>().0.iter_mut().enumerate() {
             let val: f32 = (i as f32 * 0.01).sin() * 0.5;
             chunk.copy_from_slice(&val.to_ne_bytes());
         }

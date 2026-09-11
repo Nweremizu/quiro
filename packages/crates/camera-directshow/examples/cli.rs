@@ -148,7 +148,7 @@ mod windows {
                         .map(|v| v.to_string())
                         .unwrap_or(format!("unknown ({:?})", self.media_type.subtype))
                 },
-                &self.frame_rates
+                self.frame_rates
             )
         }
     }

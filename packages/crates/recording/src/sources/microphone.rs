@@ -831,7 +831,9 @@ mod tests {
 
             let any_energy = frame
                 .data(0)
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .take(frame.samples())
                 .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
                 .any(|s| s.abs() > 0.01);
@@ -873,7 +875,9 @@ mod tests {
         let had_energy = frame
             .inner
             .data(0)
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .take(samples_before)
             .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
             .any(|s| s.abs() > 0.001);
@@ -892,7 +896,9 @@ mod tests {
         let all_zero = frame
             .inner
             .data(0)
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .take(frame.samples())
             .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
             .all(|s| s == 0.0);

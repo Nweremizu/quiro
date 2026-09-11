@@ -90,7 +90,12 @@ fn rgb_from_rgba(
         let src_row = data.get(src_start..src_end)?;
         let dst_row = rgb.get_mut(dst_start..dst_end)?;
 
-        for (src, dst) in src_row.chunks_exact(4).zip(dst_row.chunks_exact_mut(3)) {
+        for (src, dst) in src_row
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(dst_row.as_chunks_mut::<3>().0)
+        {
             let (r, b) = match order {
                 ChannelOrder::Rgba => (src[0], src[2]),
                 ChannelOrder::Bgra => (src[2], src[0]),
@@ -136,7 +141,12 @@ fn rgba_from_raw(
         let src_row = data.get(src_start..src_end)?;
         let dst_row = rgba.get_mut(dst_start..dst_end)?;
 
-        for (src, dst) in src_row.chunks_exact(4).zip(dst_row.chunks_exact_mut(4)) {
+        for (src, dst) in src_row
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(dst_row.as_chunks_mut::<4>().0)
+        {
             let (r, b) = match order {
                 ChannelOrder::Rgba => (src[0], src[2]),
                 ChannelOrder::Bgra => (src[2], src[0]),

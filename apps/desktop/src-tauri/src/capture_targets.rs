@@ -168,7 +168,7 @@ fn capture_single_frame_thumbnail(item: GraphicsCaptureItem) -> Result<String, S
         bgra.extend_from_slice(&row[..(width * 4) as usize]);
     }
     // BGRA -> RGBA
-    for pixel in bgra.chunks_exact_mut(4) {
+    for pixel in bgra.as_chunks_mut::<4>().0 {
         pixel.swap(0, 2);
     }
 

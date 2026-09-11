@@ -98,7 +98,7 @@ fn make_audio_frame(samples: usize, sample_offset: u64, freq_hz: f32) -> ffmpeg:
     frame.set_rate(48000);
     frame.set_pts(Some(sample_offset as i64));
     let data = frame.data_mut(0);
-    for (i, chunk) in data.chunks_exact_mut(4).enumerate() {
+    for (i, chunk) in data.as_chunks_mut::<4>().0.iter_mut().enumerate() {
         let t = (sample_offset as f32 + i as f32) / 48000.0;
         let val: f32 = (t * freq_hz * std::f32::consts::TAU).sin() * 0.5;
         chunk.copy_from_slice(&val.to_ne_bytes());

@@ -949,10 +949,10 @@ impl WindowImpl {
                 );
 
                 if get_bits_result > 0 {
-                    let has_content = buffer.chunks_exact(4).any(|chunk| chunk[3] != 0);
+                    let has_content = buffer.as_chunks::<4>().0.iter().any(|chunk| chunk[3] != 0);
 
                     if has_content {
-                        for chunk in buffer.chunks_exact_mut(4) {
+                        for chunk in buffer.as_chunks_mut::<4>().0 {
                             chunk.swap(0, 2);
                         }
 
