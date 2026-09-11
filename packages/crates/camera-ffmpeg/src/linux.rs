@@ -161,7 +161,7 @@ fn copy_yuv420(
     let y_stride = format.stride.max(width);
     let chroma_width = width / 2;
     let chroma_height = height / 2;
-    if y_stride % 2 != 0 {
+    if !y_stride.is_multiple_of(2) {
         return Err(AsFFmpegError::InvalidFrameStride {
             format: fourcc_str(format.fourcc),
             stride: y_stride,
