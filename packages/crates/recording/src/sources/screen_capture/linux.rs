@@ -924,7 +924,7 @@ fn select_system_audio_monitor() -> anyhow::Result<SelectedSystemAudioInput> {
     let mut candidates = devices
         .iter()
         .filter_map(|(name, device)| {
-            system_audio_device_rank(&name).map(|rank| (rank, name, device))
+            system_audio_device_rank(name).map(|rank| (rank, name, device))
         })
         .collect::<Vec<_>>();
 
@@ -1355,10 +1355,10 @@ impl X11Grabber {
                 .scale(&source, self.output)?
         };
 
-        if self.show_cursor {
-            if let Err(error) = self.composite_cursor(&mut frame) {
-                tracing::trace!(error = %error, "X11 cursor composite skipped");
-            }
+        if self.show_cursor
+            && let Err(error) = self.composite_cursor(&mut frame)
+        {
+            tracing::trace!(error = %error, "X11 cursor composite skipped");
         }
 
         Ok(frame)
