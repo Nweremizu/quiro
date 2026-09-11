@@ -1,4 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
+import { invoke } from "@tauri-apps/api/core";
+import type { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { type as ostype } from "@tauri-apps/plugin-os";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import DisplayHint from "@/components/DisplayHint";
@@ -18,6 +21,7 @@ import {
 	readAreaSelectionPreferences,
 	writeAreaSelectionPreferences,
 } from "@/utils/area-selection";
+import { getCameraWindow } from "@/utils/camera-window";
 import { useTauriEventListener } from "@/utils/createEventListner";
 import {
 	commands,
@@ -574,6 +578,182 @@ function AreaSelectOverlay({
 	ratioRef.current = ratio;
 	const snapRef = useRef(preferences.snapToRatio);
 	snapRef.current = preferences.snapToRatio;
+
+	// Shrinks the camera bubble into a corner of the selection while it's
+	// being drawn/moved/resized so it doesn't block the view of what's being
+	// selected, then puts it back once this Area view goes away. Mirrors
+	// Cap's target-select-overlay.tsx camera-tracking effect.
+	const cameraWindowRef = useRef<WebviewWindow | null>(null);
+	const originalCameraBoundsRef = useRef<{
+		position: Awaited<ReturnType<WebviewWindow["outerPosition"]>>;
+		size: Awaited<ReturnType<WebviewWindow["outerSize"]>>;
+	} | null>(null);
+	const cachedScaleFactorRef = useRef<number | null>(null);
+	const lastAppliedCameraBoundsRef = useRef<Bounds | null>(null);
+	const applyingCameraBoundsRef = useRef(false);
+
+	const revertCamera = useCallback(async () => {
+		const original = originalCameraBoundsRef.current;
+		const win = cameraWindowRef.current;
+		if (!original || !win) return;
+
+		try {
+			await win.setPosition(original.position);
+			await win.setSize(original.size);
+			await invoke("update_camera_overlay_bounds", {
+				x: original.position.x,
+				y: original.position.y,
+				width: original.size.width,
+				height: original.size.height,
+			});
+		} catch (e) {
+			console.error("Failed to revert camera window", e);
+		}
+
+		originalCameraBoundsRef.current = null;
+		cachedScaleFactorRef.current = null;
+		lastAppliedCameraBoundsRef.current = null;
+	}, []);
+
+	useEffect(() => {
+		return () => {
+			void revertCamera();
+		};
+	}, [revertCamera]);
+
+	useEffect(() => {
+		if (mode === "screenshot" || !bounds || !isBusy) return;
+
+		(async () => {
+			let win = cameraWindowRef.current;
+			if (!win) {
+				try {
+					win = await getCameraWindow();
+					cameraWindowRef.current = win;
+				} catch (e) {
+					console.error("Failed to find camera window", e);
+				}
+			}
+			if (!win) return;
+
+			if (
+				!originalCameraBoundsRef.current ||
+				cachedScaleFactorRef.current === null
+			) {
+				try {
+					const [position, size, factor] = await Promise.all([
+						win.outerPosition(),
+						win.outerSize(),
+						win.scaleFactor(),
+					]);
+					originalCameraBoundsRef.current = { position, size };
+					cachedScaleFactorRef.current = factor;
+				} catch (e) {
+					console.error("Failed to init camera bounds", e);
+				}
+				return;
+			}
+
+			const scaleFactor = cachedScaleFactorRef.current ?? 1;
+			const originalLogicalSize =
+				originalCameraBoundsRef.current.size.toLogical(scaleFactor);
+
+			const padding = 16;
+			const TOOLBAR_HEIGHT = 56;
+			const originalContentWidth = originalLogicalSize.width;
+			const originalContentHeight = Math.max(
+				0,
+				originalLogicalSize.height - TOOLBAR_HEIGHT,
+			);
+
+			const selectionMinDim = Math.min(bounds.width, bounds.height);
+			const targetContentMaxDim = Math.max(
+				100,
+				Math.min(
+					Math.max(originalContentWidth, originalContentHeight),
+					selectionMinDim * 0.5 - TOOLBAR_HEIGHT,
+				),
+			);
+
+			const originalContentMaxDim = Math.max(
+				originalContentWidth,
+				originalContentHeight,
+			);
+			const scale =
+				originalContentMaxDim > 0
+					? targetContentMaxDim / originalContentMaxDim
+					: 1;
+
+			const newWidth = Math.round(originalContentWidth * scale);
+			const newHeight =
+				Math.round(originalContentHeight * scale) + TOOLBAR_HEIGHT;
+
+			if (
+				bounds.width <= newWidth + padding * 2 ||
+				bounds.height <= newHeight + padding * 2
+			) {
+				return;
+			}
+
+			const displayInfo = await commands.displayInformation(displayId);
+			const displayLogicalBounds =
+				displayInfo.status === "ok" ? displayInfo.data.logical_bounds : null;
+			const displayOriginX = displayLogicalBounds?.position?.x ?? 0;
+			const displayOriginY = displayLogicalBounds?.position?.y ?? 0;
+
+			const newX = Math.round(bounds.x + bounds.width - newWidth - padding);
+			const newY = Math.round(bounds.y + bounds.height - newHeight - padding);
+
+			// The command applies these as raw device pixels. On Windows that
+			// means converting with the scale of the display the target rect
+			// is on (the overlay's display) — the camera window's own scale is
+			// wrong when it starts on a monitor with a different DPI. On macOS
+			// physical coordinates are interpreted relative to the camera
+			// window's own scale, so its own factor is the correct
+			// (self-canceling) one.
+			let targetScale = scaleFactor;
+			if (ostype() === "windows" && displayInfo.status === "ok") {
+				const physicalWidth = displayInfo.data.physical_size?.width;
+				const logicalWidth = displayInfo.data.logical_size?.width;
+				targetScale =
+					physicalWidth && logicalWidth && logicalWidth > 0
+						? physicalWidth / logicalWidth
+						: scaleFactor;
+			}
+
+			const target: Bounds = {
+				x: (newX + displayOriginX) * targetScale,
+				y: (newY + displayOriginY) * targetScale,
+				width: newWidth * targetScale,
+				height: newHeight * targetScale,
+			};
+
+			const last = lastAppliedCameraBoundsRef.current;
+			const changed =
+				!last ||
+				Math.abs(last.x - target.x) > 1 ||
+				Math.abs(last.y - target.y) > 1 ||
+				Math.abs(last.width - target.width) > 1 ||
+				Math.abs(last.height - target.height) > 1;
+
+			if (!changed || applyingCameraBoundsRef.current) return;
+
+			applyingCameraBoundsRef.current = true;
+			try {
+				await invoke("update_camera_overlay_bounds", {
+					x: target.x,
+					y: target.y,
+					width: target.width,
+					height: target.height,
+				});
+				lastAppliedCameraBoundsRef.current = target;
+			} catch (e) {
+				console.error("Failed to update camera window", e);
+			} finally {
+				applyingCameraBoundsRef.current = false;
+			}
+		})();
+	}, [bounds, isBusy, mode, displayId]);
 
 	const beginDraw = (event: React.PointerEvent<HTMLDivElement>) => {
 		if (event.button !== 0) return;

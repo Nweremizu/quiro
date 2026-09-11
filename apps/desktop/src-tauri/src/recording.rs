@@ -211,7 +211,9 @@ pub async fn start_recording(
     }
 
     if let Some(main) = WindowId::Main.get(&app) {
-        let _ = main.hide();
+        let _ = settings
+            .main_window_recording_start_behaviour
+            .perform(&main);
     }
     {
         let handoff_app = app.clone();

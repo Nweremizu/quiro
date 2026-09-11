@@ -907,13 +907,6 @@ pub(crate) fn restore_camera_window(app: &AppHandle) {
     }
 }
 
-pub(crate) fn restore_main_window_inputs(app: &AppHandle) {
-    let handle = app.clone();
-    spawn_on_runtime(async move {
-        windows::restore_main_window_inputs(&handle).await;
-    });
-}
-
 /// Waking from sleep invalidates capture sessions and device handles; give the
 /// OS a moment to settle, then ask the frontend to re-prewarm screen capture.
 pub(crate) fn schedule_resume_recovery(app_handle: AppHandle) {
@@ -1156,6 +1149,7 @@ fn specta_bindings() -> tauri_specta::Builder {
             target_select_overlay::focus_window,
             target_select_overlay::open_target_select_overlays,
             target_select_overlay::close_target_select_overlays,
+            target_select_overlay::update_camera_overlay_bounds,
             fake_window::set_fake_window_bounds,
             fake_window::remove_fake_window,
             platform::perform_haptic_feedback,
@@ -1166,6 +1160,7 @@ fn specta_bindings() -> tauri_specta::Builder {
             windows::set_teleprompter_window_opacity,
             windows::refresh_window_content_protection,
             windows::set_window_transparent,
+            windows::apply_macos_liquid_glass_background,
             windows::show_window,
             windows::is_camera_window_open,
             input_commands::set_mic_input,
@@ -1355,8 +1350,9 @@ pub fn run() {
                     camera_legacy::create_camera_preview_ws(camera_preview_state_rx).await;
                 let camera_ws_sender = camera_tx.clone();
 
-                let (mic_samples_tx, _mic_samples_rx) = flume::bounded(8);
+                let (mic_samples_tx, mic_samples_rx) = flume::bounded(8);
                 let mic_meter_sender = mic_samples_tx.clone();
+                audio_meter::spawn_event_emitter(app.clone(), mic_samples_rx);
 
                 let camera_feed = CameraFeed::spawn(CameraFeed::default());
                 let _ = camera_feed.ask(feeds::camera::AddSender(camera_tx)).await;
@@ -1407,6 +1403,7 @@ pub fn run() {
                     disconnected_inputs: HashSet::new(),
                 })));
 
+                fake_window::init(&app);
                 app.manage(camera_session_id_handle);
                 app.manage(CameraWindowCloseGate::default());
                 app.manage(gpu_context::PendingScreenshots::default());
@@ -1511,6 +1508,18 @@ pub fn run() {
                     exit_state.begin();
                     crash_sentinel::mark_clean_exit();
                     power_observer::uninstall(&app_handle);
+                    tauri::async_runtime::spawn(captions::release_ml_models());
+                    tauri::async_runtime::spawn({
+                        let app_handle = app_handle.clone();
+                        async move {
+                            screenshot_editor::PendingScreenshotEditorInstances::dispose_all(
+                                &app_handle,
+                            )
+                            .await;
+                            screenshot_editor::ScreenshotEditorInstances::dispose_all(&app_handle)
+                                .await;
+                        }
+                    });
                     app_handle.exit(0);
                 }
                 exit_shutdown::ExitRequestDecision::ExportActive => {

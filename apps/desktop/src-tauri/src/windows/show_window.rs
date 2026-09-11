@@ -99,7 +99,7 @@ impl ShowQuiroWindow {
             return result;
         }
 
-        let _id = self.id(app);
+        let _id = self.id();
         let cursor_monitor = CursorMonitorInfo::get();
 
         let window = match self {
@@ -241,7 +241,7 @@ impl ShowQuiroWindow {
         app: &'a AppHandle<Wry>,
         url: impl Into<PathBuf>,
     ) -> WebviewWindowBuilder<'a, Wry, AppHandle<Wry>> {
-        let id = self.id(app);
+        let id = self.id();
         self.window_builder_with_label(app, url, id.label())
     }
 
@@ -251,7 +251,7 @@ impl ShowQuiroWindow {
         url: impl Into<PathBuf>,
         label: impl Into<String>,
     ) -> WebviewWindowBuilder<'a, Wry, AppHandle<Wry>> {
-        let id = self.id(app);
+        let id = self.id();
 
         let settings = GeneralSettingsStore::get(app).ok().flatten();
         let window_transparency_enabled = settings
@@ -347,7 +347,7 @@ impl ShowQuiroWindow {
         builder
     }
 
-    pub fn id(&self, app: &AppHandle) -> WindowId {
+    pub fn id(&self) -> WindowId {
         match self {
             ShowQuiroWindow::Main { .. } => WindowId::Main,
             ShowQuiroWindow::Settings { .. } => WindowId::Settings,

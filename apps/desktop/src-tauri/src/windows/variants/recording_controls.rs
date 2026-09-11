@@ -6,7 +6,7 @@ pub(crate) async fn try_reuse(
 ) -> Option<tauri::Result<WebviewWindow>> {
     #[cfg(target_os = "macos")]
     if let ShowQuiroWindow::InProgressRecording { capture_target, .. } = this
-        && let Some(window) = this.id(app).get(app)
+        && let Some(window) = this.id().get(app)
     {
         use crate::panel_manager::is_window_handle_valid;
 
@@ -40,7 +40,7 @@ pub(crate) async fn try_reuse(
             warn!("InProgressRecording window handle invalid, destroying and recreating...");
             let _ = window.destroy();
 
-            let window_id = this.id(app);
+            let window_id = this.id();
             let max_wait = std::time::Duration::from_millis(500);
             let poll_interval = std::time::Duration::from_millis(25);
             let start = std::time::Instant::now();
@@ -65,7 +65,7 @@ pub(crate) async fn try_reuse(
 
     #[cfg(not(target_os = "macos"))]
     if let ShowQuiroWindow::InProgressRecording { capture_target, .. } = this
-        && let Some(window) = this.id(app).get(app)
+        && let Some(window) = this.id().get(app)
     {
         let width = crate::fake_window::RECORDING_CONTROLS_WIDTH;
         let height = crate::fake_window::RECORDING_CONTROLS_HEIGHT;

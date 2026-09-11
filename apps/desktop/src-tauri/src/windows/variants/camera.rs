@@ -39,7 +39,7 @@ pub(crate) async fn try_reuse(
             }
         }
 
-        if let Some(window) = this.id(app).get(app) {
+        if let Some(window) = this.id().get(app) {
             #[cfg(target_os = "macos")]
             {
                 use crate::panel_manager::is_window_handle_valid;

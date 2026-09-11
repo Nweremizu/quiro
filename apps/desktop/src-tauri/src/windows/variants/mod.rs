@@ -17,7 +17,7 @@ pub(crate) async fn try_reuse_existing(
             | ShowQuiroWindow::InProgressRecording { .. }
             | ShowQuiroWindow::ScreenshotEditor { .. }
             | ShowQuiroWindow::Editor { .. }
-    ) && let Some(window) = this.id(app).get(app)
+    ) && let Some(window) = this.id().get(app)
     {
         #[cfg(target_os = "macos")]
         if matches!(this, ShowQuiroWindow::Main { .. })
@@ -89,7 +89,7 @@ pub(crate) async fn try_reuse_existing(
         }
 
         #[cfg(target_os = "macos")]
-        if this.id(app).activates_dock() {
+        if this.id().activates_dock() {
             crate::permissions::sync_macos_dock_visibility(app);
         }
 

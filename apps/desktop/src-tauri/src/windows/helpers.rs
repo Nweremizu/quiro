@@ -575,6 +575,8 @@ pub(crate) fn restore_main_window_after_editor(app: &AppHandle, closing_label: &
 
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
+        crate::captions::release_ml_models().await;
+
         if let Err(err) = (ShowQuiroWindow::Main {
             init_target_mode: None,
         })
