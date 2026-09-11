@@ -368,6 +368,9 @@ importers:
       dialkit:
         specifier: ^1.4.3
         version: 1.4.3(motion@13.1.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
       typescript:
         specifier: ~5.8.3
         version: 5.8.3
