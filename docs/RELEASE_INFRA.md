@@ -11,6 +11,10 @@ ships an update.
 <RELEASE_BASE_URL>/
   stable/
     latest.json                       # updater manifest, fetched fresh every check
+    downloads.json                    # public installer metadata
+    downloads/
+      quiro-windows-x64.exe           # stable website download alias
+      quiro-macos-arm64.dmg           # stable website download alias
     1.4.0/
       Quiro_1.4.0_x64-setup.exe       # Windows installer (updater downloads this)
       Quiro_1.4.0_x64-setup.exe.sig   # its signature
@@ -23,8 +27,10 @@ ships an update.
     1.5.0-nightly.<ts>.<sha>/ ...
 ```
 
-`stable/latest.json` is served `Cache-Control: no-cache`; everything under a
-version folder is immutable and cached forever.
+`stable/latest.json`, `stable/downloads.json`, and the website download aliases
+are served `Cache-Control: no-cache`; everything under a version folder is
+immutable and cached forever. The release workflow replaces the aliases only
+after both platform installers have been collected.
 
 ## 1. Create the bucket
 
@@ -45,12 +51,13 @@ is `RELEASE_BASE_URL`.
 You get `https://pub-<hash>.r2.dev`. Rate-limited and uncached — fine for
 testing, switch to a custom domain before real users.
 
-## 3. Cache rule for `latest.json`
+## 3. Cache rules for mutable release files
 
 R2 objects are uploaded with `Cache-Control` headers by the release workflow, so
 nothing extra is required. If you front the bucket with extra Cloudflare caching,
-add a **Cache Rule**: when URI path ends with `/latest.json` → *Bypass cache* (or
-Edge TTL 60s). The updater must see a new release within minutes.
+add a **Cache Rule** for `/stable/latest.json`, `/stable/downloads.json`, and
+`/stable/downloads/*` → *Bypass cache* (or Edge TTL 60s). The updater and public
+website must see a new release within minutes.
 
 ## 4. API token for CI
 
@@ -110,4 +117,21 @@ git push --follow-tags origin main
 ```
 
 `release.yml` builds all platforms, uploads to R2, publishes the GitHub Release,
-and writes `stable/latest.json`. Installed apps pick it up on next launch.
+writes both manifests, and refreshes the stable website download aliases.
+Installed apps pick up `stable/latest.json` on next launch; the website buttons
+resolve to the same release's `.exe` and `.dmg`.
+
+## 8. Publish the website
+
+Create a Cloudflare Pages project for this repository, then add:
+
+| Setting | Value |
+| ------- | ----- |
+| Secret `CLOUDFLARE_API_TOKEN` | Cloudflare token with Pages edit access |
+| Variable `CLOUDFLARE_PAGES_PROJECT` | Pages project name |
+| Variable `SITE_URL` | `https://quiro.app` |
+
+The existing `CLOUDFLARE_ACCOUNT_ID` secret and `RELEASE_BASE_URL` variable are
+reused. `.github/workflows/web.yml` builds a static artifact for every website
+change and deploys `apps/web/out` on pushes to `main` when the Pages settings
+are present.

@@ -128,7 +128,10 @@ fn capture_group() -> DiagnosticGroup {
     }
 
     if let Some(gpu) = d.gpu_info {
-        entries.push(entry("GPU", format!("{} ({})", gpu.description, gpu.vendor)));
+        entries.push(entry(
+            "GPU",
+            format!("{} ({})", gpu.description, gpu.vendor),
+        ));
         entries.push(flagged(
             "Hardware encoding",
             yes_no(gpu.supports_hardware_encoding),
@@ -180,7 +183,11 @@ fn capture_group() -> DiagnosticGroup {
         entries.push(entry("GPU", gpu));
     }
 
-    entries.push(flagged("Metal", yes_no(d.metal_supported), !d.metal_supported));
+    entries.push(flagged(
+        "Metal",
+        yes_no(d.metal_supported),
+        !d.metal_supported,
+    ));
     entries.push(flagged(
         "Screen capture",
         yes_no(d.screen_capture_supported),

@@ -375,6 +375,7 @@ export function ScreenshotEditorProvider({
 
 			if (next.project) setProjectState(next.project);
 			if (next.annotations) setAnnotationsState(next.annotations);
+			live.current = { ...current, ...next };
 		},
 		[pushHistory],
 	);

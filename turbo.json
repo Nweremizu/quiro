@@ -6,7 +6,7 @@
 		"build": {
 			"inputs": ["$TURBO_DEFAULT$", "!src-tauri/**"],
 			"dependsOn": ["^build"],
-			"outputs": ["dist/**"]
+			"outputs": ["dist/**", "out/**"]
 		},
 		"typecheck": {
 			"dependsOn": ["^build"],

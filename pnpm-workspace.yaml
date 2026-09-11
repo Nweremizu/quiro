@@ -4,4 +4,5 @@ packages:
   - "packages/crates/tauri-plugin-*"
 allowBuilds:
   esbuild: false
+  sharp: false
   unrs-resolver: false

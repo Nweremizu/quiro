@@ -33,11 +33,15 @@ fn pack_frame_data(
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum WSFrameFormat {
     Rgba,
-    Nv12 { full_range: bool },
+    Nv12 {
+        full_range: bool,
+    },
     /// All-intra H.264. `config_len` bytes of `avcC`/Annex-B decoder config are
     /// prepended to the payload, and are only non-zero when the client needs to
     /// (re)configure — on the first frame and after a resolution change.
-    H264 { config_len: u32 },
+    H264 {
+        config_len: u32,
+    },
 }
 
 #[derive(Clone)]

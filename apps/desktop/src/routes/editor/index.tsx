@@ -63,6 +63,7 @@ function Editor() {
 		},
 		{ combo: "Mod+KeyZ", handler: undo },
 		{ combo: "Mod+Shift+KeyZ", handler: redo },
+		{ combo: "Mod+KeyY", handler: redo },
 		{ combo: "Space", handler: togglePlay },
 		{ combo: "KeyS", handler: () => setSplitMode(!splitMode) },
 		{

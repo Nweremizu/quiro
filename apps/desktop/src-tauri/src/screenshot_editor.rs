@@ -125,6 +125,9 @@ async fn render_layer(
     };
 
     let (base_w, base_h) = ProjectUniforms::get_base_size(&constants.options, config);
+    let preview_scale = (1920.0 / f64::from(base_w.max(base_h).max(1))).min(1.0);
+    let base_w = (f64::from(base_w) * preview_scale).round().max(1.0) as u32;
+    let base_h = (f64::from(base_h) * preview_scale).round().max(1.0) as u32;
 
     let cursor_events = quiro_project::CursorEvents::default();
     let mut zoom_timeline = ZoomTransformTimeline::from_project(
@@ -554,6 +557,7 @@ impl ScreenshotEditorInstances {
             let mut first_frame_logged = false;
             let mut last_frames: Option<(Arc<WSFrame>, Arc<WSFrame>)> = None;
             let mut last_fingerprint: Option<String> = None;
+            let mut last_background_fingerprint: Option<String> = None;
 
             loop {
                 if shutdown_token.is_cancelled() {
@@ -575,6 +579,12 @@ impl ScreenshotEditorInstances {
                 // ponytail: JSON compare, derive PartialEq if this ever shows up in a profile
                 let card_config = quiro_project::frame_layout::card_pass_config(&current_config);
                 let fingerprint = serde_json::to_string(&card_config).ok();
+                let mut background_config = card_config.clone();
+                background_config.annotations.clear();
+                let background_fingerprint = serde_json::to_string(&background_config).ok();
+                let reuse_background = background_fingerprint.is_some()
+                    && background_fingerprint == last_background_fingerprint
+                    && last_frames.is_some();
                 let reuse = fingerprint.is_some()
                     && fingerprint == last_fingerprint
                     && last_frames.is_some();
@@ -613,15 +623,21 @@ impl ScreenshotEditorInstances {
                 // Both passes derive their output size from a config with the
                 // same `base_size`, so the two images line up pixel for pixel
                 // and the browser can stack them without measuring either.
-                let background = render_layer(
-                    &constants,
-                    &decoded_frame,
-                    &current_config,
-                    CompositionScope::BackgroundOnly,
-                    &mut frame_renderer,
-                    &mut layers,
-                )
-                .await;
+                let background = if reuse_background {
+                    None
+                } else {
+                    Some(
+                        render_layer(
+                            &constants,
+                            &decoded_frame,
+                            &current_config,
+                            CompositionScope::BackgroundOnly,
+                            &mut frame_renderer,
+                            &mut layers,
+                        )
+                        .await,
+                    )
+                };
 
                 // The card is rendered where layout alone would put it: its
                 // offset and scale are stripped for the browser to apply, and
@@ -641,10 +657,10 @@ impl ScreenshotEditorInstances {
                 let mut sent: Vec<Arc<WSFrame>> = Vec::with_capacity(2);
                 for (rendered, tx, what) in [
                     (background, &frame_tx, "background"),
-                    (card, &card_frame_tx, "card"),
+                    (Some(card), &card_frame_tx, "card"),
                 ] {
                     match rendered {
-                        Ok(frame) => {
+                        Some(Ok(frame)) => {
                             if !first_frame_logged {
                                 tracing::info!(
                                     render_ms = render_started.elapsed().as_millis() as u64,
@@ -669,8 +685,14 @@ impl ScreenshotEditorInstances {
                             sent.push(ws_frame.clone());
                             let _ = tx.send(Some(ws_frame));
                         }
-                        Err(e) => {
+                        Some(Err(e)) => {
                             tracing::error!("Failed to render screenshot {what} layer: {e}");
+                        }
+                        None => {
+                            let (background, _) = last_frames.as_ref().expect("cached background");
+                            let frame = reissue(background, current_revision);
+                            sent.push(frame.clone());
+                            let _ = tx.send(Some(frame));
                         }
                     }
                 }
@@ -681,9 +703,11 @@ impl ScreenshotEditorInstances {
                 if let [background, card] = sent.as_slice() {
                     last_frames = Some((background.clone(), card.clone()));
                     last_fingerprint = fingerprint;
+                    last_background_fingerprint = background_fingerprint;
                 } else {
                     last_frames = None;
                     last_fingerprint = None;
+                    last_background_fingerprint = None;
                 }
 
                 tokio::select! {

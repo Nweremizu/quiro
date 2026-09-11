@@ -71,7 +71,10 @@ impl UnicodeString {
 
     fn from_str(s: &str) -> Self {
         let mut buf = [0u16; UNICODE_STRING_LEN];
-        for (dst, src) in buf.iter_mut().zip(s.encode_utf16().take(UNICODE_STRING_LEN - 1)) {
+        for (dst, src) in buf
+            .iter_mut()
+            .zip(s.encode_utf16().take(UNICODE_STRING_LEN - 1))
+        {
             *dst = src;
         }
         Self(buf)
@@ -176,7 +179,10 @@ type FnDrsSetSetting =
 
 fn load_query_interface() -> Option<QueryInterfaceFn> {
     unsafe {
-        let name: Vec<u16> = "nvapi64.dll".encode_utf16().chain(std::iter::once(0)).collect();
+        let name: Vec<u16> = "nvapi64.dll"
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect();
         let module = LoadLibraryW(PCWSTR(name.as_ptr())).ok()?;
         let proc = GetProcAddress(module, windows::core::s!("nvapi_QueryInterface"))?;
         Some(std::mem::transmute::<
@@ -195,7 +201,10 @@ fn resolve<T: Copy>(query: QueryInterfaceFn, id: u32) -> Result<T, &'static str>
     if ptr.is_null() {
         return Err("interface not available");
     }
-    debug_assert_eq!(std::mem::size_of::<T>(), std::mem::size_of::<*const c_void>());
+    debug_assert_eq!(
+        std::mem::size_of::<T>(),
+        std::mem::size_of::<*const c_void>()
+    );
     Ok(unsafe { std::mem::transmute_copy(&ptr) })
 }
 
@@ -207,7 +216,9 @@ fn resolve<T: Copy>(query: QueryInterfaceFn, id: u32) -> Result<T, &'static str>
 /// call this as early as possible in `run()`.
 pub fn ensure_max_performance_profile() {
     let Some(query) = load_query_interface() else {
-        tracing::debug!("nvapi64.dll not found; skipping GPU power policy setup (no NVIDIA driver?)");
+        tracing::debug!(
+            "nvapi64.dll not found; skipping GPU power policy setup (no NVIDIA driver?)"
+        );
         return;
     };
 
@@ -245,7 +256,10 @@ pub fn ensure_max_performance_profile() {
     }
 }
 
-fn try_set_max_performance(query: QueryInterfaceFn, session: SessionHandle) -> Result<(), &'static str> {
+fn try_set_max_performance(
+    query: QueryInterfaceFn,
+    session: SessionHandle,
+) -> Result<(), &'static str> {
     let load_settings: FnDrsLoadSettings = resolve(query, ID_DRS_LOAD_SETTINGS)?;
     if unsafe { load_settings(session) } != NVAPI_OK {
         return Err("LoadSettings failed");
@@ -254,7 +268,8 @@ fn try_set_max_performance(query: QueryInterfaceFn, session: SessionHandle) -> R
     let exe_name = current_exe_file_name().ok_or("could not determine current exe name")?;
     let exe_name_unicode = UnicodeString::from_str(&exe_name);
 
-    let find_application: FnDrsFindApplicationByName = resolve(query, ID_DRS_FIND_APPLICATION_BY_NAME)?;
+    let find_application: FnDrsFindApplicationByName =
+        resolve(query, ID_DRS_FIND_APPLICATION_BY_NAME)?;
     let mut profile: ProfileHandle = std::ptr::null_mut();
     let mut found_application = DrsApplicationV1 {
         version: make_version(std::mem::size_of::<DrsApplicationV1>(), 1),
@@ -264,7 +279,12 @@ fn try_set_max_performance(query: QueryInterfaceFn, session: SessionHandle) -> R
         launcher_name: UnicodeString::empty(),
     };
     let already_registered = unsafe {
-        find_application(session, exe_name_unicode, &mut profile, &mut found_application)
+        find_application(
+            session,
+            exe_name_unicode,
+            &mut profile,
+            &mut found_application,
+        )
     } == NVAPI_OK
         && !profile.is_null();
 
@@ -272,9 +292,9 @@ fn try_set_max_performance(query: QueryInterfaceFn, session: SessionHandle) -> R
         const PROFILE_NAME: &str = "quiro-desktop (max performance)";
         let find_profile: FnDrsFindProfileByName = resolve(query, ID_DRS_FIND_PROFILE_BY_NAME)?;
         let profile_name_unicode = UnicodeString::from_str(PROFILE_NAME);
-        let found_profile =
-            unsafe { find_profile(session, profile_name_unicode, &mut profile) } == NVAPI_OK
-                && !profile.is_null();
+        let found_profile = unsafe { find_profile(session, profile_name_unicode, &mut profile) }
+            == NVAPI_OK
+            && !profile.is_null();
 
         if !found_profile {
             let create_profile: FnDrsCreateProfile = resolve(query, ID_DRS_CREATE_PROFILE)?;

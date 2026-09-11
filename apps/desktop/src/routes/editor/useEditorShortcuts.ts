@@ -15,6 +15,7 @@ export type ShortcutBinding = {
 function normalizeCombo(event: KeyboardEvent) {
 	const parts: string[] = [];
 	if (event.metaKey || event.ctrlKey) parts.push("Mod");
+	if (event.altKey) parts.push("Alt");
 	if (event.shiftKey) parts.push("Shift");
 
 	switch (event.code) {
@@ -49,7 +50,13 @@ export function useEditorShortcuts(bindings: ShortcutBinding[]) {
 
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
-			if (event.repeat || typingInField()) return;
+			if (
+				event.defaultPrevented ||
+				event.isComposing ||
+				event.repeat ||
+				typingInField()
+			)
+				return;
 
 			const combo = normalizeCombo(event);
 			const binding = bindingsRef.current.find(

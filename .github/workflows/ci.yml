@@ -30,6 +30,8 @@ jobs:
         run: pnpm check
       - name: Frontend bundle
         run: pnpm --filter desktop build:app
+      - name: Marketing site
+        run: pnpm --filter @quiro/web build
 
   rust:
     name: rustfmt · clippy · test

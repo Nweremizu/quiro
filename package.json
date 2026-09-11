@@ -9,9 +9,11 @@
 		"node": ">=22.13"
 	},
 	"scripts": {
-		"dev": "pnpm --filter desktop tauri dev",
+		"dev": "pnpm --filter desktop tauri dev --config src-tauri/tauri.dev.conf.json",
+		"dev:web": "pnpm --filter @quiro/web dev",
 		"build": "turbo run build",
-		"build:web": "pnpm --filter desktop build",
+		"build:web": "pnpm --filter @quiro/web build",
+		"build:desktop-web": "pnpm --filter desktop build",
 		"tauri:build": "node scripts/build-local.mjs",
 		"tauri:build:debug": "node scripts/build-local.mjs --debug",
 		"tauri:build:nightly": "node scripts/build-local.mjs -c src-tauri/tauri.nightly.conf.json",

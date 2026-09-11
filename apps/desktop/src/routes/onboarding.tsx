@@ -343,7 +343,7 @@ export default function Onboarding() {
 					className="pointer-events-none absolute left-1/2 flex -translate-x-1/2 items-center gap-1.5"
 					data-tauri-drag-region
 				>
-					<div className="grid size-6 place-items-center rounded-lg bg-accent-solid text-accent-on-solid shadow-xs">
+					<div className="grid size-6 place-items-center rounded-lg bg-accent-solid text-gray-1 dark:text-gray-12 shadow-xs">
 						<IconQuiroLogo className="size-3.5" />
 					</div>
 					<span className="text-xs font-semibold tracking-tight">Quiro</span>
@@ -579,7 +579,7 @@ function StartupOverlay({
 					<span>Get Started</span>
 					<span className="inline-flex items-center gap-1 text-[11px] font-normal opacity-60">
 						Click here, or press
-						<kbd className="rounded border border-current/20 px-1 py-px text-[10px]">
+						<kbd className="rounded border border-current/20 px-1 py-px text-[10px] gray-button-shadow">
 							Space
 						</kbd>
 					</span>
@@ -1065,7 +1065,7 @@ function ShortcutsStep({ active }: { active: boolean }) {
 						className={cn(
 							"rounded-xl bg-white px-4 py-3.5 shadow-xs transition-[transform,opacity] duration-500 dark:bg-gray-2",
 							area.primary &&
-								"col-span-2 border-accent-border-selected bg-accent-surface/45",
+							"col-span-2 border-accent-border-selected bg-accent-surface/45",
 						)}
 						style={{
 							transitionDelay: `${150 + index * 80}ms`,

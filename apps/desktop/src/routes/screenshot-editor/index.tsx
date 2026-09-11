@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useEditorShortcuts } from "../editor/useEditorShortcuts";
 import {
 	ScreenshotEditorProvider,
 	useScreenshotEditorContext,
@@ -20,8 +21,23 @@ export default function ScreenshotEditorRoute() {
 }
 
 function Editor() {
-	const { instance, loadError, renameInstance, project, layersPanelOpen } =
-		useScreenshotEditorContext();
+	const {
+		instance,
+		loadError,
+		renameInstance,
+		project,
+		layersPanelOpen,
+		history,
+	} = useScreenshotEditorContext();
+	useEditorShortcuts([
+		{ combo: "Mod+KeyZ", handler: history.undo, when: () => history.canUndo },
+		{
+			combo: "Mod+Shift+KeyZ",
+			handler: history.redo,
+			when: () => history.canRedo,
+		},
+		{ combo: "Mod+KeyY", handler: history.redo, when: () => history.canRedo },
+	]);
 
 	const [viewport, setViewport] = useState<Viewport>(DEFAULT_VIEWPORT);
 
@@ -41,7 +57,7 @@ function Editor() {
 	if (!instance || !project) return <ScreenshotEditorSkeleton />;
 
 	return (
-		<div className="flex h-screen w-screen flex-col bg-gray-1">
+		<div className="flex min-h-0 flex-1 flex-col bg-gray-1">
 			<Header
 				prettyName={instance.prettyName}
 				path={instance.path}

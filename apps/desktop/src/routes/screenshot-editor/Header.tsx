@@ -18,6 +18,7 @@ import IconLucideMoreHorizontal from "~icons/lucide/more-horizontal";
 import IconLucideSave from "~icons/lucide/save";
 import IconLucideSettings from "~icons/lucide/settings";
 import IconLucideTrash2 from "~icons/lucide/trash-2";
+import { useEditorShortcuts } from "../editor/useEditorShortcuts";
 import { FileNameEditor } from "./file-name-editor";
 import { useScreenshotExport } from "./useScreenshotExport";
 
@@ -35,6 +36,18 @@ export function Header({
 	// canvas: the on-screen frame is fitted to the window, so copying it would
 	// hand over a downscaled image with no annotations composited in.
 	const { exportImage, isExporting } = useScreenshotExport();
+	useEditorShortcuts([
+		{
+			combo: "Mod+KeyS",
+			handler: () => exportImage("file"),
+			when: () => !isExporting,
+		},
+		{
+			combo: "Mod+KeyC",
+			handler: () => exportImage("clipboard"),
+			when: () => !isExporting && !window.getSelection()?.toString(),
+		},
+	]);
 
 	const deleteScreenshot = async () => {
 		setMoreOpen(false);

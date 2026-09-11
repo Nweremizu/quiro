@@ -273,6 +273,47 @@ export function LaunchRoutePage() {
 	const navigate = useNavigate();
 	const [isExpanded, setIsExpanded] = useState(false);
 	const { rawOptions, setOptions } = useRecordingOptions();
+	const shortcutPending = useRef(false);
+
+	useTauriEventListener(events.requestStartRecording, () => {
+		if (shortcutPending.current) return;
+		shortcutPending.current = true;
+		void commands
+			.startRecording(rawOptions.captureTarget)
+			.then((result) => {
+				if (result.status === "error") toast.error(result.error);
+			})
+			.catch(() => toast.error("Failed to start recording"))
+			.finally(() => {
+				shortcutPending.current = false;
+			});
+	});
+
+	useTauriEventListener(events.requestSetTargetMode, (request) => {
+		if (shortcutPending.current) return;
+		shortcutPending.current = true;
+		const mode = request.target_mode ?? rawOptions.targetMode ?? "display";
+		void (async () => {
+			try {
+				await commands.closeTargetSelectOverlays();
+				const result = await commands.openTargetSelectOverlays(
+					null,
+					request.display_id,
+					mode,
+				);
+				if (result.status === "error") throw new Error(result.error);
+				setOptions({ targetMode: mode, targetModeSource: "main" });
+			} catch (error) {
+				toast.error(
+					error instanceof Error
+						? error.message
+						: "Failed to open capture picker",
+				);
+			} finally {
+				shortcutPending.current = false;
+			}
+		})();
+	});
 
 	const [isWindowResizing, setIsWindowResizing] = useState(false);
 

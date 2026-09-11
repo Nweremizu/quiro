@@ -275,8 +275,8 @@ impl Default for GeneralSettingsStore {
     fn default() -> Self {
         Self {
             instance_id: uuid::Uuid::new_v4(),
-                    hide_dock_icon: false,
-                    enable_notifications: true,
+            hide_dock_icon: false,
+            enable_notifications: true,
             disable_auto_open_links: false,
             has_completed_startup: false,
             theme: AppTheme::System,
@@ -293,7 +293,7 @@ impl Default for GeneralSettingsStore {
             capture_keyboard_events: quiro_recording::DEFAULT_CAPTURE_KEYBOARD_EVENTS,
             post_deletion_behaviour: PostDeletionBehaviour::DoNothing,
             excluded_windows: default_excluded_windows(),
-                    instant_mode_max_resolution: quiro_recording::DEFAULT_INSTANT_MODE_MAX_RESOLUTION,
+            instant_mode_max_resolution: quiro_recording::DEFAULT_INSTANT_MODE_MAX_RESOLUTION,
             default_project_name_template: None,
             crash_recovery_recording: quiro_recording::DEFAULT_CRASH_RECOVERY_RECORDING,
             max_fps: quiro_recording::DEFAULT_STUDIO_MAX_FPS,
@@ -304,7 +304,7 @@ impl Default for GeneralSettingsStore {
             camera_window_position: None,
             camera_window_positions_by_monitor_name: BTreeMap::new(),
             has_completed_onboarding: false,
-                    out_of_process_muxer: quiro_recording::DEFAULT_OUT_OF_PROCESS_MUXER,
+            out_of_process_muxer: quiro_recording::DEFAULT_OUT_OF_PROCESS_MUXER,
             recordings_path: None,
             previous_recordings_paths: Vec::new(),
             camera_blur_disabled_by_crash: None,

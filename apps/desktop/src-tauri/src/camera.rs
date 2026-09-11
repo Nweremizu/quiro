@@ -1085,8 +1085,9 @@ impl Renderer {
                                             "Camera GPU-native preview unavailable ({err}); using CPU conversion"
                                         );
                                     }
-                                    match quiro_camera_ffmpeg::sample_buf_as_ffmpeg(&frame.sample_buf)
-                                    {
+                                    match quiro_camera_ffmpeg::sample_buf_as_ffmpeg(
+                                        &frame.sample_buf,
+                                    ) {
                                         Ok(inner) => {
                                             if self.render_cpu_frame(
                                                 &inner,
@@ -1502,8 +1503,10 @@ impl Renderer {
         }
 
         self.blur_processor_init_attempted = true;
-        match quiro_camera_effects::BlurProcessor::new(&self.device, wgpu::TextureFormat::Rgba8Unorm)
-        {
+        match quiro_camera_effects::BlurProcessor::new(
+            &self.device,
+            wgpu::TextureFormat::Rgba8Unorm,
+        ) {
             Ok(processor) => {
                 let mut processor = processor;
                 processor.set_inference_interval(CAMERA_PREVIEW_BLUR_INFERENCE_INTERVAL);

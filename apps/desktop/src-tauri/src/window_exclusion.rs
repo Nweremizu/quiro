@@ -332,7 +332,10 @@ mod tests {
         let exclusions = vec![title_exclusion("Quiro Camera")];
 
         assert!(matches_window_title(&exclusions, "Quiro Camera"));
-        assert!(!matches_window_title(&exclusions, "Quiro Recording Controls"));
+        assert!(!matches_window_title(
+            &exclusions,
+            "Quiro Recording Controls"
+        ));
     }
 
     #[test]

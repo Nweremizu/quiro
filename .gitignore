@@ -3,6 +3,9 @@ node_modules
 .pnpm-store
 .turbo
 apps/desktop/dist
+apps/web/.next
+apps/web/out
+apps/web/tsconfig.tsbuildinfo
 
 # Secrets / local config
 .env

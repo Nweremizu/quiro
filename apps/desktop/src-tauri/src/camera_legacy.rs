@@ -2,10 +2,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
+use flume::Sender;
 use quiro_recording::FFmpegVideoFrame;
 #[cfg(target_os = "macos")]
 use quiro_utils::macos_qos::{MacOsQosClass, set_current_thread_qos};
-use flume::Sender;
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 
@@ -270,9 +270,8 @@ pub async fn create_camera_preview_ws(
             let blur_mode = state.background_blur;
             let blur_enabled = blur_mode != quiro_project::BackgroundBlurMode::Off;
             let effects_mode = match blur_mode {
-                quiro_project::BackgroundBlurMode::Off | quiro_project::BackgroundBlurMode::Light => {
-                    quiro_camera_effects::BlurMode::Light
-                }
+                quiro_project::BackgroundBlurMode::Off
+                | quiro_project::BackgroundBlurMode::Light => quiro_camera_effects::BlurMode::Light,
                 quiro_project::BackgroundBlurMode::Heavy => quiro_camera_effects::BlurMode::Heavy,
             };
 

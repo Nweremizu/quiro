@@ -12,7 +12,10 @@ use tauri::{WebviewWindow, Window};
 ///
 /// # Safety
 /// Must be called on the main thread, with the window still alive.
-unsafe fn with_ns_window<T>(ptr: *mut std::ffi::c_void, f: impl FnOnce(&NSWindow) -> T) -> Option<T> {
+unsafe fn with_ns_window<T>(
+    ptr: *mut std::ffi::c_void,
+    f: impl FnOnce(&NSWindow) -> T,
+) -> Option<T> {
     if ptr.is_null() {
         return None;
     }

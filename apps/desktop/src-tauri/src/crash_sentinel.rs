@@ -285,7 +285,6 @@ fn report_unexpected_termination(prev: &SessionRecord) {
         prev_blur_recovery = prev.blur_recovery,
         "Previous Quiro session terminated without a clean shutdown"
     );
-
 }
 
 fn process_is_running(pid: u32) -> bool {

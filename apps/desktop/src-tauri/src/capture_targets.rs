@@ -146,12 +146,7 @@ fn capture_single_frame_thumbnail(item: GraphicsCaptureItem) -> Result<String, S
         settings,
         move |frame| {
             let buf = frame.as_buffer()?;
-            let _ = tx.send((
-                buf.data().to_vec(),
-                buf.width(),
-                buf.height(),
-                buf.stride(),
-            ));
+            let _ = tx.send((buf.data().to_vec(), buf.width(), buf.height(), buf.stride()));
             Ok(())
         },
         || Ok(()),
@@ -193,7 +188,10 @@ fn capture_single_frame_thumbnail(item: GraphicsCaptureItem) -> Result<String, S
         )
         .map_err(|e| e.to_string())?;
 
-    Ok(format!("data:image/png;base64,{}", BASE64.encode(png_bytes)))
+    Ok(format!(
+        "data:image/png;base64,{}",
+        BASE64.encode(png_bytes)
+    ))
 }
 
 fn to_png_data_uri_raw(bytes: &[u8]) -> String {

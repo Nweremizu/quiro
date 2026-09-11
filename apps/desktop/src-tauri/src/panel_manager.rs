@@ -84,10 +84,7 @@ impl PanelManager {
     /// Dropping the returned guard without calling [`PanelCreateGuard::mark_completed`]
     /// releases the claim, so a failed or panicking create can't wedge the
     /// state at `Creating` forever.
-    pub async fn try_begin_create(
-        &self,
-        window_type: PanelWindowType,
-    ) -> Option<PanelCreateGuard> {
+    pub async fn try_begin_create(&self, window_type: PanelWindowType) -> Option<PanelCreateGuard> {
         let operation_id = self.next_operation_id.fetch_add(1, Ordering::Relaxed) + 1;
         let mut entries = self
             .entries
