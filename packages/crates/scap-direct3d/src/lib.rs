@@ -152,6 +152,33 @@ impl Drop for CallbackActivityGuard {
     }
 }
 
+/// Closes the frame pool/session if `Capturer::new` bails out partway
+/// through setup (any `?` between their creation and the end of the
+/// function). Plain `Release()` via `Drop` on the WinRT objects usually
+/// tears down the underlying capture surfaces too, but `Close()` is the
+/// documented way to guarantee it — left armed, disarmed once `Ok(Capturer
+/// {..})` is actually returned.
+struct CaptureInitGuard {
+    frame_pool: Direct3D11CaptureFramePool,
+    session: GraphicsCaptureSession,
+    disarmed: bool,
+}
+
+impl CaptureInitGuard {
+    fn disarm(&mut self) {
+        self.disarmed = true;
+    }
+}
+
+impl Drop for CaptureInitGuard {
+    fn drop(&mut self) {
+        if !self.disarmed {
+            let _ = self.session.Close();
+            let _ = self.frame_pool.Close();
+        }
+    }
+}
+
 struct PooledStagingTexture {
     texture: ID3D11Texture2D,
     width: u32,
@@ -518,6 +545,12 @@ impl Capturer {
             .CreateCaptureSession(&item)
             .map_err(NewCapturerError::CaptureSession)?;
 
+        let mut init_guard = CaptureInitGuard {
+            frame_pool: frame_pool.clone(),
+            session: session.clone(),
+            disarmed: false,
+        };
+
         if let Some(border_required) = settings.is_border_required {
             session
                 .SetIsBorderRequired(border_required)
@@ -650,6 +683,8 @@ impl Capturer {
                 "Hardware GPU unavailable, using WARP software rasterizer for screen capture"
             );
         }
+
+        init_guard.disarm();
 
         Ok(Capturer {
             settings,

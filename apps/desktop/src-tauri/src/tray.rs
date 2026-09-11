@@ -2,14 +2,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Manager, Wry};
+use tauri::{AppHandle, Listener, Manager, Wry};
 use tauri_specta::Event;
 use tracing::error;
 
-use crate::recording_settings::RecordingTargetMode;
-use crate::target_select_overlay::{open_target_select_overlays, WindowFocusManager};
-use crate::windows::ShowQuiroWindow;
 use crate::CurrentRecordingChanged;
+use crate::recording_settings::RecordingTargetMode;
+use crate::target_select_overlay::{WindowFocusManager, open_target_select_overlays};
+use crate::windows::ShowQuiroWindow;
 
 // Whether the *current* ExitRequested is a deliberate quit (tray's "Quit")
 // versus one Tauri fires on its own — e.g. when the last window closes.
@@ -36,7 +36,9 @@ pub fn retry_exit_when_recording_stops(app: AppHandle<Wry>) {
     }
 
     let listener_app = app.clone();
-    CurrentRecordingChanged::listen_any(&app, move |_| {
+    let event_id = std::sync::Arc::new(std::sync::OnceLock::new());
+    let event_id_for_listener = event_id.clone();
+    let id = CurrentRecordingChanged::listen_any(&app, move |_| {
         let still_recording = listener_app
             .try_state::<crate::ArcLock<crate::App>>()
             .and_then(|state| {
@@ -49,9 +51,13 @@ pub fn retry_exit_when_recording_stops(app: AppHandle<Wry>) {
 
         if !still_recording {
             RETRY_ARMED.store(false, Ordering::Release);
+            if let Some(id) = event_id_for_listener.get() {
+                listener_app.unlisten(*id);
+            }
             listener_app.exit(0);
         }
     });
+    let _ = event_id.set(id);
 }
 pub fn create_tray(app: &AppHandle<Wry>) -> tauri::Result<()> {
     let menu = Menu::with_items(
@@ -119,7 +125,8 @@ pub fn create_tray(app: &AppHandle<Wry>) -> tauri::Result<()> {
                 }
                 "settings" => {
                     tauri::async_runtime::spawn(async move {
-                        if let Err(err) = (ShowQuiroWindow::Settings { page: None }).show(&app).await
+                        if let Err(err) =
+                            (ShowQuiroWindow::Settings { page: None }).show(&app).await
                         {
                             error!(?err, "Failed to open settings from tray");
                         }

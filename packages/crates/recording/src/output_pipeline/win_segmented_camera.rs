@@ -15,7 +15,9 @@ use std::{
     time::Duration,
 };
 use tracing::*;
-use windows::{Foundation::TimeSpan, Graphics::SizeInt32};
+use windows::{
+    Foundation::TimeSpan, Graphics::SizeInt32, Win32::Graphics::Direct3D11::ID3D11Device,
+};
 
 #[derive(Debug, Clone)]
 struct SegmentInfo {
@@ -164,6 +166,7 @@ pub struct WindowsSegmentedCameraMuxer {
 
     video_config: VideoInfo,
     output_height: Option<u32>,
+    d3d_device: ID3D11Device,
     encoder_preferences: crate::capture_pipeline::EncoderPreferences,
 
     pause: PauseTracker,
@@ -173,17 +176,8 @@ pub struct WindowsSegmentedCameraMuxer {
 pub struct WindowsSegmentedCameraMuxerConfig {
     pub output_height: Option<u32>,
     pub segment_duration: Duration,
+    pub d3d_device: ID3D11Device,
     pub encoder_preferences: crate::capture_pipeline::EncoderPreferences,
-}
-
-impl Default for WindowsSegmentedCameraMuxerConfig {
-    fn default() -> Self {
-        Self {
-            output_height: None,
-            segment_duration: Duration::from_secs(3),
-            encoder_preferences: crate::capture_pipeline::EncoderPreferences::new(),
-        }
-    }
 }
 
 impl Muxer for WindowsSegmentedCameraMuxer {
@@ -215,6 +209,7 @@ impl Muxer for WindowsSegmentedCameraMuxer {
             current_state: None,
             video_config,
             output_height: config.output_height,
+            d3d_device: config.d3d_device,
             encoder_preferences: config.encoder_preferences,
             pause: PauseTracker::new(pause_flag),
             frame_drops: FrameDropTracker::new(),
@@ -398,6 +393,7 @@ impl WindowsSegmentedCameraMuxer {
         let bitrate_multiplier = 0.2f32;
         let input_format = first_frame.dxgi_format();
         let video_config = self.video_config;
+        let d3d_device = self.d3d_device.clone();
         let encoder_preferences = self.encoder_preferences.clone();
 
         let (video_tx, video_rx) = sync_channel::<Option<(NativeCameraFrame, Duration)>>(30);
@@ -410,14 +406,6 @@ impl WindowsSegmentedCameraMuxer {
             .name(format!("camera-segment-encoder-{}", self.current_index))
             .spawn(move || {
                 quiro_mediafoundation_utils::thread_init();
-
-                let d3d_device = match crate::capture_pipeline::create_d3d_device() {
-                    Ok(device) => device,
-                    Err(e) => {
-                        let _ = ready_tx.send(Err(anyhow!("Failed to create D3D device: {e}")));
-                        return Err(anyhow!("Failed to create D3D device: {e}"));
-                    }
-                };
 
                 let encoder = (|| {
                     let fallback = |reason: Option<String>| {

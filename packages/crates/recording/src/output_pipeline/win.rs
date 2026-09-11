@@ -1139,6 +1139,17 @@ impl AudioMuxer for WindowsCameraMuxer {
 pub struct CameraBuffers {
     uyvy_buffer: Vec<u8>,
     flip_buffer: Vec<u8>,
+    // Reused across frames instead of calling CreateTexture2D per frame — a
+    // camera segment is one dedicated encoder thread, so there's no need for
+    // a slot pool the way the multi-thread screen-capture path uses one.
+    upload_texture: Option<CachedUploadTexture>,
+}
+
+struct CachedUploadTexture {
+    texture: windows::Win32::Graphics::Direct3D11::ID3D11Texture2D,
+    width: u32,
+    height: u32,
+    format: DXGI_FORMAT,
 }
 
 impl CameraBuffers {
@@ -1146,6 +1157,7 @@ impl CameraBuffers {
         Self {
             uyvy_buffer: Vec::new(),
             flip_buffer: Vec::new(),
+            upload_texture: None,
         }
     }
 
@@ -1872,6 +1884,15 @@ pub fn upload_mf_buffer_to_texture(
 
     let dxgi_format = frame.dxgi_format();
 
+    // Looked up before `data` is computed below, since that borrows `buffers`
+    // mutably (the uyvy/flip scratch buffers) for the rest of the function.
+    let cached_texture = buffers.upload_texture.as_ref().and_then(|cached| {
+        (cached.width == frame.width
+            && cached.height == frame.height
+            && cached.format == dxgi_format)
+            .then(|| cached.texture.clone())
+    });
+
     let buffer_guard = frame
         .buffer
         .lock()
@@ -1981,6 +2002,14 @@ pub fn upload_mf_buffer_to_texture(
         }
     };
 
+    if let Some(texture) = cached_texture {
+        unsafe {
+            let context = device.GetImmediateContext()?;
+            context.UpdateSubresource(&texture, 0, None, data.as_ptr() as *const _, row_pitch, 0);
+        }
+        return Ok(texture);
+    }
+
     let texture_desc = D3D11_TEXTURE2D_DESC {
         Width: frame.width,
         Height: frame.height,
@@ -2003,7 +2032,7 @@ pub fn upload_mf_buffer_to_texture(
         SysMemSlicePitch: 0,
     };
 
-    unsafe {
+    let texture = unsafe {
         let mut texture = None;
         device.CreateTexture2D(&texture_desc, Some(&subresource_data), Some(&mut texture))?;
         texture.ok_or_else(|| {
@@ -2011,6 +2040,15 @@ pub fn upload_mf_buffer_to_texture(
                 windows::core::HRESULT(-1),
                 "CreateTexture2D succeeded but returned no texture",
             )
-        })
-    }
+        })?
+    };
+
+    buffers.upload_texture = Some(CachedUploadTexture {
+        texture: texture.clone(),
+        width: frame.width,
+        height: frame.height,
+        format: dxgi_format,
+    });
+
+    Ok(texture)
 }

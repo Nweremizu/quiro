@@ -6,6 +6,8 @@
 //! exposed any of it to the frontend, so the preview window had no way to
 //! read or change size, shape, mirroring or blur. These are that bridge.
 
+use std::collections::HashSet;
+
 use scap_targets::Display;
 use tauri::{AppHandle, Manager, State, Wry};
 use tracing::instrument;
@@ -60,9 +62,7 @@ pub async fn set_camera_preview_state(
     let native_preview_driving = guard.camera_preview.is_initialized();
     drop(guard);
 
-    if !native_preview_driving
-        && let Some(window) = WindowId::Camera.get(&app)
-    {
+    if !native_preview_driving && let Some(window) = WindowId::Camera.get(&app) {
         resize_camera_window_for_state(&app, &window, &state_for_ws, frame_aspect);
     }
 
@@ -97,6 +97,15 @@ pub fn set_camera_window_position(app: AppHandle, x: f64, y: f64) -> Result<(), 
         let position = WindowPosition { x, y, display_id };
         settings.camera_window_position = Some(position.clone());
         if let Some(monitor_name) = monitor_name {
+            // Monitor names churn as displays are docked/undocked/renamed, and
+            // this map is never otherwise written to — without pruning here it
+            // grows by one stale entry per never-seen-again monitor for the
+            // life of the install.
+            let connected: HashSet<String> =
+                Display::list().iter().filter_map(Display::name).collect();
+            settings
+                .camera_window_positions_by_monitor_name
+                .retain(|name, _| connected.contains(name));
             settings
                 .camera_window_positions_by_monitor_name
                 .insert(monitor_name, position);

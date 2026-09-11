@@ -13,7 +13,7 @@ use crate::{
     App, ArcLock, general_settings,
     recording_settings::RecordingTargetMode,
     window_exclusion::WindowExclusion,
-    windows::{WindowId, ShowQuiroWindow, hide_overlay, show_overlay},
+    windows::{ShowQuiroWindow, WindowId, hide_overlay, show_overlay},
 };
 use scap_targets::{
     Display, DisplayId, Window, WindowId as ScapWindowId,
@@ -553,12 +553,28 @@ impl WindowFocusManager {
                     // overlay the user is interacting with on multi-monitor setups, firing a
                     // `blur` that cancelled the in-progress crop drag. Focus held by any
                     // overlay is fine, so only refocus when nothing of ours is focused.
-                    let overlay_focused = app.webview_windows().iter().any(|(label, other)| {
-                        matches!(
-                            WindowId::from_str(label),
-                            Ok(WindowId::TargetSelectOverlay { .. })
-                        ) && other.is_focused().unwrap_or(false)
-                    });
+                    //
+                    // On the common single-monitor case there's only one overlay task, so
+                    // that overlay *is* "any overlay" — skip the full webview_windows() scan
+                    // (every overlay does this every 400ms) and just check this window.
+                    let single_overlay = app
+                        .state::<WindowFocusManager>()
+                        .tasks
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .len()
+                        <= 1;
+
+                    let overlay_focused = if single_overlay {
+                        window.is_focused().unwrap_or(false)
+                    } else {
+                        app.webview_windows().iter().any(|(label, other)| {
+                            matches!(
+                                WindowId::from_str(label),
+                                Ok(WindowId::TargetSelectOverlay { .. })
+                            ) && other.is_focused().unwrap_or(false)
+                        })
+                    };
 
                     let should_refocus =
                         overlay_focused || quiro_main.is_focused().ok().unwrap_or_default();

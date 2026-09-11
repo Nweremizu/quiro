@@ -1510,6 +1510,7 @@ pub fn run() {
                 exit_shutdown::ExitRequestDecision::StartCleanup => {
                     exit_state.begin();
                     crash_sentinel::mark_clean_exit();
+                    power_observer::uninstall(&app_handle);
                     app_handle.exit(0);
                 }
                 exit_shutdown::ExitRequestDecision::ExportActive => {
