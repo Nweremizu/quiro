@@ -374,7 +374,9 @@ impl SegmentedVideoEncoder {
         }
 
         let elapsed_in_segment = timestamp.saturating_sub(segment_start);
-        let at_keyframe = self.frames_in_segment % self.keyframe_interval_frames == 0;
+        let at_keyframe = self
+            .frames_in_segment
+            .is_multiple_of(self.keyframe_interval_frames);
         if at_keyframe && elapsed_in_segment >= self.segment_duration {
             self.on_segment_boundary(self.current_index, timestamp);
         }
