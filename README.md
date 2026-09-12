@@ -1,5 +1,5 @@
 <p align="center">
-  <img src=".github/assets/readme-banner.png" alt="Quiro — beautiful screen recordings, owned by you" width="100%" />
+  <img src="https://cdn.jsdelivr.net/gh/Nweremizu/quiro@main/.github/assets/readme-banner.png" alt="Quiro — beautiful screen recordings, owned by you" width="100%" />
 </p>
 
 <p align="center">
