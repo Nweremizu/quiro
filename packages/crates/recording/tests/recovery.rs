@@ -1257,7 +1257,7 @@ fn write_synthetic_fragments(display_dir: &Path, total_frames: u64, segment_dura
 
     for i in 0..total_frames {
         let frame = make_synthetic_video_frame(320, 240);
-        let ts = Duration::from_micros(i * 33_333);
+        let ts = Duration::from_secs_f64(i as f64 / 30.0);
         encoder.queue_frame(frame, ts).expect("queue frame");
     }
 

@@ -218,6 +218,23 @@ impl SegmentedVideoEncoder {
         let init_seg_str = INIT_SEGMENT_NAME;
         let media_seg_str = "segment_$Number%03d$.m4s";
 
+        let keyframe_interval_frames = keyframe_interval_frames(
+            video_config.frame_rate,
+            config.segment_duration.as_secs_f64(),
+        );
+        // FFmpeg's own dash muxer cuts at the first keyframe whose PTS-since-
+        // last-cut reaches this value -- and hits the exact same structural
+        // shortfall queue_frame's boundary check below compensates for: the
+        // keyframe at frame N is only N-1 real frame intervals in, one whole
+        // frame period short of an exact multiple of segment_duration. Pass
+        // it a duration already reduced by that amount so its decision lands
+        // on the intended keyframe instead of deferring to the next one, an
+        // entire GOP later.
+        let muxer_seg_duration = config
+            .segment_duration
+            .saturating_sub(config.segment_duration / keyframe_interval_frames.max(1))
+            .saturating_sub(Duration::from_millis(1));
+
         unsafe {
             let opts = output.as_mut_ptr();
 
@@ -231,7 +248,7 @@ impl SegmentedVideoEncoder {
             set_opt("media_seg_name", media_seg_str);
             set_opt(
                 "seg_duration",
-                &config.segment_duration.as_secs_f64().to_string(),
+                &muxer_seg_duration.as_secs_f64().to_string(),
             );
             set_opt("use_timeline", "1");
             set_opt("use_template", "1");
@@ -287,10 +304,7 @@ impl SegmentedVideoEncoder {
             output,
             current_index: 1,
             segment_duration: config.segment_duration,
-            keyframe_interval_frames: keyframe_interval_frames(
-                video_config.frame_rate,
-                config.segment_duration.as_secs_f64(),
-            ),
+            keyframe_interval_frames,
             segment_start_time: None,
             last_frame_timestamp: None,
             frames_in_segment: 0,
@@ -377,7 +391,22 @@ impl SegmentedVideoEncoder {
         let at_keyframe = self
             .frames_in_segment
             .is_multiple_of(self.keyframe_interval_frames);
-        if at_keyframe && elapsed_in_segment >= self.segment_duration {
+        // Structural, not just noise: the Nth *counted* frame is the (N-1)th
+        // 0-indexed one, so by the time frames_in_segment first reaches a GOP
+        // multiple, only N-1 real frame intervals have elapsed since this
+        // segment's first frame defined its t=0 -- one whole frame period
+        // short of the target, every single GOP. On top of that, real
+        // capture timestamps only approximate the nominal frame rate (e.g. a
+        // rounded 33_333us/frame is 1/3us short of an exact 1/30s, and that
+        // residual compounds over every frame in the GOP). Without slack,
+        // either gap fails the elapsed check and defers the cut to the
+        // *next* keyframe a whole GOP later, doubling the segment's real
+        // duration. One nominal frame period plus a small fixed buffer
+        // absorbs both without letting an earlier keyframe cut a segment
+        // short.
+        let boundary_tolerance =
+            self.segment_duration / self.keyframe_interval_frames.max(1) + Duration::from_millis(1);
+        if at_keyframe && elapsed_in_segment + boundary_tolerance >= self.segment_duration {
             self.on_segment_boundary(self.current_index, timestamp);
         }
 
