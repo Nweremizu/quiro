@@ -44,9 +44,6 @@ impl AudioData {
 
             let target_channels = target_channels_for_source(source_channels);
             let target_channel_layout = ChannelLayout::default(target_channels as i32);
-            let mut options = ffmpeg::Dictionary::new();
-            options.set("filter_size", "128");
-            options.set("cutoff", "0.97");
 
             let mut resampler = resampling::Context::get_with(
                 decoder.format(),
@@ -55,7 +52,7 @@ impl AudioData {
                 AudioData::SAMPLE_FORMAT,
                 target_channel_layout,
                 AudioData::SAMPLE_RATE,
-                options,
+                resampler_options(),
             )
             .map_err(|e| format!("Resampler / {e}"))?;
 
@@ -122,6 +119,13 @@ fn target_channels_for_source(channels: u16) -> u16 {
     if channels <= 1 { 1 } else { 2 }
 }
 
+fn resampler_options() -> ffmpeg::Dictionary<'static> {
+    let mut options = ffmpeg::Dictionary::new();
+    options.set("filter_size", "128");
+    options.set("cutoff", "0.97");
+    options
+}
+
 fn run_resampler(
     resampler: &mut resampling::Context,
     decoded_frame: &FFAudio,
@@ -131,9 +135,34 @@ fn run_resampler(
     let capacity = resample_capacity(resampler, decoded_frame.samples());
     let mut resampled_frame = FFAudio::new(target.format, capacity, target.channel_layout);
 
-    resampler
-        .run(decoded_frame, &mut resampled_frame)
-        .map_err(|e| format!("Run Resampler / {e}"))?;
+    match resampler.run(decoded_frame, &mut resampled_frame) {
+        Ok(_) => {}
+        // The decoder's frames don't always carry the same format/layout/rate
+        // the stream's own metadata predicted — seen in practice with unusual
+        // channel counts (e.g. quad, 16ch) on some FFmpeg builds. swr signals
+        // this rather than silently resampling from the wrong assumption, so
+        // rebuild the resampler around what this frame actually reports and
+        // retry once instead of failing the whole decode.
+        Err(ffmpeg::Error::InputChanged) => {
+            *resampler = resampling::Context::get_with(
+                decoded_frame.format(),
+                decoded_frame.channel_layout(),
+                decoded_frame.rate(),
+                target.format,
+                target.channel_layout,
+                target.rate,
+                resampler_options(),
+            )
+            .map_err(|e| format!("Resampler Reconfigure / {e}"))?;
+
+            let capacity = resample_capacity(resampler, decoded_frame.samples());
+            resampled_frame = FFAudio::new(target.format, capacity, target.channel_layout);
+            resampler
+                .run(decoded_frame, &mut resampled_frame)
+                .map_err(|e| format!("Run Resampler / {e}"))?;
+        }
+        Err(e) => return Err(format!("Run Resampler / {e}")),
+    }
 
     append_resampled_frame(samples, &resampled_frame)
 }
