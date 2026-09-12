@@ -72,14 +72,14 @@ impl AudioData {
                 }
 
                 while decoder.receive_frame(&mut decoded_frame).is_ok() {
-                    run_resampler(&mut resampler, &decoded_frame, &mut samples)?;
+                    run_resampler(&mut resampler, &mut decoded_frame, &mut samples)?;
                 }
             }
 
             decoder.send_eof().map_err(|e| format!("Send EOF / {e}"))?;
 
             while decoder.receive_frame(&mut decoded_frame).is_ok() {
-                run_resampler(&mut resampler, &decoded_frame, &mut samples)?;
+                run_resampler(&mut resampler, &mut decoded_frame, &mut samples)?;
             }
 
             flush_resampler(&mut resampler, &mut samples)?;
@@ -128,35 +128,36 @@ fn resampler_options() -> ffmpeg::Dictionary<'static> {
 
 fn run_resampler(
     resampler: &mut resampling::Context,
-    decoded_frame: &FFAudio,
+    decoded_frame: &mut FFAudio,
     samples: &mut Vec<f32>,
 ) -> Result<(), String> {
+    // Some FFmpeg builds leave a decoded frame's own channel_layout unset for
+    // channel counts with no named default (matches why the decoder needed
+    // the same fallback at setup, below) — swr compares the resampler's
+    // configured input against the frame's own fields, so an unset layout
+    // there mismatches every time, on every frame, no matter what the
+    // resampler was built with. Fix the frame itself before it ever reaches
+    // swr, rather than reacting after the fact.
+    if decoded_frame.channel_layout().is_empty() {
+        decoded_frame.set_channel_layout(ChannelLayout::default(
+            decoded_frame.channels().max(1) as i32
+        ));
+    }
+
     let target = *resampler.output();
     let capacity = resample_capacity(resampler, decoded_frame.samples());
     let mut resampled_frame = FFAudio::new(target.format, capacity, target.channel_layout);
 
     match resampler.run(decoded_frame, &mut resampled_frame) {
         Ok(_) => {}
-        // The decoder's frames don't always carry the same format/layout/rate
-        // the stream's own metadata predicted — seen in practice with unusual
-        // channel counts (e.g. quad, 16ch) on some FFmpeg builds. swr signals
-        // this rather than silently resampling from the wrong assumption, so
-        // rebuild the resampler around what this frame actually reports and
-        // retry once instead of failing the whole decode.
+        // A genuine mid-stream property change (distinct from the
+        // always-unset-layout case handled above) — rebuild the resampler
+        // around what this frame actually reports and retry once instead of
+        // failing the whole decode.
         Err(ffmpeg::Error::InputChanged) => {
-            // Some FFmpeg builds leave the frame's own channel_layout unset
-            // for channel counts with no named default (matches why the
-            // decoder needed the same fallback at setup, above).
-            let frame_channel_layout = decoded_frame.channel_layout();
-            let frame_channel_layout = if frame_channel_layout.is_empty() {
-                ChannelLayout::default(decoded_frame.channels().max(1) as i32)
-            } else {
-                frame_channel_layout
-            };
-
             *resampler = resampling::Context::get_with(
                 decoded_frame.format(),
-                frame_channel_layout,
+                decoded_frame.channel_layout(),
                 decoded_frame.rate(),
                 target.format,
                 target.channel_layout,
