@@ -31,7 +31,7 @@ pub struct H264EncoderBuilder {
     encoder_priority_override: Option<&'static [&'static str]>,
     is_export: bool,
     crf: Option<u8>,
-    keyframe_interval_secs: Option<u32>,
+    keyframe_interval_secs: Option<f64>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -126,7 +126,18 @@ impl H264EncoderBuilder {
     /// costs bitrate but is immune to that, and to seeking and scrubbing, which
     /// otherwise need a keyframe request round trip.
     pub fn all_intra(mut self) -> Self {
-        self.keyframe_interval_secs = Some(0);
+        self.keyframe_interval_secs = Some(0.0);
+        self
+    }
+
+    /// Caps the GOP length so a downstream segmenter (DASH/HLS-style muxing
+    /// only cuts at keyframes) can actually honor a segment duration shorter
+    /// than the encoder's default keyframe interval. Without this, a 100ms
+    /// segment_duration still gets one keyframe every
+    /// `DEFAULT_KEYFRAME_INTERVAL_SECS`, producing far fewer, much larger
+    /// segments than requested.
+    pub fn with_keyframe_interval_secs(mut self, secs: f64) -> Self {
+        self.keyframe_interval_secs = Some(secs);
         self
     }
 
@@ -982,23 +993,32 @@ fn export_encoder_priority_override(
 
 pub const DEFAULT_KEYFRAME_INTERVAL_SECS: u32 = 2;
 
+/// The GOP length (in frames) libx264's `g`/`keyint_min` options will actually
+/// use for a given `keyframe_interval_secs`. A downstream segmenter (DASH/HLS)
+/// can only cut at these exact frame counts, so callers that need to know
+/// where a real segment boundary will land (rather than just configuring the
+/// encoder) must use this same formula instead of re-deriving their own.
+pub fn keyframe_interval_frames(frame_rate: ffmpeg::Rational, keyframe_interval_secs: f64) -> u32 {
+    let denominator = frame_rate.denominator();
+    let frames_per_sec =
+        frame_rate.numerator() as f64 / if denominator == 0 { 1 } else { denominator } as f64;
+    // `0.0` is the all-intra request: `max(1.0)` turns it into a GOP of one
+    // frame rather than falling back to the default interval.
+    (keyframe_interval_secs * frames_per_sec).round().max(1.0) as u32
+}
+
 fn get_codec_and_options(
     config: &VideoInfo,
     preset: H264Preset,
     encoder_priority_override: Option<&'static [&'static str]>,
     is_export: bool,
     crf: Option<u8>,
-    keyframe_interval_secs: Option<u32>,
+    keyframe_interval_secs: Option<f64>,
 ) -> Vec<(Codec, Dictionary<'static>)> {
-    let keyframe_interval_secs = keyframe_interval_secs.unwrap_or(DEFAULT_KEYFRAME_INTERVAL_SECS);
-    let denominator = config.frame_rate.denominator();
-    let frames_per_sec = config.frame_rate.numerator() as f64
-        / if denominator == 0 { 1 } else { denominator } as f64;
-    // `Some(0)` is the all-intra request: `max(1.0)` turns it into a GOP of one
-    // frame rather than falling back to the default interval.
-    let keyframe_interval = (keyframe_interval_secs as f64 * frames_per_sec)
-        .round()
-        .max(1.0) as i32;
+    let keyframe_interval_secs =
+        keyframe_interval_secs.unwrap_or(DEFAULT_KEYFRAME_INTERVAL_SECS as f64);
+    let keyframe_interval =
+        keyframe_interval_frames(config.frame_rate, keyframe_interval_secs) as i32;
     let keyframe_interval_str = keyframe_interval.to_string();
 
     let encoder_priority = if crf.is_some() {

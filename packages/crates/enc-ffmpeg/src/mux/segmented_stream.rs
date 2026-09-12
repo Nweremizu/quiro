@@ -11,6 +11,7 @@ use std::{
 
 use crate::video::h264::{
     DEFAULT_KEYFRAME_INTERVAL_SECS, H264Encoder, H264EncoderBuilder, H264EncoderError, H264Preset,
+    keyframe_interval_frames,
 };
 
 const INIT_SEGMENT_NAME: &str = "init.mp4";
@@ -81,6 +82,14 @@ pub struct SegmentedVideoEncoder {
 
     current_index: u32,
     segment_duration: Duration,
+    // DASH's own segmenter can only cut at a keyframe, so a boundary we
+    // detect off the wall-clock elapsed time alone can land ahead of where a
+    // physical cut will actually happen (the muxer waits for the *next*
+    // keyframe once real GOP length doesn't divide `segment_duration`
+    // evenly), leaving a "completed" segment that never materializes on
+    // disk. Gating on this frame count as well makes our bookkeeping only
+    // fire at the same points the muxer can physically cut.
+    keyframe_interval_frames: u32,
     segment_start_time: Option<Duration>,
     last_frame_timestamp: Option<Duration>,
     frames_in_segment: u32,
@@ -232,7 +241,8 @@ impl SegmentedVideoEncoder {
 
         let mut builder = H264EncoderBuilder::new(video_config)
             .with_preset(config.preset)
-            .with_bpp(config.bpp);
+            .with_bpp(config.bpp)
+            .with_keyframe_interval_secs(config.segment_duration.as_secs_f64());
 
         if let Some((width, height)) = config.output_size {
             builder = builder.with_output_size(width, height)?;
@@ -277,6 +287,10 @@ impl SegmentedVideoEncoder {
             output,
             current_index: 1,
             segment_duration: config.segment_duration,
+            keyframe_interval_frames: keyframe_interval_frames(
+                video_config.frame_rate,
+                config.segment_duration.as_secs_f64(),
+            ),
             segment_start_time: None,
             last_frame_timestamp: None,
             frames_in_segment: 0,
@@ -360,7 +374,8 @@ impl SegmentedVideoEncoder {
         }
 
         let elapsed_in_segment = timestamp.saturating_sub(segment_start);
-        if elapsed_in_segment >= self.segment_duration {
+        let at_keyframe = self.frames_in_segment % self.keyframe_interval_frames == 0;
+        if at_keyframe && elapsed_in_segment >= self.segment_duration {
             self.on_segment_boundary(self.current_index, timestamp);
         }
 
