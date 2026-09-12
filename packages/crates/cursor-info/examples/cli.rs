@@ -1,3 +1,4 @@
+#[cfg(any(target_os = "macos", windows))]
 use quiro_cursor_info::CursorShape;
 #[cfg(target_os = "macos")]
 use quiro_cursor_info::CursorShapeMacOS;
