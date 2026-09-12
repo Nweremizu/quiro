@@ -624,7 +624,7 @@ mod tests {
     #[test]
     fn recording_controls_default_interaction_is_size_limited() {
         assert!(recording_controls_size_allows_default_interaction(
-            tauri::PhysicalSize::new(640, 300),
+            tauri::PhysicalSize::new(640, 280),
             2.0,
         ));
         assert!(!recording_controls_size_allows_default_interaction(
@@ -640,7 +640,7 @@ mod tests {
 
         let position = calculate_area_recording_controls_position(display, area);
 
-        assert_eq!(position, (540.0, 718.0));
+        assert_eq!(position, (540.0, 790.0));
     }
 
     #[test]
@@ -650,7 +650,7 @@ mod tests {
 
         let position = calculate_area_recording_controls_position(display, area);
 
-        assert_eq!(position, (540.0, 446.0));
+        assert_eq!(position, (540.0, 514.0));
     }
 
     #[test]
@@ -660,7 +660,7 @@ mod tests {
 
         let position = calculate_area_recording_controls_position(display, area);
 
-        assert_eq!(position, (540.0, 842.0));
+        assert_eq!(position, (540.0, 896.0));
     }
 
     #[test]
