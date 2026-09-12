@@ -1,0 +1,91 @@
+name: A/V Sync Tests
+
+# The synthetic device matrix (packages/crates/recording/tests/sync_matrix.rs)
+# drives fake cameras/screens/microphones across frame rates, sample rates,
+# channel counts, and delivery pathologies (jitter, drops, static-screen
+# gaps) through the real recording pipeline and verifies sync at the
+# container level. Its default seed derives from system time, so results
+# aren't reproducible run-to-run — a fit for scheduled/opt-in scrutiny, not
+# a hard gate on every push. Findings are published as a job-summary table
+# and a JSON artifact.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 5 * * *"
+  pull_request:
+    paths:
+      - "packages/crates/recording/**"
+      - "packages/crates/enc-ffmpeg/**"
+      - ".github/workflows/sync-tests.yml"
+
+concurrency:
+  group: sync-tests-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  sync-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          cache-key: sync-tests
+      - name: Fetch native deps
+        run: |
+          node scripts/setup-onnxruntime.js
+          node scripts/setup-ffmpeg.mjs
+
+      - name: Synthetic device matrix
+        id: matrix
+        continue-on-error: true
+        shell: bash
+        env:
+          CAP_SYNC_MATRIX_REPORT: ${{ github.workspace }}/sync-matrix-report.json
+          CAP_SYNC_MATRIX_RANDOM_CASES: ${{ github.event_name == 'schedule' && '40' || '6' }}
+        run: |
+          cargo test -p quiro-recording --test sync_matrix -- --ignored --nocapture
+
+      - name: Report findings
+        if: always()
+        shell: bash
+        run: |
+          REPORT="${{ github.workspace }}/sync-matrix-report.json"
+          {
+            echo "## A/V sync matrix"
+            echo ""
+            if [ -f "$REPORT" ]; then
+              PYTHONIOENCODING=utf-8 python3 - "$REPORT" << 'PYEOF'
+          import json, sys
+          report = json.load(open(sys.argv[1]))
+          print(f"Randomized seed: `{report.get('seed')}` (rerun with CAP_SYNC_MATRIX_SEED)")
+          print()
+          print("| Case | Result | Detail |")
+          print("| --- | --- | --- |")
+          for case in report.get("cases", []):
+              verdict = "PASS" if case["pass"] else "FAIL"
+              detail = case["detail"].replace("|", "\\|")
+              print(f"| {case['name']} | {verdict} | {detail} |")
+          PYEOF
+            else
+              echo "No report produced — the matrix crashed before writing results."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-matrix-report
+          path: ${{ github.workspace }}/sync-matrix-report.json
+          if-no-files-found: ignore
+
+      - name: Fail on matrix failures
+        if: steps.matrix.outcome == 'failure'
+        shell: bash
+        run: |
+          echo "Synthetic sync matrix reported failures; see the job summary." >&2
+          exit 1

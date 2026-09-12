@@ -70,6 +70,10 @@ jobs:
         # it on its own.
         run: cargo build -p quiro-muxer
       - name: test
+        # sync_matrix.rs's test is #[ignore]d here (default seed derives from
+        # system time, so it isn't reproducible run-to-run) and runs instead
+        # on its own schedule via .github/workflows/sync-tests.yml, mirroring
+        # how Cap gates the same test.
         run: cargo test --workspace
 
   # Proves the installers still bundle, without publishing. Skipped on PRs to

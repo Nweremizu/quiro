@@ -1214,6 +1214,14 @@ async fn warm_up_video_encoder() {
     let _ = pipeline.stop().await;
 }
 
+// Randomized (default seed derives from system time) and timing-sensitive
+// across encoders/platforms, unlike the rest of the workspace's tests -- not
+// a fit for the main `cargo test --workspace` gate that blocks every push.
+// Runs on its own schedule with a reduced case count on PRs and graceful
+// reporting instead of a hard failure; see .github/workflows/sync-tests.yml
+// and CAP_SYNC_MATRIX_SEED/CAP_SYNC_MATRIX_REPORT above to reproduce a
+// specific failure locally.
+#[ignore]
 #[tokio::test(flavor = "multi_thread")]
 async fn synthetic_device_matrix_preserves_sync() {
     let mut results: Vec<CaseResult> = Vec::new();
