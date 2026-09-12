@@ -6581,7 +6581,7 @@ dependencies = [
 name = "quiro-cursor-capture"
 version = "0.1.0"
 dependencies = [
- "core-graphics 0.24.0",
+ "core-graphics 0.25.0",
  "device_query",
  "scap-targets",
 ]
@@ -6943,7 +6943,7 @@ dependencies = [
  "clap",
  "cocoa",
  "core-foundation 0.10.1",
- "core-graphics 0.24.0",
+ "core-graphics 0.25.0",
  "coreaudio-rs",
  "cpal 0.15.3 (git+https://github.com/CapSoftware/cpal?rev=6013cb5f8bd3)",
  "device_query",
@@ -7968,7 +7968,7 @@ dependencies = [
  "cidre",
  "cocoa",
  "core-foundation 0.10.1",
- "core-graphics 0.24.0",
+ "core-graphics 0.25.0",
  "image 0.24.9",
  "objc",
  "serde",
