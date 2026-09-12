@@ -44,7 +44,7 @@ pub fn ensure_dir(path: &PathBuf) -> Result<PathBuf, std::io::Error> {
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust,ignore
 /// let unique_name = ensure_unique_filename("My Recording.cap", &recordings_dir,);
 /// // If "My Recording.cap" exists, returns "My Recording (1).cap"
 /// // If that exists too, returns "My Recording (2).cap", etc.
@@ -161,7 +161,7 @@ pub fn ensure_unique_filename_with_attempts(
 ///
 /// ## Examples
 ///
-/// ```
+/// ```text
 /// // Basic formats
 /// YYYY-MM-DD HH:mm → %Y-%m-%d %H:%M
 /// // Output: "2025-01-15 14:30"
