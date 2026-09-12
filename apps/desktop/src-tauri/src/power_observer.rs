@@ -1,5 +1,6 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::AppHandle;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use tracing::info;
 
 static SYSTEM_ASLEEP: AtomicBool = AtomicBool::new(false);
