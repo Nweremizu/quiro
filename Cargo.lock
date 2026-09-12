@@ -6894,6 +6894,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "quiro-muxer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ffmpeg-next",
+ "libc",
+ "quiro-muxer-protocol",
+ "thiserror 1.0.69",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "quiro-muxer-protocol"
 version = "0.1.0"
 dependencies = [

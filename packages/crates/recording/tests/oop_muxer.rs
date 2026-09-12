@@ -13,9 +13,18 @@ const TEST_FPS: u32 = 30;
 static MUXER_BINARY: Once = Once::new();
 
 fn setup_muxer_binary() -> PathBuf {
+    let bin_name = if cfg!(windows) {
+        "quiro-muxer.exe"
+    } else {
+        "quiro-muxer"
+    };
     let workspace = env!("CARGO_MANIFEST_DIR");
-    let target_debug = PathBuf::from(workspace).join("../../target/debug/cap-muxer");
-    let target_release = PathBuf::from(workspace).join("../../target/release/cap-muxer");
+    let target_debug = PathBuf::from(workspace)
+        .join("../../../target/debug")
+        .join(bin_name);
+    let target_release = PathBuf::from(workspace)
+        .join("../../../target/release")
+        .join(bin_name);
 
     for candidate in [target_debug, target_release] {
         if candidate.exists() {
@@ -26,7 +35,9 @@ fn setup_muxer_binary() -> PathBuf {
         }
     }
 
-    panic!("cap-muxer binary not found; run `cargo build -p cap-muxer` before the OOP muxer tests");
+    panic!(
+        "quiro-muxer binary not found; run `cargo build -p quiro-muxer` before the OOP muxer tests"
+    );
 }
 
 fn minimal_video_config(output_dir: &std::path::Path, extradata: Vec<u8>) -> MuxerSubprocessConfig {
@@ -55,7 +66,7 @@ fn subprocess_spawns_and_finishes_cleanly_without_packets() {
 
     let config = minimal_video_config(&output_dir, Vec::new());
     let subprocess = MuxerSubprocess::spawn(bin, config, None)
-        .expect("spawn cap-muxer subprocess with no packets");
+        .expect("spawn quiro-muxer subprocess with no packets");
 
     let report = subprocess
         .finish()
@@ -77,7 +88,7 @@ fn subprocess_survives_kill_and_parent_reports_crashed() {
     let (health_tx, mut health_rx) = tokio::sync::mpsc::channel::<PipelineHealthEvent>(16);
 
     let mut subprocess =
-        MuxerSubprocess::spawn(bin, config, Some(health_tx)).expect("spawn cap-muxer subprocess");
+        MuxerSubprocess::spawn(bin, config, Some(health_tx)).expect("spawn quiro-muxer subprocess");
 
     subprocess
         .kill_for_testing()
@@ -170,7 +181,7 @@ fn subprocess_survives_finish_after_init_only() {
     let config = minimal_video_config(&output_dir, fake_extradata.clone());
 
     let subprocess = MuxerSubprocess::spawn(bin, config, None)
-        .expect("spawn cap-muxer with non-empty extradata");
+        .expect("spawn quiro-muxer with non-empty extradata");
     let report = subprocess.finish().expect("finish cleanly");
     assert_eq!(report.exit_code, Some(0));
 
@@ -236,7 +247,7 @@ fn encoder_to_subprocess_end_to_end_produces_playable_init_and_segments() {
     };
 
     let mut subprocess =
-        MuxerSubprocess::spawn(bin, config, None).expect("spawn cap-muxer subprocess");
+        MuxerSubprocess::spawn(bin, config, None).expect("spawn quiro-muxer subprocess");
 
     fn ship_packet(
         subprocess: &mut MuxerSubprocess,

@@ -63,6 +63,12 @@ jobs:
             echo "$versions"
             exit 1
           fi
+      - name: Build quiro-muxer
+        # The OOP muxer integration tests (packages/crates/recording/tests/oop_muxer.rs)
+        # spawn this binary directly from target/{debug,release} rather than
+        # depending on it as a crate, so `cargo test --workspace` never builds
+        # it on its own.
+        run: cargo build -p quiro-muxer
       - name: test
         run: cargo test --workspace
 
