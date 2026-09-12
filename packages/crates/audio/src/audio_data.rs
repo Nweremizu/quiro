@@ -144,9 +144,19 @@ fn run_resampler(
         // rebuild the resampler around what this frame actually reports and
         // retry once instead of failing the whole decode.
         Err(ffmpeg::Error::InputChanged) => {
+            // Some FFmpeg builds leave the frame's own channel_layout unset
+            // for channel counts with no named default (matches why the
+            // decoder needed the same fallback at setup, above).
+            let frame_channel_layout = decoded_frame.channel_layout();
+            let frame_channel_layout = if frame_channel_layout.is_empty() {
+                ChannelLayout::default(decoded_frame.channels().max(1) as i32)
+            } else {
+                frame_channel_layout
+            };
+
             *resampler = resampling::Context::get_with(
                 decoded_frame.format(),
-                decoded_frame.channel_layout(),
+                frame_channel_layout,
                 decoded_frame.rate(),
                 target.format,
                 target.channel_layout,
