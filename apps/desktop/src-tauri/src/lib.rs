@@ -115,6 +115,7 @@ pub(crate) fn should_show_onboarding(app: &AppHandle) -> bool {
         || !permissions::do_permissions_check(false).necessary_granted()
 }
 
+#[cfg(target_os = "windows")]
 fn should_engage_graphics_recovery(
     previous_termination: Option<crash_sentinel::UnexpectedTermination>,
 ) -> bool {
@@ -1003,6 +1004,7 @@ pub(crate) fn restore_camera_window(app: &AppHandle) {
 
 /// Waking from sleep invalidates capture sessions and device handles; give the
 /// OS a moment to settle, then ask the frontend to re-prewarm screen capture.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub(crate) fn schedule_resume_recovery(app_handle: AppHandle) {
     spawn_on_runtime(async move {
         if app_is_exiting(&app_handle) {

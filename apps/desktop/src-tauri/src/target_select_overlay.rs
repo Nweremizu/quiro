@@ -437,6 +437,10 @@ pub async fn display_information(display_id: &str) -> Result<DisplayInformation,
 #[tauri::command]
 #[instrument]
 pub async fn focus_window(window_id: ScapWindowId) -> Result<(), String> {
+    #[cfg_attr(
+        not(any(target_os = "macos", target_os = "windows")),
+        allow(unused_variables)
+    )]
     let window = Window::from_id(&window_id).ok_or("Window not found")?;
 
     #[cfg(target_os = "macos")]
