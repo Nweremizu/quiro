@@ -102,8 +102,17 @@ runs:
         # sizes/alignment for a cross-compiled x86_64-apple-darwin build
         # (arch-conditional layouts in FFmpeg's headers) — surfaces as a
         # bindgen const-eval underflow, not an obvious "wrong arch" error.
+        # Only add it when actually cross-compiling, though: callers that
+        # want a native build (no `rust-targets` input) leave this empty, and
+        # `--target=` with nothing after the `=` isn't "use the host
+        # default" — libclang reports it as an unparseable "unknown target
+        # triple 'unknown'".
         RUST_TARGET="${{ inputs.rust-targets }}"
-        echo "BINDGEN_EXTRA_CLANG_ARGS=-isysroot $SDKROOT --target=$RUST_TARGET" >> "$GITHUB_ENV"
+        if [ -n "$RUST_TARGET" ]; then
+          echo "BINDGEN_EXTRA_CLANG_ARGS=-isysroot $SDKROOT --target=$RUST_TARGET" >> "$GITHUB_ENV"
+        else
+          echo "BINDGEN_EXTRA_CLANG_ARGS=-isysroot $SDKROOT" >> "$GITHUB_ENV"
+        fi
 
     - name: Install Rust
       if: inputs.rust == 'true'

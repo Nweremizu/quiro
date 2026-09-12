@@ -101,6 +101,13 @@ jobs:
           node scripts/setup-ffmpeg.mjs
       - name: Build bundles
         # No signing key on CI — build the installers without updater artifacts.
+        # Explicit bash: windows-latest's default shell for `run:` is
+        # pwsh, which re-quotes this through pnpm's node shim and strips the
+        # embedded double quotes before tauri ever sees them (arrives as
+        # `{bundle:{createUpdaterArtifacts:false}}`, invalid JSON). bash's
+        # single-quote handling passes the whole --config value through as
+        # one literal argv entry, same as already works on macOS/Linux.
+        shell: bash
         run: pnpm --filter desktop tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}'
       - uses: actions/upload-artifact@v4
         with:
