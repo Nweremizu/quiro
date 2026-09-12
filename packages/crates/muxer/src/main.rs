@@ -440,7 +440,12 @@ fn open_output(state: &mut State, params: &StartParams) -> Result<OpenOutput, Mu
             (*cp).width = init.width as i32;
             (*cp).height = init.height as i32;
             (*cp).format = ffmpeg::ffi::AVPixelFormat::AV_PIX_FMT_YUV420P as i32;
-            (*cp).bit_rate = 0;
+            // A literal 0 here (variable bitrate, deliberately not reported)
+            // makes the dash muxer's own bandwidth/duration math divide by
+            // zero and crash the process outright if the stream ends up with
+            // zero packets ever written to it -- a nominal nonzero value
+            // avoids that without affecting the actual encoded bitrate.
+            (*cp).bit_rate = 1;
 
             if !init.extradata.is_empty() {
                 let size = init.extradata.len() as i32;
@@ -485,6 +490,9 @@ fn open_output(state: &mut State, params: &StartParams) -> Result<OpenOutput, Mu
                 2 => ffmpeg::ffi::AV_CH_LAYOUT_STEREO,
                 _ => ffmpeg::ffi::AV_CH_LAYOUT_STEREO,
             };
+            // See the matching video codecpar comment above: a zero bit_rate
+            // crashes the dash muxer if this stream never gets a packet.
+            (*cp).bit_rate = 1;
 
             if !init.extradata.is_empty() {
                 let size = init.extradata.len() as i32;
