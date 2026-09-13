@@ -1,5 +1,7 @@
 use std::{env, fs, str::FromStr};
 
+mod wayland;
+
 use x11rb::{
     connection::Connection,
     protocol::{
@@ -314,19 +316,7 @@ fn x11_connection() -> Result<(RustConnection, usize), x11rb::errors::ConnectErr
 }
 
 fn wayland_displays() -> Vec<DisplayImpl> {
-    if env::var_os("WAYLAND_DISPLAY").is_none() {
-        return Vec::new();
-    }
-
-    let (width, height) = wayland_display_size();
-    vec![DisplayImpl {
-        id: 0,
-        x: 0,
-        y: 0,
-        width,
-        height,
-        refresh_rate: 60.0,
-    }]
+    wayland::displays().unwrap_or_default()
 }
 
 fn wayland_windows() -> Vec<WindowImpl> {
@@ -335,21 +325,6 @@ fn wayland_windows() -> Vec<WindowImpl> {
     } else {
         vec![WindowImpl(0)]
     }
-}
-
-fn wayland_display_size() -> (u32, u32) {
-    let width = env::var("QUIRO_WAYLAND_OUTPUT_WIDTH")
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .filter(|value| *value > 0)
-        .unwrap_or(1920);
-    let height = env::var("QUIRO_WAYLAND_OUTPUT_HEIGHT")
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .filter(|value| *value > 0)
-        .unwrap_or(1080);
-
-    (width, height)
 }
 
 fn is_wayland_portal_window(window: Window) -> bool {
