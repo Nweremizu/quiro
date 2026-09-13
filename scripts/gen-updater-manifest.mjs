@@ -86,6 +86,14 @@ const DOWNLOADS = [
 		minimumVersion: "macOS 12",
 		alias: "quiro-macos-arm64.dmg",
 	},
+	{
+		suffix: "amd64.AppImage",
+		key: "linux-x86_64",
+		platform: "Linux",
+		architecture: "x64",
+		minimumVersion: "Most distros (AppImage)",
+		alias: "quiro-linux-x64.AppImage",
+	},
 ];
 
 const walk = (dir) => {

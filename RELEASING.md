@@ -2,9 +2,8 @@
 
 Quiro ships as native installers (`.exe`/NSIS on Windows, `.dmg` on macOS,
 `.AppImage`/`.deb` on Linux) with in-app auto-update via the Tauri updater
-(Linux's is signed on the AppImage). The website's downloads page only lists
-Windows/macOS installer links for now — Linux users get the AppImage through
-the in-app updater's `latest.json` and the GitHub Release assets.
+(Linux updates itself through the signed AppImage). The website's downloads
+page and `latest.json`/`downloads.json` all cover Windows, macOS, and Linux.
 
 ## How a change ships
 

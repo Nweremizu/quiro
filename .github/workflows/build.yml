@@ -239,8 +239,10 @@ jobs:
             --cache-control "no-cache"
           windows_installer=$(find ./dist -type f -name '*x64-setup.exe' -print -quit)
           macos_installer=$(find ./dist -type f -name '*aarch64.dmg' -print -quit)
+          linux_installer=$(find ./dist -type f -name '*amd64.AppImage' -print -quit)
           test -n "$windows_installer"
           test -n "$macos_installer"
+          test -n "$linux_installer"
           $R2 cp "$windows_installer" "s3://$BUCKET/$CHANNEL/downloads/quiro-windows-x64.exe" \
             --content-type application/vnd.microsoft.portable-executable \
             --content-disposition 'attachment; filename="Quiro-Windows-x64.exe"' \
@@ -248,6 +250,10 @@ jobs:
           $R2 cp "$macos_installer" "s3://$BUCKET/$CHANNEL/downloads/quiro-macos-arm64.dmg" \
             --content-type application/x-apple-diskimage \
             --content-disposition 'attachment; filename="Quiro-macOS-arm64.dmg"' \
+            --cache-control "no-cache"
+          $R2 cp "$linux_installer" "s3://$BUCKET/$CHANNEL/downloads/quiro-linux-x64.AppImage" \
+            --content-type application/octet-stream \
+            --content-disposition 'attachment; filename="Quiro-Linux-x64.AppImage"' \
             --cache-control "no-cache"
           $R2 cp "./manifest/$CHANNEL/downloads.json" "s3://$BUCKET/$CHANNEL/downloads.json" \
             --content-type application/json \

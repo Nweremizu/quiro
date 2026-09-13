@@ -12,5 +12,6 @@ const releaseBaseUrl =
 export const downloads = {
 	windows: `${releaseBaseUrl}/stable/downloads/quiro-windows-x64.exe`,
 	macos: `${releaseBaseUrl}/stable/downloads/quiro-macos-arm64.dmg`,
+	linux: `${releaseBaseUrl}/stable/downloads/quiro-linux-x64.AppImage`,
 	manifest: `${releaseBaseUrl}/stable/downloads.json`,
 } as const;

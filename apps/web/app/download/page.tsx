@@ -6,7 +6,7 @@ import { Icon } from "@/components/icons";
 
 export const metadata: Metadata = {
 	title: "Download",
-	description: "Download Quiro for Windows or Apple silicon Mac.",
+	description: "Download Quiro for Windows, Apple silicon Mac, or Linux.",
 };
 
 export default function DownloadPage() {
@@ -40,8 +40,8 @@ export default function DownloadPage() {
 					<Icon name="layers" />
 					<h2>Clear platform support</h2>
 					<p>
-						Quiro currently ships for Windows x64 and Apple silicon Macs running
-						macOS 12 or later.
+						Quiro currently ships for Windows x64, Apple silicon Macs running
+						macOS 12 or later, and Linux x64 (AppImage).
 					</p>
 				</div>
 			</section>

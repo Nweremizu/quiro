@@ -12,6 +12,12 @@
 			"runtimeExecutable": "pnpm",
 			"runtimeArgs": ["dev"],
 			"port": 1420
+		},
+		{
+			"name": "web",
+			"runtimeExecutable": "pnpm",
+			"runtimeArgs": ["--filter", "@quiro/web", "dev"],
+			"port": 3000
 		}
 	]
 }
