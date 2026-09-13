@@ -923,24 +923,42 @@ impl AudioSource for SystemAudioSource {
 // whatever default source we changed on each failed attempt so retries don't
 // compound onto an already-modified system state.
 async fn create_system_audio_source_config() -> anyhow::Result<SystemAudioSourceConfig> {
-    let mut remaining_retries = 2u8;
+    retry_with_restore(
+        2,
+        try_create_system_audio_source_config,
+        restore_pactl_default_source,
+    )
+    .await
+    .context("Linux system audio could not reach the output monitor")
+}
+
+/// Retries `attempt` up to `retries` more times (a 100ms backoff between
+/// each), calling `restore` with whatever needs undoing after every failed
+/// attempt so retries don't compound onto an already-modified system state.
+/// Generic and side-effect-free beyond the injected closures so the retry
+/// count/backoff/restore behavior itself is unit-testable without a real
+/// PulseAudio server.
+async fn retry_with_restore<T, E, Fut>(
+    mut retries: u8,
+    mut attempt: impl FnMut() -> Fut,
+    mut restore: impl FnMut(&str),
+) -> Result<T, E>
+where
+    Fut: std::future::Future<Output = Result<T, (E, Option<String>)>>,
+    E: std::fmt::Display,
+{
     loop {
-        match try_create_system_audio_source_config().await {
-            Ok(config) => return Ok(config),
+        match attempt().await {
+            Ok(value) => return Ok(value),
             Err((error, restore_source)) => {
-                if let Some(source) = restore_source {
-                    restore_pactl_default_source(&source);
+                if let Some(source) = &restore_source {
+                    restore(source);
                 }
-                if remaining_retries == 0 {
-                    return Err(error)
-                        .context("Linux system audio could not reach the output monitor");
+                if retries == 0 {
+                    return Err(error);
                 }
-                remaining_retries -= 1;
-                tracing::warn!(
-                    error = %error,
-                    remaining_retries,
-                    "Reconnecting the Linux system-audio input after setup failed"
-                );
+                tracing::warn!(%error, remaining_retries = retries, "Retrying after setup failed");
+                retries -= 1;
                 tokio::time::sleep(Duration::from_millis(100)).await;
             }
         }
@@ -1672,4 +1690,104 @@ fn x11_source_pixel(
         (3, 2, 1) => ffmpeg::format::Pixel::ZRGB,
         _ => bail!("Unsupported X11 channel order: b={blue} g={green} r={red}"),
     })
+}
+
+#[cfg(test)]
+mod retry_with_restore_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    #[tokio::test]
+    async fn succeeds_without_retrying_when_the_first_attempt_works() {
+        let attempts = AtomicU32::new(0);
+        let restores: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+        let result: Result<&str, String> = retry_with_restore(
+            2,
+            || {
+                attempts.fetch_add(1, Ordering::SeqCst);
+                std::future::ready(Ok("ok"))
+            },
+            |source| restores.lock().unwrap().push(source.to_string()),
+        )
+        .await;
+
+        assert_eq!(result, Ok("ok"));
+        assert_eq!(attempts.load(Ordering::SeqCst), 1);
+        assert!(restores.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn recovers_after_transient_failures_within_the_retry_budget() {
+        let attempts = AtomicU32::new(0);
+        let restores: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+        let result: Result<&str, String> = retry_with_restore(
+            2,
+            || {
+                let attempt = attempts.fetch_add(1, Ordering::SeqCst);
+                std::future::ready(if attempt < 2 {
+                    Err(("transient".to_string(), Some(format!("source-{attempt}"))))
+                } else {
+                    Ok("ok")
+                })
+            },
+            |source| restores.lock().unwrap().push(source.to_string()),
+        )
+        .await;
+
+        assert_eq!(result, Ok("ok"));
+        assert_eq!(attempts.load(Ordering::SeqCst), 3);
+        assert_eq!(
+            *restores.lock().unwrap(),
+            vec!["source-0".to_string(), "source-1".to_string()]
+        );
+    }
+
+    #[tokio::test]
+    async fn gives_up_and_restores_after_exhausting_the_retry_budget() {
+        let attempts = AtomicU32::new(0);
+        let restores: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+        let result: Result<&str, String> = retry_with_restore(
+            2,
+            || {
+                let attempt = attempts.fetch_add(1, Ordering::SeqCst);
+                std::future::ready(Err::<&str, _>((
+                    format!("failure-{attempt}"),
+                    Some(format!("source-{attempt}")),
+                )))
+            },
+            |source| restores.lock().unwrap().push(source.to_string()),
+        )
+        .await;
+
+        // 1 initial attempt + 2 retries = 3 total attempts, and the very
+        // last failure's error is what the caller ultimately sees.
+        assert_eq!(result, Err("failure-2".to_string()));
+        assert_eq!(attempts.load(Ordering::SeqCst), 3);
+        assert_eq!(
+            *restores.lock().unwrap(),
+            vec![
+                "source-0".to_string(),
+                "source-1".to_string(),
+                "source-2".to_string(),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn never_calls_restore_when_the_failure_carries_no_source() {
+        let restores: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+        let result: Result<&str, String> = retry_with_restore(
+            0,
+            || std::future::ready(Err::<&str, _>(("no source".to_string(), None))),
+            |source| restores.lock().unwrap().push(source.to_string()),
+        )
+        .await;
+
+        assert_eq!(result, Err("no source".to_string()));
+        assert!(restores.lock().unwrap().is_empty());
+    }
 }
