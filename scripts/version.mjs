@@ -88,21 +88,19 @@ console.log(`${current}  ->  ${next}${dryRun ? "  (dry run)" : ""}`);
 
 const edits = [];
 
-// JSON files: reformat is fine, they are tool-owned.
-const bumpJson = (path, mut) => {
-	const obj = JSON.parse(readFileSync(rel(path), "utf8"));
-	mut(obj);
-	edits.push([path, `${JSON.stringify(obj, null, "\t")}\n`]);
+// A surgical regex replace, like the Cargo.toml bump below — re-serializing
+// via JSON.stringify reformats the whole file to Node's own JSON style, which
+// disagrees with Biome's (e.g. it never collapses short arrays onto one
+// line) and broke CI's lint job on the v0.1.3 release.
+const bumpJsonVersion = (path) => {
+	const src = readFileSync(rel(path), "utf8");
+	const out = src.replace(/"version":\s*"[^"]+"/, `"version": "${next}"`);
+	if (out === src) throw new Error(`no "version" field found in ${path}`);
+	edits.push([path, out]);
 };
-bumpJson(TAURI_CONF, (o) => {
-	o.version = next;
-});
-bumpJson("apps/desktop/package.json", (o) => {
-	o.version = next;
-});
-bumpJson("package.json", (o) => {
-	o.version = next;
-});
+bumpJsonVersion(TAURI_CONF);
+bumpJsonVersion("apps/desktop/package.json");
+bumpJsonVersion("package.json");
 
 // Cargo.toml / Cargo.lock: surgical regex so nothing else is touched.
 const bumpCargoToml = (path) => {
