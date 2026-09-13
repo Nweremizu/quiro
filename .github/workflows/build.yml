@@ -152,7 +152,7 @@ jobs:
           ls -la "$dir"
 
       - name: Collect bundles
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bundles-${{ matrix.rust-target }}
           # Workspace target dir is at the repo root; `--target` nests bundles
