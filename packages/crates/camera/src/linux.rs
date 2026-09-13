@@ -17,6 +17,13 @@ use v4l::{
     video::{Capture, capture::Parameters as CaptureParameters},
 };
 
+// Without a stream timeout, `stream.next()` can block indefinitely on a
+// stalled camera, and since the stop-request check only runs *between*
+// `.next()` calls, that means a stall makes the capture thread uncancellable.
+const CAMERA_POLL_INTERVAL_MS: i32 = 250;
+const CAMERA_FRAME_TIMEOUT: Duration = Duration::from_secs(4);
+const POLLIN: i16 = 0x0001;
+
 const PREFERRED_FOURCCS: &[([u8; 4], u32)] = &[
     (*b"YUYV", 0),
     (*b"UYVY", 1),
@@ -203,7 +210,8 @@ pub fn start_capturing_impl(
 
     let thread = thread::spawn(move || {
         let mut stream = match MmapStream::with_buffers(&device, Type::VideoCapture, 4) {
-            Ok(stream) => {
+            Ok(mut stream) => {
+                stream.set_timeout(CAMERA_FRAME_TIMEOUT);
                 let _ = ready_tx.send(Ok(()));
                 stream
             }
@@ -213,13 +221,30 @@ pub fn start_capturing_impl(
             }
         };
 
+        let can_poll_before_requeue = has_multiple_capture_buffers(&stream);
+        let mut received_frame = false;
         loop {
             if stop_rx.try_recv().is_ok() {
                 break;
             }
 
+            // Poll before next() so a stalled camera stays cancellable without
+            // re-queuing a buffer after v4l's internal dequeue times out.
+            if received_frame && can_poll_before_requeue {
+                match stream.handle().poll(POLLIN, CAMERA_POLL_INTERVAL_MS) {
+                    Ok(0) => continue,
+                    Ok(_) => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                    Err(error) => {
+                        tracing::warn!(%error, "Linux camera polling failed");
+                        break;
+                    }
+                }
+            }
+
             match stream.next() {
                 Ok((bytes, meta)) => {
+                    received_frame = true;
                     let used = meta.bytesused as usize;
                     let bytes = bytes.get(..used).unwrap_or(bytes);
                     callback(CapturedFrame {
@@ -256,6 +281,25 @@ pub fn start_capturing_impl(
         }
         Err(error) => Err(StartCapturingError::Native(error.to_string())),
     }
+}
+
+fn has_multiple_capture_buffers(stream: &MmapStream<'_>) -> bool {
+    let mut buffer = v4l::v4l_sys::v4l2_buffer {
+        index: 1,
+        type_: Type::VideoCapture as u32,
+        memory: v4l::memory::Memory::Mmap as u32,
+        ..unsafe { std::mem::zeroed() }
+    };
+    // A driver may grant only one buffer; pre-polling then waits on a buffer
+    // still held by next(), so that case must queue before polling.
+    unsafe {
+        v4l::v4l2::ioctl(
+            stream.handle().fd(),
+            v4l::v4l2::vidioc::VIDIOC_QUERYBUF,
+            &mut buffer as *mut _ as *mut std::ffi::c_void,
+        )
+    }
+    .is_ok()
 }
 
 fn video_device_paths() -> Vec<PathBuf> {
