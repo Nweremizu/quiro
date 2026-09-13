@@ -26,7 +26,11 @@ use std::{
 };
 use tokio_util::sync::CancellationToken;
 use x11rb::connection::Connection as _;
-use x11rb::protocol::xproto::{ConnectionExt as _, ImageFormat, ImageOrder};
+use x11rb::protocol::Event;
+use x11rb::protocol::composite::{ConnectionExt as _, Redirect};
+use x11rb::protocol::xproto::{
+    ChangeWindowAttributesAux, ConnectionExt as _, EventMask, ImageFormat, ImageOrder, MapState,
+};
 use x11rb::rust_connection::RustConnection;
 
 #[derive(Debug)]
@@ -67,6 +71,9 @@ pub(crate) struct X11InputConfig {
     pub height: u32,
     pub fps: u32,
     pub show_cursor: bool,
+    /// Some(id) captures just that window via the XComposite extension
+    /// instead of a display-relative rectangle.
+    pub window_id: Option<u32>,
 }
 
 struct WaylandInputConfig {
@@ -118,6 +125,41 @@ impl ScreenCaptureConfig<X11Capture> {
             }
         }
 
+        if let LinuxCaptureSource::Window { id } = &self.config.linux_source {
+            let window = Window::from_id(id).ok_or_else(|| anyhow!("Window not found"))?;
+            let size = window
+                .physical_size()
+                .ok_or_else(|| anyhow!("Window size unavailable"))?;
+            let window_id: u32 = id
+                .to_string()
+                .parse()
+                .map_err(|_| anyhow!("Invalid X11 window id {id}"))?;
+            let width = ensure_even(size.width() as u32);
+            let height = ensure_even(size.height() as u32);
+            let video_info = VideoInfo {
+                width,
+                height,
+                ..self.video_info
+            };
+
+            return Ok((
+                VideoSourceConfig {
+                    video_info,
+                    input: LinuxInputConfig::X11(X11InputConfig {
+                        display_name: std::env::var("DISPLAY").unwrap_or_else(|_| ":0".to_string()),
+                        x: 0,
+                        y: 0,
+                        width,
+                        height,
+                        fps: self.config.fps,
+                        show_cursor: self.config.show_cursor,
+                        window_id: Some(window_id),
+                    }),
+                },
+                system_audio,
+            ));
+        }
+
         let display =
             Display::from_id(&self.config.display).ok_or_else(|| anyhow!("Display not found"))?;
         let display_position = display
@@ -160,6 +202,7 @@ impl ScreenCaptureConfig<X11Capture> {
                     height,
                     fps: self.config.fps,
                     show_cursor: self.config.show_cursor,
+                    window_id: None,
                 }),
             },
             system_audio,
@@ -300,10 +343,11 @@ impl PipewireCaptureState {
 async fn create_wayland_source_config(
     config: &ScreenCaptureConfig<X11Capture>,
 ) -> anyhow::Result<(VideoInfo, WaylandInputConfig)> {
-    let portal = open_wayland_portal(config.config.linux_source, config.config.show_cursor).await?;
-    let crop_bounds = match config.config.linux_source {
+    let portal =
+        open_wayland_portal(&config.config.linux_source, config.config.show_cursor).await?;
+    let crop_bounds = match &config.config.linux_source {
         LinuxCaptureSource::Area => config.config.crop_bounds,
-        LinuxCaptureSource::Display | LinuxCaptureSource::Window => None,
+        LinuxCaptureSource::Display | LinuxCaptureSource::Window { .. } => None,
     };
     let video_info = wayland_video_info(&portal.stream, config.video_info, crop_bounds);
 
@@ -320,7 +364,7 @@ async fn create_wayland_source_config(
 }
 
 async fn open_wayland_portal(
-    source: LinuxCaptureSource,
+    source: &LinuxCaptureSource,
     show_cursor: bool,
 ) -> anyhow::Result<WaylandPortalCapture> {
     let proxy: Screencast<'static> = Screencast::new()
@@ -384,9 +428,9 @@ fn prefers_wayland_portal() -> bool {
             .is_ok_and(|session| session.eq_ignore_ascii_case("wayland"))
 }
 
-fn wayland_source_type(source: LinuxCaptureSource) -> ashpd::enumflags2::BitFlags<SourceType> {
+fn wayland_source_type(source: &LinuxCaptureSource) -> ashpd::enumflags2::BitFlags<SourceType> {
     match source {
-        LinuxCaptureSource::Window => SourceType::Window.into(),
+        LinuxCaptureSource::Window { .. } => SourceType::Window.into(),
         LinuxCaptureSource::Display | LinuxCaptureSource::Area => SourceType::Monitor.into(),
     }
 }
@@ -1194,9 +1238,16 @@ fn capture_x11(
 /// FFmpeg (spacedrive native-deps) is built without. Capturing with `x11rb`
 /// keeps us off any system FFmpeg/libavdevice and adds no new runtime
 /// shared-library dependency (`x11rb` speaks the X11 protocol over a socket).
+struct X11WindowCapture {
+    id: x11rb::protocol::xproto::Window,
+    pixmap: x11rb::protocol::xproto::Pixmap,
+    border_width: u16,
+}
+
 pub(crate) struct X11Grabber {
     conn: RustConnection,
     root: x11rb::protocol::xproto::Window,
+    window: Option<X11WindowCapture>,
     x: i16,
     y: i16,
     width: u16,
@@ -1274,9 +1325,37 @@ impl X11Grabber {
             config.fps.max(1),
         );
 
-        Ok(Self {
+        let window = if let Some(id) = config.window_id {
+            let version = conn
+                .composite_query_version(0, 4)
+                .context("XComposite is required for isolated window capture")?
+                .reply()
+                .context("query XComposite version")?;
+            if version.major_version == 0 && version.minor_version < 2 {
+                bail!("XComposite 0.2 or later is required for isolated window capture");
+            }
+            conn.change_window_attributes(
+                id,
+                &ChangeWindowAttributesAux::new().event_mask(EventMask::STRUCTURE_NOTIFY),
+            )?
+            .check()?;
+            conn.composite_redirect_window(id, Redirect::AUTOMATIC)
+                .context("redirect X11 window for isolated capture")?
+                .check()
+                .context("enable isolated X11 window capture")?;
+            Some(X11WindowCapture {
+                id,
+                pixmap: 0,
+                border_width: 0,
+            })
+        } else {
+            None
+        };
+
+        let mut grabber = Self {
             conn,
             root,
+            window,
             x,
             y,
             width,
@@ -1285,18 +1364,102 @@ impl X11Grabber {
             output,
             scaler: None,
             show_cursor,
-        })
+        };
+        grabber.refresh_window_pixmap()?;
+        Ok(grabber)
+    }
+
+    /// Recreates the composite pixmap when the selected window's storage
+    /// changes (resize/reparent/map), and bails once it's gone. A no-op when
+    /// not in window-capture mode.
+    fn refresh_window_pixmap(&mut self) -> anyhow::Result<()> {
+        let Some(window) = self.window.as_mut() else {
+            return Ok(());
+        };
+        let mut storage_changed = false;
+        while let Some(event) = self.conn.poll_for_event()? {
+            match event {
+                Event::UnmapNotify(event) if event.window == window.id => {
+                    bail!("Selected X11 window was unmapped");
+                }
+                Event::DestroyNotify(event) if event.window == window.id => {
+                    bail!("Selected X11 window was closed");
+                }
+                Event::ConfigureNotify(event) if event.window == window.id => {
+                    storage_changed = true
+                }
+                Event::ReparentNotify(event) if event.window == window.id => storage_changed = true,
+                Event::MapNotify(event) if event.window == window.id => storage_changed = true,
+                _ => {}
+            }
+        }
+        let attributes = self
+            .conn
+            .get_window_attributes(window.id)?
+            .reply()
+            .context("selected X11 window is no longer available")?;
+        if attributes.map_state != MapState::VIEWABLE {
+            bail!("Selected X11 window is no longer viewable");
+        }
+        let geometry = self
+            .conn
+            .get_geometry(window.id)?
+            .reply()
+            .context("read selected X11 window geometry")?;
+        if geometry.width == 0 || geometry.height == 0 {
+            bail!("Selected X11 window has no content");
+        }
+
+        if storage_changed
+            || window.pixmap == 0
+            || self.width != geometry.width
+            || self.height != geometry.height
+            || window.border_width != geometry.border_width
+        {
+            let pixmap = self.conn.generate_id()?;
+            self.conn
+                .composite_name_window_pixmap(window.id, pixmap)?
+                .check()
+                .context("access isolated X11 window pixels")?;
+            let previous = std::mem::replace(&mut window.pixmap, pixmap);
+            if previous != 0 {
+                self.conn.free_pixmap(previous)?.check()?;
+            }
+            self.width = geometry.width;
+            self.height = geometry.height;
+            window.border_width = geometry.border_width;
+        }
+
+        if self.show_cursor {
+            let position = self
+                .conn
+                .translate_coordinates(window.id, self.root, 0, 0)?
+                .reply()
+                .context("locate selected X11 window cursor")?;
+            self.x = position.dst_x;
+            self.y = position.dst_y;
+        }
+        Ok(())
     }
 
     /// Capture one frame of the configured region as a BGRZ video frame.
     pub(crate) fn grab(&mut self) -> anyhow::Result<ffmpeg::frame::Video> {
+        self.refresh_window_pixmap()?;
+        let (drawable, x, y) = match &self.window {
+            Some(window) => {
+                let border = i16::try_from(window.border_width)
+                    .context("X11 window border exceeds capture limits")?;
+                (window.pixmap, border, border)
+            }
+            None => (self.root, self.x, self.y),
+        };
         let reply = self
             .conn
             .get_image(
                 ImageFormat::Z_PIXMAP,
-                self.root,
-                self.x,
-                self.y,
+                drawable,
+                x,
+                y,
                 self.width,
                 self.height,
                 u32::MAX,

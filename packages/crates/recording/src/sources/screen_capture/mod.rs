@@ -73,10 +73,10 @@ pub enum ScreenCaptureTarget {
 }
 
 #[cfg(target_os = "linux")]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum LinuxCaptureSource {
     Display,
-    Window,
+    Window { id: WindowId },
     Area,
 }
 
@@ -84,7 +84,7 @@ pub enum LinuxCaptureSource {
 impl LinuxCaptureSource {
     pub fn from_target(target: &ScreenCaptureTarget) -> Self {
         match target {
-            ScreenCaptureTarget::Window { .. } => Self::Window,
+            ScreenCaptureTarget::Window { id } => Self::Window { id: id.clone() },
             ScreenCaptureTarget::Area { .. } => Self::Area,
             ScreenCaptureTarget::Display { .. } | ScreenCaptureTarget::CameraOnly => Self::Display,
         }
