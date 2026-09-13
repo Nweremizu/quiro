@@ -915,9 +915,50 @@ impl AudioSource for SystemAudioSource {
     }
 }
 
+// Setting the PulseAudio/PipeWire default source and opening a CPAL stream
+// against it are two separate operations with a real gap between them (the
+// server needs a moment to actually reroute), so a transient failure right
+// after selecting the monitor doesn't necessarily mean the monitor itself is
+// bad. Retry a couple of times with backoff before giving up, restoring
+// whatever default source we changed on each failed attempt so retries don't
+// compound onto an already-modified system state.
 async fn create_system_audio_source_config() -> anyhow::Result<SystemAudioSourceConfig> {
-    let selected = select_system_audio_monitor()?;
+    let mut remaining_retries = 2u8;
+    loop {
+        match try_create_system_audio_source_config().await {
+            Ok(config) => return Ok(config),
+            Err((error, restore_source)) => {
+                if let Some(source) = restore_source {
+                    restore_pactl_default_source(&source);
+                }
+                if remaining_retries == 0 {
+                    return Err(error)
+                        .context("Linux system audio could not reach the output monitor");
+                }
+                remaining_retries -= 1;
+                tracing::warn!(
+                    error = %error,
+                    remaining_retries,
+                    "Reconnecting the Linux system-audio input after setup failed"
+                );
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+        }
+    }
+}
 
+async fn try_create_system_audio_source_config()
+-> Result<SystemAudioSourceConfig, (anyhow::Error, Option<String>)> {
+    let selected = select_system_audio_monitor().map_err(|error| (error, None))?;
+    let restore_source = selected.restore_source.clone();
+    try_create_system_audio_source_config_inner(selected)
+        .await
+        .map_err(|error| (error, restore_source))
+}
+
+async fn try_create_system_audio_source_config_inner(
+    selected: SelectedSystemAudioInput,
+) -> anyhow::Result<SystemAudioSourceConfig> {
     let (error_tx, _error_rx) = flume::bounded(16);
     let feed = MicrophoneFeed::spawn(MicrophoneFeed::new(error_tx));
     feed.ask(microphone::SetInput {
