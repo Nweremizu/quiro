@@ -11,6 +11,48 @@ use crate::recording_settings::RecordingTargetMode;
 use crate::target_select_overlay::{WindowFocusManager, open_target_select_overlays};
 use crate::windows::ShowQuiroWindow;
 
+// AppIndicator/StatusNotifierItem (the tray protocol GNOME Shell extensions
+// and KDE actually implement) looks up icons by theme name/path rather than
+// accepting a raw pixel buffer the way macOS/Windows tray icons do, so
+// Tauri's generic cross-platform `TrayIcon::set_icon` renders poorly or not
+// at all there. Write a symbolic (currentColor) SVG to a per-run icon
+// theme directory and point AppIndicator at it directly via its own FFI,
+// mirroring Cap's so.cap.desktop-tray-*-symbolic.svg approach.
+#[cfg(target_os = "linux")]
+const LINUX_TRAY_ICON_NAME: &str = "com.bronx.quiro-tray-symbolic";
+#[cfg(target_os = "linux")]
+const LINUX_TRAY_ICON_SVG: &str = include_str!("../icons/linux/com.bronx.quiro-tray-symbolic.svg");
+
+#[cfg(target_os = "linux")]
+fn write_linux_tray_symbolic_icon() -> std::io::Result<std::path::PathBuf> {
+    let dir = std::env::var_os("XDG_RUNTIME_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir)
+        .join("quiro-tray-icons");
+    std::fs::create_dir_all(&dir)?;
+
+    let path = dir.join(format!("{LINUX_TRAY_ICON_NAME}.svg"));
+    let svg = LINUX_TRAY_ICON_SVG.as_bytes();
+    if std::fs::read(&path).ok().as_deref() != Some(svg) {
+        std::fs::write(&path, svg)?;
+    }
+
+    Ok(dir)
+}
+
+#[cfg(target_os = "linux")]
+fn set_linux_tray_icon(tray: &tauri::tray::TrayIcon<Wry>) -> tauri::Result<()> {
+    let icon_dir = write_linux_tray_symbolic_icon().map_err(tauri::Error::Io)?;
+
+    tray.with_inner_tray_icon(move |inner| unsafe {
+        let indicator = inner.app_indicator() as *mut libappindicator::AppIndicator;
+        if let Some(indicator) = indicator.as_mut() {
+            indicator.set_icon_theme_path(&icon_dir.to_string_lossy());
+            indicator.set_icon_full(LINUX_TRAY_ICON_NAME, "Quiro tray icon");
+        }
+    })
+}
+
 // Whether the *current* ExitRequested is a deliberate quit (tray's "Quit")
 // versus one Tauri fires on its own — e.g. when the last window closes.
 // Read by lib.rs's ExitRequested handler: only a deliberate quit is allowed
@@ -143,6 +185,13 @@ pub fn create_tray(app: &AppHandle<Wry>) -> tauri::Result<()> {
             }
         })
         .build(app)?;
+
+    #[cfg(target_os = "linux")]
+    if let Some(tray) = app.tray_by_id("tray")
+        && let Err(error) = set_linux_tray_icon(&tray)
+    {
+        tracing::warn!(%error, "Failed to set Linux tray icon; falling back to the default pixel icon");
+    }
 
     Ok(())
 }

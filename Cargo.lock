@@ -6632,6 +6632,7 @@ dependencies = [
  "kameo",
  "keyed_priority_queue",
  "lazy_static",
+ "libappindicator",
  "log",
  "objc",
  "objc2",

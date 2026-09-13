@@ -1239,6 +1239,7 @@ fn capture_screenshot_x11_blocking(target: &ScreenCaptureTarget) -> anyhow::Resu
         height,
         fps: 1,
         show_cursor: false,
+        window_id: None,
     };
     let mut grabber = X11Grabber::new(&config)?;
     let frame = grabber.grab()?;
