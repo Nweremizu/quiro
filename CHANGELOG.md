@@ -10,6 +10,21 @@ changes.
 
 ## [Unreleased]
 
+### Added
+
+- Linux downloads and in-app updates: the website's download page now offers
+  an AppImage alongside Windows/macOS, and the release pipeline publishes it
+  to R2 so the desktop updater can serve it too.
+- The in-app changelog now fetches from quiro.app first (so it can show
+  what's new before you update), falling back to the bundled copy offline.
+
+### Fixed
+
+- `pnpm release` reformatted every JSON version file through
+  `JSON.stringify`, which disagreed with Biome's formatter and broke CI's
+  lint job on release commits (as it did for v0.1.3). It now does a surgical
+  version-field replace instead, like the existing Cargo.toml/Cargo.lock bump.
+
 ## [0.1.3] - 2026-09-13
 
 - Maintenance release.

@@ -6,15 +6,19 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import type { ReactNode } from "react";
 import { Section, SectionCard, SettingsPageContent } from "./Setting";
 
-// Cap fetches its changelog from a web API; Quiro has none, so this reads the
-// CHANGELOG.md that `scripts/version.mjs` already maintains, bundled as a Tauri
-// resource (see tauri.conf.json `resources`). That keeps one source of truth,
-// works offline, and can never show entries for a version that isn't installed.
+// The website republishes the repo's CHANGELOG.md as a small JSON API
+// (apps/web/app/api/changelog/route.ts), so this fetches that first — it's
+// the same file Quiro already bundles as a Tauri resource, just reachable
+// without an update, so users can see what's new before installing it. A
+// bundled copy is still shipped as the offline fallback for a launch with no
+// network or when quiro.app is unreachable.
 //
 // The file is Keep a Changelog, which is a fixed enough shape to parse directly
 // — versions, change-type sections, bullets — rather than pulling in a markdown
 // renderer for one page. Parsing it into real structure also lets the page group
 // by change type instead of rendering a wall of prose.
+
+const CHANGELOG_API_URL = "https://quiro.app/api/changelog";
 
 type ChangeKind =
 	| "Added"
@@ -51,6 +55,14 @@ const KIND_STYLES: Record<ChangeKind, string> = {
 	Security: "bg-red-3 text-red-11",
 	Other: "bg-gray-4 text-gray-11",
 };
+
+async function fetchRemoteChangelog(): Promise<string> {
+	const response = await fetch(CHANGELOG_API_URL);
+	if (!response.ok)
+		throw new Error(`changelog API returned ${response.status}`);
+	const { markdown } = (await response.json()) as { markdown: string };
+	return markdown;
+}
 
 /**
  * Keep a Changelog subset: `## [version] - date` opens a release, `### Kind`
@@ -174,8 +186,11 @@ export default function ChangelogSettings() {
 	const query = useQuery({
 		queryKey: ["changelog"],
 		queryFn: async () => {
-			const path = await resolveResource("CHANGELOG.md");
-			return parseChangelog(await readTextFile(path));
+			const markdown = await fetchRemoteChangelog().catch(async () => {
+				const path = await resolveResource("CHANGELOG.md");
+				return readTextFile(path);
+			});
+			return parseChangelog(markdown);
 		},
 	});
 
