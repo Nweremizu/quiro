@@ -33,46 +33,18 @@ static HW_CAPABILITIES: OnceLock<HwDecoderCapabilities> = OnceLock::new();
 #[cfg(target_os = "windows")]
 fn query_d3d11_video_decoder_capabilities() -> HwDecoderCapabilities {
     use windows::{
-        Win32::{
-            Foundation::HMODULE,
-            Graphics::{
-                Direct3D::D3D_DRIVER_TYPE_UNKNOWN,
-                Direct3D11::{
-                    D3D11_CREATE_DEVICE_VIDEO_SUPPORT, D3D11_DECODER_PROFILE_H264_VLD_NOFGT,
-                    D3D11_DECODER_PROFILE_HEVC_VLD_MAIN, D3D11_SDK_VERSION,
-                    D3D11_VIDEO_DECODER_DESC, D3D11CreateDevice, ID3D11VideoDevice,
-                },
-                Dxgi::Common::DXGI_FORMAT_NV12,
+        Win32::Graphics::{
+            Direct3D11::{
+                D3D11_DECODER_PROFILE_H264_VLD_NOFGT, D3D11_DECODER_PROFILE_HEVC_VLD_MAIN,
+                D3D11_VIDEO_DECODER_DESC, ID3D11VideoDevice,
             },
+            Dxgi::Common::DXGI_FORMAT_NV12,
         },
         core::Interface,
     };
 
     let result: Result<HwDecoderCapabilities, String> = (|| {
-        let selected = quiro_d3d_adapter::select_capture_adapter(None)?;
-
-        let mut device = None;
-        unsafe {
-            D3D11CreateDevice(
-                Some(&selected.adapter),
-                D3D_DRIVER_TYPE_UNKNOWN,
-                HMODULE::default(),
-                D3D11_CREATE_DEVICE_VIDEO_SUPPORT,
-                None,
-                D3D11_SDK_VERSION,
-                Some(&mut device),
-                None,
-                None,
-            )
-            .map_err(|e| {
-                format!(
-                    "D3D11CreateDevice failed on '{}': {e:?}",
-                    selected.description
-                )
-            })?;
-        }
-
-        let device = device.ok_or("D3D11CreateDevice returned null")?;
+        let device = quiro_d3d_adapter::shared_capture_device()?;
 
         let video_device: ID3D11VideoDevice = device
             .cast()

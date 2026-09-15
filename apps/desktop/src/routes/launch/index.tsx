@@ -352,14 +352,6 @@ export function LaunchRoutePage() {
 	}, []);
 
 	const handleMouseEnter = () => {
-		// Only actually call setFocus() when the window isn't already focused —
-		// this fires on every hover of the window edge, and repeated native
-		// focus/activation calls on this undecorated, always-on-top popup
-		// window are what was causing the cursor to visibly flicker.
-		const window = getCurrentWindow();
-		window.isFocused().then((focused) => {
-			if (!focused) window.setFocus();
-		});
 		scheduleTargetListPrewarm();
 	};
 

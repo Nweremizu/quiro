@@ -10,6 +10,12 @@ pub struct SegmentBounds {
     pub bottom_right: XY<f64>,
 }
 
+/// Upper bound on the half-viewport used to derive the auto-follow centring
+/// band, equal to the true half-viewport at 2x. See
+/// [`SegmentBounds::calculate_follow_center`] for why the raw geometric value
+/// cannot be used below that.
+const MAX_FOLLOW_BAND_EDGE: f64 = 0.25;
+
 impl SegmentBounds {
     pub fn new(top_left: XY<f64>, bottom_right: XY<f64>) -> Self {
         Self {
@@ -83,12 +89,22 @@ impl SegmentBounds {
     /// clamping to the geometric band already puts the frame flush against an
     /// edge whenever the focus is closer than half a viewport to it, which is
     /// what the snap was approximating, and it does so at every magnification.
+    ///
+    /// The band is floored at 0.25 (the half-viewport at 2x). The geometric
+    /// value alone degenerates below 2x: the band `[lo, 1 - lo]` narrows as
+    /// `lo -> 0.5`, so the focus range that maps onto the whole centre travel
+    /// shrinks to nothing and its gain — `1 / (1 - 2 * lo)` — runs away (3.5x
+    /// at 1.4x, unbounded as the amount approaches 1). A gain like that turns
+    /// ordinary cursor movement into a lurch across the full travel range,
+    /// with the framing pinned against a limit either side of it. Flooring
+    /// costs nothing at 2x and above, where the geometric value is already
+    /// the tighter of the two.
     pub(crate) fn calculate_follow_center(focus_pos: (f64, f64), amount: f64) -> (f64, f64) {
         // At amount <= 1 the viewport covers the whole frame, so the centre
         // scalar is unobservable (`from_amount_center` cancels it out); pass
         // the focus through rather than inventing a framing.
         let half_viewport = if amount.is_finite() && amount > 1.0 {
-            0.5 / amount
+            (0.5 / amount).min(MAX_FOLLOW_BAND_EDGE)
         } else {
             0.0
         };

@@ -3477,8 +3477,18 @@ impl ProjectUniforms {
         // segment_end_focus/segment_end_cursor plumbing that patched its
         // boundary discontinuities — is gone: the spring is continuous across
         // segment starts, ends and re-aims by construction.
-        let zoom = zoom_timeline.sample(frame_time);
-        let prev_zoom = zoom_timeline.sample(prev_frame_time);
+        let zoom = zoom_timeline.sample_with_cursor_position(
+            frame_time,
+            interpolated_cursor
+                .as_ref()
+                .map(|cursor| cursor.position.coord),
+        );
+        let prev_zoom = zoom_timeline.sample_with_cursor_position(
+            prev_frame_time,
+            prev_interpolated_cursor
+                .as_ref()
+                .map(|cursor| cursor.position.coord),
+        );
 
         let motion_sample_frames = frame_number.min(DISPLAY_MOTION_SAMPLE_FRAMES);
         let motion_frame_delta = motion_sample_frames as f32 / fps_f32;
@@ -3488,7 +3498,18 @@ impl ProjectUniforms {
         } else {
             1.0
         };
-        let motion_prev_zoom = zoom_timeline.sample(motion_prev_frame_time);
+        let motion_prev_recording_time = (current_recording_time - motion_frame_delta).max(0.0);
+        let motion_prev_cursor_time = cursor_stop_time
+            .map_or(motion_prev_recording_time, |stop_time| {
+                motion_prev_recording_time.min(stop_time)
+            });
+        let motion_prev_cursor = cursor_interp_fn(motion_prev_cursor_time);
+        let motion_prev_zoom = zoom_timeline.sample_with_cursor_position(
+            motion_prev_frame_time,
+            motion_prev_cursor
+                .as_ref()
+                .map(|cursor| cursor.position.coord),
+        );
 
         let scene =
             InterpolatedScene::new(SceneSegmentsCursor::new(frame_time as f64, scene_segments));

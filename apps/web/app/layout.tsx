@@ -1,21 +1,16 @@
-import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import type { ReactNode } from "react";
-import { SiteFooter } from "@/components/site-footer";
-import { SiteHeader } from "@/components/site-header";
-import { site } from "@/lib/site";
+import type { Metadata } from "next";
+import { DM_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { site } from "@/lib/site";
 
-const geist = Geist({
+const sans = DM_Sans({
+	variable: "--font-geist-sans",
 	subsets: ["latin"],
-	variable: "--font-geist",
-	display: "swap",
 });
 
-const geistMono = Geist_Mono({
-	subsets: ["latin"],
+const mono = JetBrains_Mono({
 	variable: "--font-geist-mono",
-	display: "swap",
+	subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
@@ -30,31 +25,29 @@ export const metadata: Metadata = {
 		type: "website",
 		siteName: site.name,
 		title: "Quiro — Beautiful screen recordings, owned by you",
+		url: site.url,
 		description: site.description,
 	},
 	twitter: {
 		card: "summary_large_image",
 		title: "Quiro — Beautiful screen recordings, owned by you",
 		description: site.description,
-		images: ["/opengraph-image.png"],
+		images: ["/images/hero-img.png"],
 	},
 };
 
-export const viewport: Viewport = {
-	themeColor: "#fdfdfe",
-	colorScheme: "light",
-};
-
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default function RootLayout({ children }: LayoutProps<"/">) {
 	return (
-		<html lang="en" className={`${geist.variable} ${geistMono.variable}`}>
-			<body>
-				<a className="skip-link" href="#main-content">
-					Skip to content
-				</a>
-				<SiteHeader />
-				<main id="main-content">{children}</main>
-				<SiteFooter />
+		<html
+			lang="en"
+			data-scroll-behavior="smooth"
+			className={`${sans.variable} ${mono.variable} h-full antialiased`}
+			suppressHydrationWarning
+		>
+			<body suppressHydrationWarning>
+				<main id="main-content" tabIndex={-1} className="w-full">
+					{children}
+				</main>
 			</body>
 		</html>
 	);

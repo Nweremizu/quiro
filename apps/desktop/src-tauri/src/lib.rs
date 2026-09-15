@@ -1538,6 +1538,9 @@ pub fn run() {
                 }
             });
 
+            #[cfg(target_os = "windows")]
+            quiro_d3d_adapter::prewarm_shared_capture_device();
+
             let handle = app.clone();
             tauri::async_runtime::spawn(async move {
                 let onboarding = general_settings::GeneralSettingsStore::get(&handle)

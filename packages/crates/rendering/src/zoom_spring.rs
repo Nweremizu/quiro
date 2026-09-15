@@ -46,11 +46,12 @@ const STEP_MS: f64 = 8.0;
 const INSTANT_SNAP_WINDOW_SECS: f64 = 0.1;
 
 /// While the zoom amount is at (or within a hair of) identity the viewport
-/// covers the whole frame regardless of the center, so the center channel is
-/// free to track its target instantly — this pre-aims upcoming zooms so they
-/// scale straight toward their focus. Any center jump while amount <= this
-/// bound moves the viewport by at most (bound - 1) of the card: sub-pixel.
+/// covers the whole frame regardless of the center. Fixed-focus zooms can
+/// pre-aim instantly here; auto zooms can start tracking the upcoming segment
+/// without interrupting a visible zoom-out. Any center jump below this bound
+/// moves the viewport by at most (bound - 1) of the card: sub-pixel.
 const CENTER_PREAIM_MAX_AMOUNT: f32 = 1.0005;
+const MAX_AUTO_CENTER_STEP: f32 = 0.02;
 
 /// Greedy click-cluster bounding-box limits, as a fraction of the visible
 /// zoomed viewport (50% width x 70% height).
@@ -61,28 +62,6 @@ const CENTER_PREAIM_MAX_AMOUNT: f32 = 1.0005;
 /// motion smooth. The same trick centres the drawn cursor (see
 /// `cursor_interpolation::spring_lag_ms`); at high magnification the residual
 /// trail is the difference between "tracks the cursor" and "chases it".
-fn spring_lead_ms(config: &SpringMassDamperSimulationConfig) -> f64 {
-    // Equivalent to `!(tension > 0.0)`, but without a negated partial-order
-    // comparison — `tension <= 0.0` alone would treat NaN as valid, since
-    // every NaN comparison is false.
-    if config.tension.is_nan() || config.tension <= 0.0 || !config.friction.is_finite() {
-        return 0.0;
-    }
-    (f64::from(config.friction / config.tension) * 1000.0).clamp(0.0, MAX_AIM_LEAD_MS)
-}
-
-/// Ceiling on the look-ahead. A very soft spring would otherwise aim so far
-/// into the future that the shot anticipates movement that has not happened.
-const MAX_AIM_LEAD_MS: f64 = 400.0;
-
-/// Half-size of the dead zone the cursor may roam inside before the camera
-/// re-aims, as a fraction of the *visible* (zoomed) viewport. Small enough
-/// that the cursor is never far from centre at high magnification; large
-/// enough that ordinary hand tremor doesn't drag the frame around. The spring
-/// smooths whatever movement does get through.
-const DEAD_ZONE_HALF_WIDTH: f64 = 0.06;
-const DEAD_ZONE_HALF_HEIGHT: f64 = 0.08;
-
 /// Fallback focus when a segment has no usable cursor data.
 const FALLBACK_FOCUS: (f64, f64) = (0.5, 0.5);
 
@@ -91,8 +70,7 @@ const FALLBACK_FOCUS: (f64, f64) = (0.5, 0.5);
 /// Cursor events are normalized to the FULL recorded display, but zoom
 /// centers ([`SegmentBounds::from_amount_center`]) are proportions of the
 /// rendered (cropped) content. Without this remap a cropped recording aims
-/// its auto zoom at the wrong spot — and clustering dead-zone distances are
-/// measured in the wrong scale. Identity when the recording is uncropped.
+/// its auto zoom at the wrong spot. Identity when the recording is uncropped.
 #[derive(Clone, Copy, Debug)]
 pub struct CursorCropMap {
     /// Crop top-left in raw display UV.
@@ -148,8 +126,8 @@ impl CursorCropMap {
 /// box was built from its whole lifetime, the aim also drifted toward where
 /// the cursor was about to go. Both errors scale with magnification, which is
 /// why they were most obvious zoomed in. Aiming at the cursor's actual
-/// interpolated position removes them; steadiness comes from the dead zone in
-/// `targets_at` and the spring, not from blurring the target.
+/// interpolated position removes them; steadiness comes from the spring, not
+/// from blurring the target.
 #[derive(Debug)]
 pub(crate) struct CursorPath {
     /// Sorted ascending; parallel to `points`.
@@ -216,9 +194,8 @@ pub(crate) fn build_cursor_path(
 ) -> CursorPath {
     let start_ms = segment_start_secs * 1000.0;
     let end_ms = segment_end_secs * 1000.0;
-    // Clustering happens in CONTENT UV space: dead-zone limits are fractions
-    // of the visible (cropped) viewport, so raw display UVs must be remapped
-    // before distances mean what the constants say they mean.
+    // The aim lives in CONTENT UV space, which is what the zoom centre is a
+    // proportion of, so raw display UVs must be remapped first.
     let map_uv = |x: f64, y: f64| crop.map_or((x, y), |c| c.map(x, y));
 
     // Non-finite coordinates (corrupted files, synthetic event generators)
@@ -383,13 +360,8 @@ struct PrecomputeState {
     motion_offset_sim: SpringMassDamperSimulation,
     motion_tilt_sim: SpringMassDamperSimulation,
     motion_rot_sim: SpringMassDamperSimulation,
-    /// Last center target while a segment was active. Held during zoom-out so
-    /// the outgoing framing stays anchored instead of re-aiming mid-flight.
+    /// Last active target, retained for fixed-focus zoom-out.
     held_center_target: XY<f32>,
-    /// Where auto-follow is currently pointed, before edge snapping. Carried
-    /// between steps so the dead zone is measured against the live aim rather
-    /// than recomputed from scratch each step.
-    auto_aim: Option<(f64, f64)>,
 }
 
 struct StepTargets {
@@ -400,10 +372,8 @@ struct StepTargets {
     motion_tilt: XY<f32>,
     motion_rot: XY<f32>,
     segment_active: bool,
+    follows_cursor: bool,
     snap: bool,
-    /// The auto-follow aim this step settled on, for the next step's dead
-    /// zone. `None` for manual segments and while no segment is active.
-    auto_aim: Option<(f64, f64)>,
 }
 
 /// Deterministic, lazily precomputed zoom transform timeline.
@@ -416,17 +386,13 @@ pub struct ZoomTransformTimeline {
     samples: Vec<TimelineSample>,
     state: Option<PrecomputeState>,
     zoom_segments: Vec<ZoomSegment>,
-    /// Parallel to `zoom_segments`: the cursor's sampled path (RECORDING-time
-    /// ms) for Auto segments, `None` for Manual ones.
-    cursor_paths: Vec<Option<CursorPath>>,
+    cursor_path: Option<CursorPath>,
+    cursor_crop: Option<CursorCropMap>,
     time_map: Vec<TimeMapSegment>,
     recording_clip: Option<u32>,
     prefer_outgoing: bool,
     /// Total number of samples covering [0, duration] plus one lerp partner.
     total_samples: usize,
-    /// How far ahead of the playhead the auto-follow aim samples the cursor,
-    /// cancelling the centring spring's steady-state trail.
-    aim_lead_ms: f64,
 }
 
 struct RecordingClipSelection {
@@ -474,33 +440,12 @@ impl ZoomTransformTimeline {
         zoom_segments.sort_by(|a, b| a.start.total_cmp(&b.start).then(a.end.total_cmp(&b.end)));
 
         let time_map = build_time_map(timeline);
-        let cursor_paths = zoom_segments
+        // Timeline edits can revisit earlier recording times, and auto-follow
+        // continues past a zoom's end while its scale spring returns to rest.
+        let cursor_path = zoom_segments
             .iter()
-            .map(|segment| match segment.mode {
-                ZoomMode::Auto => {
-                    let recording_start = map_timeline_to_recording_secs(
-                        &time_map,
-                        segment.start,
-                        recording_clip,
-                        prefer_outgoing,
-                    );
-                    let recording_end = map_timeline_to_recording_secs(
-                        &time_map,
-                        segment.end,
-                        recording_clip,
-                        prefer_outgoing,
-                    )
-                    .max(recording_start);
-                    Some(build_cursor_path(
-                        cursor_events,
-                        recording_start,
-                        recording_end,
-                        crop,
-                    ))
-                }
-                ZoomMode::Manual { .. } => None,
-            })
-            .collect();
+            .any(|segment| matches!(segment.mode, ZoomMode::Auto))
+            .then(|| build_cursor_path(cursor_events, 0.0, f64::INFINITY, crop));
 
         let duration_secs = if duration_secs.is_finite() {
             duration_secs.max(0.0)
@@ -510,12 +455,6 @@ impl ZoomTransformTimeline {
         // One sample per step across the duration, plus one trailing sample so
         // a lookup right at the end always has a lerp partner.
         let total_samples = (duration_secs * 1000.0 / STEP_MS).ceil() as usize + 2;
-        let aim_lead_ms = spring_lead_ms(&SpringMassDamperSimulationConfig {
-            tension: spring.stiffness,
-            mass: spring.mass,
-            friction: spring.damping,
-        });
-
         if zoom_segments.is_empty() {
             return Self {
                 samples: vec![TimelineSample {
@@ -529,12 +468,12 @@ impl ZoomTransformTimeline {
                 }],
                 state: None,
                 zoom_segments,
-                cursor_paths,
+                cursor_path,
+                cursor_crop: crop,
                 time_map,
                 recording_clip,
                 prefer_outgoing,
                 total_samples: 1,
-                aim_lead_ms,
             };
         }
 
@@ -548,17 +487,17 @@ impl ZoomTransformTimeline {
             samples: Vec::new(),
             state: None,
             zoom_segments,
-            cursor_paths,
+            cursor_path,
+            cursor_crop: crop,
             time_map,
             recording_clip,
             prefer_outgoing,
             total_samples,
-            aim_lead_ms,
         };
 
         // Seed the simulations at rest on the t=0 target so the very first
         // frame is already correct and `samples` is never empty.
-        let initial = timeline.targets_at(0.0, XY::new(0.5, 0.5), None);
+        let initial = timeline.targets_at(0.0, XY::new(0.5, 0.5), 1.0);
         let mut center_sim = SpringMassDamperSimulation::new(spring_config);
         center_sim.set_position(initial.center);
         center_sim.set_velocity(XY::new(0.0, 0.0));
@@ -603,7 +542,6 @@ impl ZoomTransformTimeline {
             motion_tilt_sim,
             motion_rot_sim,
             held_center_target: initial.center,
-            auto_aim: initial.auto_aim,
         });
         timeline
     }
@@ -766,6 +704,60 @@ impl ZoomTransformTimeline {
         }
     }
 
+    pub fn sample_with_recording_time(
+        &self,
+        timeline_secs: f32,
+        recording_secs: f32,
+    ) -> InterpolatedZoom {
+        let sampled = self.sample(timeline_secs);
+        let amount = sampled.display_amount();
+        if self.auto_segment_at(f64::from(timeline_secs)).is_none() {
+            return sampled;
+        }
+        if amount <= 1.0 {
+            return sampled;
+        }
+        let center = self.follow_center_at_recording_secs(f64::from(recording_secs), amount);
+        InterpolatedZoom {
+            t: sampled.t,
+            bounds: SegmentBounds::from_amount_center(amount, XY::new(center.0, center.1)),
+            motion: sampled.motion,
+        }
+    }
+
+    pub fn sample_with_cursor_position(
+        &self,
+        timeline_secs: f32,
+        cursor_position: Option<XY<f64>>,
+    ) -> InterpolatedZoom {
+        let sampled = self.sample(timeline_secs);
+        let amount = sampled.display_amount();
+        let Some(cursor_position) = cursor_position else {
+            return sampled;
+        };
+        if self.auto_segment_at(f64::from(timeline_secs)).is_none() || amount <= 1.0 {
+            return sampled;
+        }
+
+        let mapped_position = self
+            .cursor_crop
+            .map_or((cursor_position.x, cursor_position.y), |crop| {
+                crop.map(cursor_position.x, cursor_position.y)
+            });
+        let center = SegmentBounds::calculate_follow_center(
+            (
+                mapped_position.0.clamp(0.0, 1.0),
+                mapped_position.1.clamp(0.0, 1.0),
+            ),
+            amount,
+        );
+        InterpolatedZoom {
+            t: sampled.t,
+            bounds: SegmentBounds::from_amount_center(amount, XY::new(center.0, center.1)),
+            motion: sampled.motion,
+        }
+    }
+
     /// Whether any precomputed step in `[from_secs, to_secs]` was an instant
     /// snap (no spring). Motion-effect consumers can use this to suppress
     /// velocity-derived effects across intentional discontinuities.
@@ -786,11 +778,11 @@ impl ZoomTransformTimeline {
             return;
         };
         let held_center = state.held_center_target;
-        let prev_aim = state.auto_aim;
+        let current_amount = state.aux_sim.position.x;
 
         let step_index = self.samples.len();
         let step_secs = step_index as f64 * STEP_MS / 1000.0;
-        let targets = self.targets_at(step_secs, held_center, prev_aim);
+        let targets = self.targets_at(step_secs, held_center, current_amount);
 
         let Some(state) = self.state.as_mut() else {
             return;
@@ -799,8 +791,6 @@ impl ZoomTransformTimeline {
         if targets.segment_active {
             state.held_center_target = targets.center;
         }
-        state.auto_aim = targets.auto_aim;
-
         state.center_sim.set_target_position(targets.center);
         state
             .aux_sim
@@ -834,20 +824,23 @@ impl ZoomTransformTimeline {
                 sim.set_velocity(XY::new(0.0, 0.0));
             }
         } else {
-            // While the amount spring sits at identity the viewport shows the
-            // whole frame no matter where the center is — the center channel
-            // is unobservable, so track its target instantly (free pre-aim).
-            // An incoming zoom then launches already aimed at its focus and
-            // scales straight toward it, instead of zooming about the stale
-            // center and dragging over at high magnification (a huge late pan
-            // that also detonated the motion blur). The epsilon bounds any
-            // theoretical pop to sub-pixel: (amount - 1) * |center jump| of
-            // the card, i.e. < 0.05% of the card size.
-            if state.aux_sim.position.x <= CENTER_PREAIM_MAX_AMOUNT {
-                state.center_sim.set_position(targets.center);
+            if targets.follows_cursor {
+                let delta = targets.center - state.center_sim.position;
+                let step = XY::new(
+                    delta.x.clamp(-MAX_AUTO_CENTER_STEP, MAX_AUTO_CENTER_STEP),
+                    delta.y.clamp(-MAX_AUTO_CENTER_STEP, MAX_AUTO_CENTER_STEP),
+                );
+                state
+                    .center_sim
+                    .set_position(state.center_sim.position + step);
                 state.center_sim.set_velocity(XY::new(0.0, 0.0));
+            } else {
+                if state.aux_sim.position.x <= CENTER_PREAIM_MAX_AMOUNT {
+                    state.center_sim.set_position(targets.center);
+                    state.center_sim.set_velocity(XY::new(0.0, 0.0));
+                }
+                state.center_sim.run(STEP_MS as f32);
             }
-            state.center_sim.run(STEP_MS as f32);
             state.aux_sim.run(STEP_MS as f32);
             state.motion_offset_sim.run(STEP_MS as f32);
             state.motion_tilt_sim.run(STEP_MS as f32);
@@ -885,7 +878,7 @@ impl ZoomTransformTimeline {
         &self,
         timeline_secs: f64,
         held_center: XY<f32>,
-        prev_aim: Option<(f64, f64)>,
+        current_amount: f32,
     ) -> StepTargets {
         // Same active predicate `SegmentsCursor` used: (start, end].
         let active = self
@@ -899,8 +892,6 @@ impl ZoomTransformTimeline {
                 && timeline_secs <= s.end + INSTANT_SNAP_WINDOW_SECS
         });
 
-        let mut auto_aim = None;
-
         match active {
             Some(index) => {
                 let segment = &self.zoom_segments[index];
@@ -913,42 +904,7 @@ impl ZoomTransformTimeline {
                     ZoomMode::Manual { x, y } => {
                         (f64::from(x).clamp(0.0, 1.0), f64::from(y).clamp(0.0, 1.0))
                     }
-                    ZoomMode::Auto => {
-                        let recording_ms = map_timeline_to_recording_secs(
-                            &self.time_map,
-                            timeline_secs,
-                            self.recording_clip,
-                            self.prefer_outgoing,
-                        ) * 1000.0;
-                        let live = self.cursor_paths[index]
-                            .as_ref()
-                            .and_then(|path| path.sample(recording_ms + self.aim_lead_ms))
-                            .unwrap_or(FALLBACK_FOCUS);
-                        let live = (live.0.clamp(0.0, 1.0), live.1.clamp(0.0, 1.0));
-
-                        // Dead zone, sized against the *visible* viewport: the
-                        // aim only moves once the cursor would otherwise leave
-                        // the box, and then only far enough to put it back on
-                        // the edge. Constant in screen terms at any zoom, so
-                        // the cursor is never further from centre than the box
-                        // however far in the shot is pushed.
-                        auto_aim = Some(match prev_aim {
-                            Some(aim) => {
-                                let half_w = DEAD_ZONE_HALF_WIDTH / amount;
-                                let half_h = DEAD_ZONE_HALF_HEIGHT / amount;
-                                (
-                                    aim.0.clamp(live.0 - half_w, live.0 + half_w),
-                                    aim.1.clamp(live.1 - half_h, live.1 + half_h),
-                                )
-                            }
-                            // First step of a segment: start exactly on the
-                            // cursor rather than easing in from a stale aim.
-                            None => live,
-                        });
-
-                        let aim = auto_aim.unwrap_or(live);
-                        SegmentBounds::calculate_follow_center(aim, amount)
-                    }
+                    ZoomMode::Auto => self.follow_center_at(timeline_secs, amount),
                 };
 
                 // The engaged canvas state. Because these are targets rather
@@ -961,31 +917,84 @@ impl ZoomTransformTimeline {
                     center: XY::new(center.0 as f32, center.1 as f32),
                     activity: 1.0,
                     segment_active: true,
+                    follows_cursor: matches!(segment.mode, ZoomMode::Auto),
                     snap,
-                    auto_aim,
                     motion_offset: XY::new(motion.offset_x as f32, motion.offset_y as f32),
                     motion_tilt: XY::new(motion.tilt_x as f32, motion.tilt_y as f32),
                     motion_rot: XY::new(motion.rotation as f32, motion.spin as f32),
                 }
             }
-            None => StepTargets {
-                amount: 1.0,
-                // Rest is the untransformed canvas, so every motion channel
-                // targets zero and the spring carries the shot back on its own.
-                motion_offset: XY::new(0.0, 0.0),
-                motion_tilt: XY::new(0.0, 0.0),
-                motion_rot: XY::new(0.0, 0.0),
-                // Hold the last active framing while zooming out so the
-                // outgoing shot stays anchored (irrelevant once amount = 1).
-                center: held_center,
-                activity: 0.0,
-                segment_active: false,
-                snap,
-                // Dropping the aim means the next segment starts on the
-                // cursor instead of easing over from the previous shot.
-                auto_aim: None,
-            },
+            None => {
+                let previous = self
+                    .zoom_segments
+                    .iter()
+                    .filter(|segment| segment.start < timeline_secs && segment.end < timeline_secs)
+                    .max_by(|a, b| a.end.total_cmp(&b.end));
+                let upcoming = (current_amount <= CENTER_PREAIM_MAX_AMOUNT)
+                    .then(|| {
+                        self.zoom_segments.iter().find(|segment| {
+                            segment.start >= timeline_secs && segment.end > segment.start
+                        })
+                    })
+                    .flatten();
+                let follow_segment = upcoming
+                    .or(previous)
+                    .filter(|segment| matches!(segment.mode, ZoomMode::Auto));
+                StepTargets {
+                    amount: 1.0,
+                    // Rest is the untransformed canvas, so every motion channel
+                    // targets zero and the spring carries the shot back on its own.
+                    motion_offset: XY::new(0.0, 0.0),
+                    motion_tilt: XY::new(0.0, 0.0),
+                    motion_rot: XY::new(0.0, 0.0),
+                    center: follow_segment.map_or(held_center, |segment| {
+                        let center = self.follow_center_at(timeline_secs, segment.amount);
+                        XY::new(center.0 as f32, center.1 as f32)
+                    }),
+                    activity: 0.0,
+                    segment_active: false,
+                    follows_cursor: follow_segment.is_some(),
+                    snap,
+                }
+            }
         }
+    }
+
+    fn follow_center_at(&self, timeline_secs: f64, amount: f64) -> (f64, f64) {
+        let recording_secs = map_timeline_to_recording_secs(
+            &self.time_map,
+            timeline_secs,
+            self.recording_clip,
+            self.prefer_outgoing,
+        );
+        self.follow_center_at_recording_secs(recording_secs, amount)
+    }
+
+    fn auto_segment_at(&self, timeline_secs: f64) -> Option<&ZoomSegment> {
+        if let Some(active) = self
+            .zoom_segments
+            .iter()
+            .find(|segment| segment.start < timeline_secs && timeline_secs <= segment.end)
+        {
+            return matches!(active.mode, ZoomMode::Auto).then_some(active);
+        }
+
+        self.zoom_segments
+            .iter()
+            .filter(|segment| segment.end < timeline_secs && matches!(segment.mode, ZoomMode::Auto))
+            .max_by(|a, b| a.end.total_cmp(&b.end))
+    }
+
+    fn follow_center_at_recording_secs(&self, recording_secs: f64, amount: f64) -> (f64, f64) {
+        let live = self
+            .cursor_path
+            .as_ref()
+            .and_then(|path| path.sample(recording_secs * 1000.0))
+            .unwrap_or(FALLBACK_FOCUS);
+        SegmentBounds::calculate_follow_center(
+            (live.0.clamp(0.0, 1.0), live.1.clamp(0.0, 1.0)),
+            amount,
+        )
     }
 }
 
@@ -997,6 +1006,11 @@ mod tests {
     };
 
     use super::*;
+
+    /// How far the cursor may sit from the centre of the shot, as a fraction
+    /// of the visible viewport, while the camera is tracking a steady drag.
+    /// This is spring lag alone — there is no dead zone to add to it.
+    const TRACKING_TOLERANCE: f64 = 0.05;
 
     fn manual_segment(start: f64, end: f64, amount: f64, x: f64, y: f64) -> ZoomSegment {
         ZoomSegment {
@@ -1608,12 +1622,69 @@ mod tests {
         )
     }
 
+    /// Regression: a dead zone used to hold the aim until the cursor left a
+    /// box around it, and then re-aim only far enough to put the cursor back
+    /// on that box's *edge*. So a cursor that moved and stopped left the shot
+    /// parked permanently off-centre, and every movement smaller than the box
+    /// moved the camera not at all — the camera visibly stalling while the
+    /// cursor drifted away from the middle of the shot.
+    #[test]
+    fn the_shot_centres_on_a_cursor_that_has_stopped_moving() {
+        // Drift right for 2s in steps far smaller than the old dead zone
+        // (0.06 of the visible viewport, i.e. 0.03 UV at 2x), then hold still.
+        let target = (0.7, 0.5);
+        let moves: Vec<_> = (0..=100)
+            .map(|step| {
+                let progress = (f64::from(step) / 40.0).min(1.0);
+                move_event(
+                    f64::from(step) * 50.0,
+                    0.5 + (target.0 - 0.5) * progress,
+                    0.5,
+                )
+            })
+            .collect();
+        let cursor = CursorEvents {
+            moves,
+            clicks: vec![],
+        };
+
+        let segments = vec![auto_segment(0.0, 6.0, 2.0)];
+        let mut timeline = timeline_for(&segments, &cursor, 7.0);
+        timeline.precompute();
+
+        // Well after the cursor stopped (t=2s) and the spring has settled.
+        let (dx, dy) = offset_from_shot_center(&timeline, 5.0, target);
+        assert!(
+            dx.abs() < 0.01 && dy.abs() < 0.01,
+            "a stopped cursor should end up centred in the shot, but sits              ({dx}, {dy}) of a viewport off centre"
+        );
+
+        // And the approach is continuous: the camera must not sit still while
+        // the cursor is still moving. Sampled at 60fps over the drift.
+        let mut frozen = 0;
+        let mut total = 0;
+        let mut previous = offset_from_shot_center(&timeline, 0.5, target).0;
+        for frame in 31..=120 {
+            let at_secs = frame as f32 / 60.0;
+            let centre = visible_viewport(&timeline.sample(at_secs)).0;
+            total += 1;
+            if (centre - previous).abs() < 1e-6 {
+                frozen += 1;
+            }
+            previous = centre;
+        }
+        assert!(
+            frozen * 4 < total,
+            "camera stalled for {frozen} of {total} frames while the cursor              was moving"
+        );
+    }
+
     #[test]
     fn auto_zoom_keeps_a_moving_cursor_near_the_center() {
         // A slow drag across the frame, sampled the way a real recording does.
         // Auto zoom used to aim at the centre of a cluster's bounding box, so
         // the cursor could sit a long way from the middle of the shot; it now
-        // tracks the cursor itself, bounded by the dead zone.
+        // tracks the cursor itself, and the only residual is spring lag.
         let moves: Vec<_> = (0..=60)
             .map(|step| {
                 let progress = f64::from(step) / 60.0;
@@ -1637,22 +1708,89 @@ mod tests {
             let expected = (0.2 + (time_ms / 6000.0) * 0.6, 0.5);
             let (dx, dy) = offset_from_shot_center(&timeline, at_secs, expected);
 
-            // The dead zone is DEAD_ZONE_HALF_WIDTH of the visible viewport;
-            // allow a little spring lag on top of it.
+            // Only spring lag separates the shot from the cursor now, and the
+            // aim look-ahead is there to cancel most of that.
             assert!(
-                dx.abs() < DEAD_ZONE_HALF_WIDTH * 2.5,
+                dx.abs() < TRACKING_TOLERANCE,
                 "cursor drifted {dx} of a viewport from centre at {at_secs}s"
             );
             assert!(
-                dy.abs() < DEAD_ZONE_HALF_HEIGHT * 2.5,
+                dy.abs() < TRACKING_TOLERANCE,
                 "cursor drifted {dy} of a viewport vertically at {at_secs}s"
             );
         }
     }
 
     #[test]
+    fn auto_zoom_uses_the_rendered_cursor_position_for_following() {
+        let segments = vec![auto_segment(0.0, 4.0, 2.0)];
+        let mut timeline = timeline_for(&segments, &CursorEvents::default(), 5.0);
+        timeline.precompute();
+
+        let sampled = timeline.sample_with_cursor_position(2.0, Some(XY::new(0.8, 0.7)));
+        let amount = sampled.display_amount();
+        let expected = SegmentBounds::calculate_follow_center((0.8, 0.7), amount);
+        let actual = (
+            -sampled.bounds.top_left.x / (amount - 1.0),
+            -sampled.bounds.top_left.y / (amount - 1.0),
+        );
+        assert!((actual.0 - expected.0).abs() < 1e-6);
+        assert!((actual.1 - expected.1).abs() < 1e-6);
+
+        let crop = CursorCropMap::from_crop(
+            &Crop {
+                position: XY::new(0, 500),
+                size: XY::new(1000, 500),
+            },
+            XY::new(1000, 1000),
+        );
+        let mut cropped = ZoomTransformTimeline::new(
+            &segments,
+            None,
+            &CursorEvents::default(),
+            ScreenMovementSpring::default(),
+            5.0,
+            crop,
+        );
+        cropped.precompute();
+        let sampled = cropped.sample_with_cursor_position(2.0, Some(XY::new(0.5, 0.75)));
+        let amount = sampled.display_amount();
+        let actual = (
+            -sampled.bounds.top_left.x / (amount - 1.0),
+            -sampled.bounds.top_left.y / (amount - 1.0),
+        );
+        let expected = SegmentBounds::calculate_follow_center((0.5, 0.5), amount);
+        assert!(
+            (actual.0 - expected.0).abs() < 1e-6,
+            "actual center {:?}, expected {:?}, amount {amount}",
+            actual,
+            expected
+        );
+        assert!(
+            (actual.1 - expected.1).abs() < 1e-6,
+            "actual center {:?}, expected {:?}, amount {amount}",
+            actual,
+            expected
+        );
+    }
+
+    #[test]
+    fn auto_follow_does_not_override_an_active_manual_segment() {
+        let segments = vec![
+            auto_segment(0.0, 1.0, 2.0),
+            manual_segment(1.0, 3.0, 2.0, 0.2, 0.8),
+        ];
+        let mut timeline = timeline_for(&segments, &CursorEvents::default(), 4.0);
+        timeline.precompute();
+
+        let baseline = timeline.sample(2.0);
+        let sampled = timeline.sample_with_cursor_position(2.0, Some(XY::new(0.9, 0.1)));
+        assert_eq!(sampled.bounds, baseline.bounds);
+    }
+
+    #[test]
     fn tighter_zoom_holds_the_cursor_tighter() {
-        // The dead zone is a fraction of the *visible* area, so pushing the
+        // The aim is in content UV, so pushing the
         // magnification up must not let the cursor wander further from centre
         // on screen — the failure mode being fixed here.
         let moves: Vec<_> = (0..=40)
@@ -1772,7 +1910,7 @@ mod tests {
         // Regression for the real-recording report: clicks early near the
         // center, then the cursor HOVERS (no click) into the bottom-right
         // corner mid-segment. All movement participates in clustering, so
-        // leaving the dead-zone box must re-aim the camera and bring the
+        // moving the cursor must re-aim the camera and bring the
         // hovered corner into the settled viewport.
         let corner = (0.95, 0.9);
         let mut moves = Vec::new();
@@ -1961,6 +2099,120 @@ mod tests {
             max_slope_jump < 4.0,
             "pre-aim introduced a velocity discontinuity: {max_slope_jump}/s"
         );
+    }
+
+    #[test]
+    fn auto_zoom_entry_preserves_cursor_tracking_motion() {
+        let cursor = CursorEvents {
+            moves: (0..=400)
+                .map(|step| {
+                    let time = f64::from(step) * 0.01;
+                    move_event(time * 1000.0, 0.3 + time * 0.1, 0.5)
+                })
+                .collect(),
+            clicks: vec![],
+        };
+        let mut tracking = timeline_for(&[auto_segment(0.0, 4.0, 2.0)], &cursor, 4.0);
+        tracking.precompute();
+        for segments in [
+            vec![auto_segment(2.0, 4.0, 2.0)],
+            vec![
+                manual_segment(0.0, 0.25, 2.0, 0.5, 0.5),
+                auto_segment(2.0, 4.0, 2.0),
+            ],
+        ] {
+            let mut entering = timeline_for(&segments, &cursor, 4.0);
+            entering.precompute();
+            for frame in 121..=144 {
+                let time = frame as f32 / 60.0;
+                let entry = entering.sample(time);
+                let reference = tracking.sample(time);
+                let center = |zoom: InterpolatedZoom| {
+                    -zoom.bounds.top_left.x / (zoom.display_amount() - 1.0)
+                };
+                let error = (center(entry) - center(reference)).abs();
+                assert!(error < 0.005, "entry tracking error {error} at {time}s");
+            }
+        }
+    }
+
+    #[test]
+    fn auto_follow_continues_during_zoom_out() {
+        let cursor = CursorEvents {
+            moves: vec![
+                move_event(0.0, 0.3, 0.5),
+                move_event(2_000.0, 0.3, 0.5),
+                move_event(2_250.0, 0.7, 0.5),
+                move_event(4_000.0, 0.7, 0.5),
+            ],
+            clicks: vec![],
+        };
+        for automatic in [true, false] {
+            let segment = if automatic {
+                auto_segment(0.0, 2.0, 4.0)
+            } else {
+                manual_segment(0.0, 2.0, 4.0, 0.3, 0.5)
+            };
+            let mut timeline = timeline_for(&[segment], &cursor, 4.0);
+            timeline.precompute();
+            let before = timeline.sample(1.8);
+            let after = timeline.sample(2.3);
+            let center =
+                |zoom: InterpolatedZoom| -zoom.bounds.top_left.x / (zoom.display_amount() - 1.0);
+            assert!(after.display_amount() > 1.1);
+            if automatic {
+                assert!(center(after) > center(before) + 0.2);
+            } else {
+                assert!((center(after) - center(before)).abs() < 0.001);
+            }
+        }
+    }
+
+    #[test]
+    fn auto_follow_survives_reordered_recording_ranges() {
+        let mut project = ProjectConfiguration::default();
+        project.timeline = Some(TimelineConfiguration {
+            segments: [10.0, 0.0]
+                .into_iter()
+                .map(|start| TimelineSegment {
+                    recording_clip: 0,
+                    timescale: 1.0,
+                    start,
+                    end: start + 2.0,
+                    name: None,
+                    speed_audio_mode: None,
+                    transform: None,
+                    perspective: None,
+                })
+                .collect(),
+            zoom_segments: vec![auto_segment(0.0, 4.0, 4.0)],
+            transitions: vec![],
+            scene_segments: vec![],
+            mask_segments: vec![],
+            text_segments: vec![],
+            caption_segments: vec![],
+            keyboard_segments: vec![],
+            audio_segments: vec![],
+        });
+        let cursor = CursorEvents {
+            moves: vec![
+                move_event(0.0, 0.3, 0.5),
+                move_event(2_000.0, 0.3, 0.5),
+                move_event(10_000.0, 0.7, 0.5),
+                move_event(12_000.0, 0.7, 0.5),
+            ],
+            clicks: vec![],
+        };
+        let mut timeline = ZoomTransformTimeline::from_project_for_clip(
+            &project,
+            &cursor,
+            4.0,
+            XY::new(1920, 1080),
+            0,
+        );
+        timeline.precompute();
+        let (dx, _) = offset_from_shot_center(&timeline, 3.8, (0.3, 0.5));
+        assert!(dx.abs() < TRACKING_TOLERANCE, "cursor offset: {dx}");
     }
 
     #[test]

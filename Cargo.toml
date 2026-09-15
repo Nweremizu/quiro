@@ -102,6 +102,18 @@ manual_clamp = "deny"
 
 [profile.dev]
 debug = 1
+# Incremental compilation is off because the workspace crates below are built
+# at opt-level 3. At any opt-level above 0 LLVM internalises and merges symbols
+# across codegen units; incremental then reuses some CGUs while regenerating
+# others, and the reused ones keep references to internalised symbols that no
+# longer exist. That links as `unresolved external symbol anon.<hash>.llvm.<id>`
+# (and `core::hint::unreachable_unchecked::precondition_check.llvm.<id>`) from
+# whichever opt-level-3 crate was partially rebuilt — quiro-editor and
+# quiro-export both hit it. Clearing target/debug/incremental fixes one build
+# and the next partial rebuild breaks again, so turn the interaction off at the
+# source. These crates are slow to compile because of opt-level 3 regardless;
+# incremental was buying little here.
+incremental = false
 
 # Dependencies — including the media crates below — are unusable unoptimised:
 # a debug build of the renderer is roughly an order of magnitude slower than a

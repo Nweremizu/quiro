@@ -1,5 +1,5 @@
-import { DialRoot, useDialKit } from "dialkit";
-import { useEffect } from "react";
+import { DialRoot, useDialKitController } from "dialkit";
+import { useEffect, useRef } from "react";
 import "dialkit/styles.css";
 import { useEditorContext } from "@/routes/editor/context";
 
@@ -24,7 +24,7 @@ export function SpringDials() {
 	const { project, setProject } = useEditorContext();
 	const spring = project?.screenMovementSpring;
 
-	const dials = useDialKit(
+	const { values: dials, setValues } = useDialKitController(
 		"Motion spring",
 		{
 			// [default, min, max, step]. Ranges are wide enough to find the edges
@@ -52,25 +52,76 @@ export function SpringDials() {
 			},
 		},
 	);
+	const previousDials = useRef({
+		stiffness: dials.stiffness,
+		damping: dials.damping,
+		mass: dials.mass,
+	});
+	const previousSpring = useRef(spring && { ...spring });
+	const springStiffness = spring?.stiffness;
+	const springDamping = spring?.damping;
+	const springMass = spring?.mass;
 
-	// Push dial values into the project, which is the only thing the Rust
-	// renderer reads. Guarded on a real change so dragging one dial does not
-	// republish the config on every unrelated re-render.
 	useEffect(() => {
 		const next = {
 			stiffness: dials.stiffness,
 			damping: dials.damping,
 			mass: dials.mass,
 		};
+		const dialsChanged =
+			previousDials.current.stiffness !== next.stiffness ||
+			previousDials.current.damping !== next.damping ||
+			previousDials.current.mass !== next.mass;
+		const springChanged =
+			previousSpring.current?.stiffness !== springStiffness ||
+			previousSpring.current?.damping !== springDamping ||
+			previousSpring.current?.mass !== springMass;
+
 		if (
-			spring?.stiffness === next.stiffness &&
-			spring?.damping === next.damping &&
-			spring?.mass === next.mass
+			springStiffness !== undefined &&
+			springDamping !== undefined &&
+			springMass !== undefined &&
+			springChanged &&
+			!dialsChanged
 		) {
-			return;
+			setValues({
+				stiffness: springStiffness,
+				damping: springDamping,
+				mass: springMass,
+			});
+		} else if (
+			springStiffness !== undefined &&
+			springDamping !== undefined &&
+			springMass !== undefined &&
+			dialsChanged &&
+			(springStiffness !== next.stiffness ||
+				springDamping !== next.damping ||
+				springMass !== next.mass)
+		) {
+			setProject((current) => ({ ...current, screenMovementSpring: next }));
 		}
-		setProject((current) => ({ ...current, screenMovementSpring: next }));
-	}, [dials.stiffness, dials.damping, dials.mass, spring, setProject]);
+
+		previousDials.current = next;
+		previousSpring.current =
+			springStiffness !== undefined &&
+			springDamping !== undefined &&
+			springMass !== undefined
+				? {
+						stiffness: springStiffness,
+						damping: springDamping,
+						mass: springMass,
+					}
+				: undefined;
+	}, [
+		dials.stiffness,
+		dials.damping,
+		dials.mass,
+		springStiffness,
+		springDamping,
+		springMass,
+		setProject,
+		setValues,
+	]);
 
 	return <DialRoot position="bottom-right" defaultOpen={false} />;
 }

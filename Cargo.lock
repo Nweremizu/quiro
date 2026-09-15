@@ -6646,6 +6646,7 @@ dependencies = [
  "quiro-camera",
  "quiro-camera-effects",
  "quiro-camera-ffmpeg",
+ "quiro-d3d-adapter",
  "quiro-editor",
  "quiro-enc-ffmpeg",
  "quiro-export",

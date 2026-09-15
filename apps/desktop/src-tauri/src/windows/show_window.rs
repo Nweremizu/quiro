@@ -70,6 +70,7 @@ impl ShowQuiroWindow {
         // Before the reuse checks below, so focusing an already-open editor
         // hides the main window just like opening a new one does.
         if matches!(self, Self::Editor { .. } | Self::ScreenshotEditor { .. }) {
+            crate::target_select_overlay::close_target_select_overlay_windows(app);
             hide_main_window_for_editor(app);
         }
 

@@ -1181,7 +1181,20 @@ function CursorConfig() {
 			(style) => style.value === animationStyle,
 		)?.spring;
 
-		setCursor(spring ? { animationStyle, ...spring } : { animationStyle });
+		if (!spring) {
+			setCursor({ animationStyle });
+			return;
+		}
+
+		setProject((current) => ({
+			...current,
+			cursor: { ...current.cursor, animationStyle, ...spring },
+			screenMovementSpring: {
+				stiffness: spring.tension,
+				damping: spring.friction,
+				mass: spring.mass,
+			},
+		}));
 	};
 
 	/** Tuning a spring value by hand re-labels the style to match. */
@@ -1194,7 +1207,19 @@ function CursorConfig() {
 			friction: patch.friction ?? cursor.friction,
 		};
 
-		setCursor({ ...next, animationStyle: matchCursorStyle(next) });
+		setProject((current) => ({
+			...current,
+			cursor: {
+				...current.cursor,
+				...next,
+				animationStyle: matchCursorStyle(next),
+			},
+			screenMovementSpring: {
+				stiffness: next.tension,
+				damping: next.friction,
+				mass: next.mass,
+			},
+		}));
 	};
 
 	return (

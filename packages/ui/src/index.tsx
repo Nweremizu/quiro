@@ -4,6 +4,7 @@ export * from "./components/Card";
 export * from "./components/Cmdk";
 export * from "./components/Dialog";
 export * from "./components/Dropdown";
+export * from "./components/EmbossButton";
 export * from "./components/LoadingSpinner";
 export * from "./components/LogoSpinner";
 export * from "./components/NavigationMenu";

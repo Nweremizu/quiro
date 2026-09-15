@@ -29,11 +29,9 @@ use scap_screencapturekit::{Capturer, StreamCfgBuilder};
 #[cfg(target_os = "windows")]
 use std::sync::OnceLock;
 #[cfg(target_os = "windows")]
-use windows::Win32::Foundation::{HMODULE, HWND};
+use windows::Win32::Foundation::HWND;
 #[cfg(target_os = "windows")]
-use windows::Win32::Graphics::Direct3D11::{
-    D3D11_BOX, D3D11_SDK_VERSION, D3D11CreateDevice, ID3D11Device,
-};
+use windows::Win32::Graphics::Direct3D11::{D3D11_BOX, ID3D11Device};
 #[cfg(target_os = "windows")]
 use windows::Win32::Graphics::Gdi::{
     BITMAPINFO, BITMAPINFOHEADER, BitBlt, CAPTUREBLT, CreateCompatibleDC, CreateDIBSection,
@@ -374,50 +372,8 @@ fn try_fast_capture(target: &ScreenCaptureTarget) -> Option<DynamicImage> {
 }
 
 #[cfg(target_os = "windows")]
-fn shared_d3d_device() -> anyhow::Result<&'static ID3D11Device> {
-    use windows::Win32::Graphics::Direct3D::D3D_DRIVER_TYPE_UNKNOWN;
-
-    static DEVICE: OnceLock<Option<ID3D11Device>> = OnceLock::new();
-
-    let device = DEVICE.get_or_init(|| {
-        let selected = match quiro_d3d_adapter::select_capture_adapter(None) {
-            Ok(s) => s,
-            Err(e) => {
-                tracing::warn!(error = %e, "screenshot: no physical hardware adapter, fast path disabled");
-                return None;
-            }
-        };
-
-        let mut device = None;
-        let result = unsafe {
-            D3D11CreateDevice(
-                Some(&selected.adapter),
-                D3D_DRIVER_TYPE_UNKNOWN,
-                HMODULE::default(),
-                Default::default(),
-                None,
-                D3D11_SDK_VERSION,
-                Some(&mut device),
-                None,
-                None,
-            )
-        };
-
-        if let Err(e) = result {
-            tracing::warn!(
-                adapter = %selected.description,
-                error = ?e,
-                "screenshot: D3D11CreateDevice failed on pinned adapter, fast path disabled"
-            );
-            return None;
-        }
-
-        device
-    });
-
-    device
-        .as_ref()
-        .ok_or_else(|| anyhow!("D3D11 device unavailable"))
+fn shared_d3d_device() -> anyhow::Result<ID3D11Device> {
+    quiro_d3d_adapter::shared_capture_device().map_err(|error| anyhow!(error))
 }
 
 #[cfg(target_os = "windows")]
@@ -793,7 +749,7 @@ fn try_fast_capture(target: &ScreenCaptureTarget) -> Option<DynamicImage> {
     };
 
     let (settings, _) = windows_capture_settings(target).ok()?;
-    let device = shared_d3d_device().ok().cloned();
+    let device = shared_d3d_device().ok();
 
     let (tx, rx) = sync_channel(1);
 
@@ -1038,7 +994,7 @@ pub async fn capture_screenshot(target: ScreenCaptureTarget) -> anyhow::Result<D
                 }
             },
             || Ok(()),
-            shared_d3d_device().ok().cloned(),
+            shared_d3d_device().ok(),
         ) {
             Ok(capturer) => capturer,
             Err(

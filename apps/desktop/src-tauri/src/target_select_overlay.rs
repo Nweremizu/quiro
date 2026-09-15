@@ -1,7 +1,10 @@
 use std::{
     collections::{HashMap, HashSet},
     str::FromStr,
-    sync::{Mutex, PoisonError},
+    sync::{
+        Mutex, PoisonError,
+        atomic::{AtomicU64, Ordering},
+    },
     time::{Duration, Instant},
 };
 
@@ -100,6 +103,7 @@ pub async fn open_target_select_overlays(
     target_mode: Option<RecordingTargetMode>,
 ) -> Result<(), String> {
     let start = Instant::now();
+    let session_id = state.begin_session();
 
     // Don't let a new picker session read the cursor position left behind by
     // the previous one.
@@ -171,7 +175,7 @@ pub async fn open_target_select_overlays(
             .show(&app)
             .await
             {
-                finish_created_target_select_overlay(&window, should_focus);
+                finish_created_target_select_overlay(&window, should_focus, session_id);
             }
         } else {
             let app_clone = app.clone();
@@ -184,7 +188,7 @@ pub async fn open_target_select_overlays(
                 .show(&app_clone)
                 .await
                 {
-                    finish_created_target_select_overlay(&window, should_focus);
+                    finish_created_target_select_overlay(&window, should_focus, session_id);
                 }
             });
         }
@@ -261,20 +265,28 @@ pub async fn open_target_select_overlays(
         }
     });
 
-    if let Some(task) = state
-        .task
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .replace(handle)
-    {
-        task.abort();
-    }
     state.register_escape(app.global_shortcut());
+    if !state.replace_cursor_task(session_id, handle) {
+        state.finish_if_idle(app.global_shortcut());
+    }
 
     Ok(())
 }
 
-fn finish_created_target_select_overlay(window: &WebviewWindow, should_focus: bool) {
+fn finish_created_target_select_overlay(
+    window: &WebviewWindow,
+    should_focus: bool,
+    session_id: u64,
+) {
+    if !window
+        .app_handle()
+        .state::<WindowFocusManager>()
+        .is_current_session(session_id)
+    {
+        window.close().ok();
+        return;
+    }
+
     #[cfg(target_os = "macos")]
     let _ = (window, should_focus);
 
@@ -378,6 +390,7 @@ pub fn close_target_select_overlay_windows(app: &AppHandle) {
     let mut saw_overlay = false;
 
     if let Some(state) = state.as_ref() {
+        state.invalidate_session();
         state.clear_overlay_restore_labels();
     }
 
@@ -499,6 +512,7 @@ pub async fn focus_window(window_id: ScapWindowId) -> Result<(), String> {
 
 #[derive(Default)]
 pub struct WindowFocusManager {
+    session_id: AtomicU64,
     task: Mutex<Option<JoinHandle<()>>>,
     tasks: Mutex<HashMap<String, JoinHandle<()>>>,
     escape_registered: Mutex<bool>,
@@ -506,6 +520,31 @@ pub struct WindowFocusManager {
 }
 
 impl WindowFocusManager {
+    fn begin_session(&self) -> u64 {
+        self.session_id.fetch_add(1, Ordering::AcqRel) + 1
+    }
+
+    fn invalidate_session(&self) {
+        self.session_id.fetch_add(1, Ordering::AcqRel);
+    }
+
+    fn is_current_session(&self, session_id: u64) -> bool {
+        self.session_id.load(Ordering::Acquire) == session_id
+    }
+
+    fn replace_cursor_task(&self, session_id: u64, handle: JoinHandle<()>) -> bool {
+        let mut task = self.task.lock().unwrap_or_else(PoisonError::into_inner);
+        if !self.is_current_session(session_id) {
+            handle.abort();
+            return false;
+        }
+
+        if let Some(previous) = task.replace(handle) {
+            previous.abort();
+        }
+        true
+    }
+
     fn abort_all_tasks(&self) {
         let tasks = {
             let mut tasks = self.tasks.lock().unwrap_or_else(PoisonError::into_inner);

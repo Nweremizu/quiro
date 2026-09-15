@@ -12,7 +12,14 @@
 
 #![cfg(target_os = "windows")]
 
+use std::sync::OnceLock;
 use tracing::{info, warn};
+use windows::Win32::Foundation::HMODULE;
+use windows::Win32::Graphics::Direct3D::D3D_DRIVER_TYPE_UNKNOWN;
+use windows::Win32::Graphics::Direct3D11::{
+    D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_CREATE_DEVICE_VIDEO_SUPPORT, D3D11_SDK_VERSION,
+    D3D11CreateDevice, ID3D11Device,
+};
 use windows::Win32::Graphics::Dxgi::{
     CreateDXGIFactory1, DXGI_ADAPTER_FLAG_SOFTWARE, IDXGIAdapter, IDXGIAdapter1, IDXGIFactory1,
 };
@@ -37,6 +44,59 @@ pub struct SelectedAdapter {
     pub dedicated_vram_bytes: u64,
     pub luid_low: u32,
     pub luid_high: i32,
+}
+
+static SHARED_CAPTURE_DEVICE: OnceLock<ID3D11Device> = OnceLock::new();
+
+fn create_shared_capture_device() -> Result<ID3D11Device, String> {
+    let selected = select_capture_adapter(None)?;
+    let mut device = None;
+    let flags = D3D11_CREATE_DEVICE_VIDEO_SUPPORT | D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+
+    unsafe {
+        D3D11CreateDevice(
+            Some(&selected.adapter),
+            D3D_DRIVER_TYPE_UNKNOWN,
+            HMODULE::default(),
+            flags,
+            None,
+            D3D11_SDK_VERSION,
+            Some(&mut device),
+            None,
+            None,
+        )
+        .map_err(|error| {
+            format!(
+                "D3D11CreateDevice failed on '{}': {error:?}",
+                selected.description
+            )
+        })?;
+    }
+
+    device.ok_or_else(|| "D3D11CreateDevice returned null".to_string())
+}
+
+/// Keeps one hardware device alive so opening UI capture and editor paths does
+/// not repeatedly reactivate the discrete GPU and reset Windows' cursor plane.
+pub fn shared_capture_device() -> Result<ID3D11Device, String> {
+    if let Some(device) = SHARED_CAPTURE_DEVICE.get() {
+        return Ok(device.clone());
+    }
+
+    let device = create_shared_capture_device()?;
+    if SHARED_CAPTURE_DEVICE.set(device.clone()).is_err() {
+        return SHARED_CAPTURE_DEVICE.get().cloned().ok_or_else(|| {
+            "Shared D3D11 device initialization raced without a winner".to_string()
+        });
+    }
+
+    Ok(device)
+}
+
+pub fn prewarm_shared_capture_device() {
+    if let Err(error) = shared_capture_device() {
+        warn!(%error, "Failed to prewarm shared D3D11 capture device");
+    }
 }
 
 /// Selects a physical hardware DXGI adapter, optionally preferring one whose LUID

@@ -599,6 +599,14 @@ async closeTargetSelectOverlays() : Promise<Result<null, string>> {
     else return { status: "error", error: e  as any };
 }
 },
+async updateCameraOverlayBounds(x: number, y: number, width: number, height: number) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("update_camera_overlay_bounds", { x, y, width, height }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async setFakeWindowBounds(name: string, bounds: LogicalBounds) : Promise<Result<null, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("set_fake_window_bounds", { name, bounds }) };
@@ -653,6 +661,14 @@ async refreshWindowContentProtection() : Promise<Result<null, string>> {
 },
 async setWindowTransparent(value: boolean) : Promise<void> {
     await TAURI_INVOKE("set_window_transparent", { value });
+},
+async applyMacosLiquidGlassBackground(enabled: boolean, radius: number) : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("apply_macos_liquid_glass_background", { enabled, radius }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 },
 async showWindow(window: ShowQuiroWindow) : Promise<void> {
     await TAURI_INVOKE("show_window", { window });

@@ -625,6 +625,8 @@ struct SmoothedCursorEvent {
 
 #[cfg(test)]
 mod tests {
+    use quiro_project::CursorAnimationStyle;
+
     use super::*;
 
     fn cursor_move(time_ms: f64, x: f64, y: f64) -> CursorMoveEvent {
@@ -829,5 +831,50 @@ mod tests {
             }
             prev = pos;
         }
+    }
+
+    #[test]
+    fn cursor_motion_presets_have_distinct_response_curves() {
+        let moves = (0..=200)
+            .map(|step| {
+                let time_ms = f64::from(step) * 10.0;
+                let progress = ((time_ms - 500.0) / 300.0).clamp(0.0, 1.0);
+                cursor_move(time_ms, 0.1 + 0.8 * progress, 0.5)
+            })
+            .collect();
+        let cursor = CursorEvents {
+            moves,
+            clicks: vec![],
+        };
+
+        let positions: Vec<_> = [
+            CursorAnimationStyle::Slow,
+            CursorAnimationStyle::Smooth,
+            CursorAnimationStyle::Mellow,
+            CursorAnimationStyle::Fast,
+        ]
+        .into_iter()
+        .map(|style| {
+            let preset = style.preset().unwrap();
+            let config = SpringMassDamperSimulationConfig {
+                tension: preset.tension,
+                mass: preset.mass,
+                friction: preset.friction,
+            };
+            interpolate_cursor(&cursor, 0.8, Some(config))
+                .unwrap()
+                .position
+                .coord
+                .x
+        })
+        .collect();
+
+        let [slow, smooth, mellow, fast] = positions.as_slice() else {
+            panic!("expected four preset samples");
+        };
+        assert!(smooth < slow && slow < mellow && mellow < fast);
+        assert!(slow - smooth > 0.02);
+        assert!(mellow - slow > 0.02);
+        assert!(fast - mellow > 0.02);
     }
 }

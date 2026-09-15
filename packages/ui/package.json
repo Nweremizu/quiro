@@ -7,7 +7,8 @@
 	"types": "./src/index.tsx",
 	"exports": {
 		".": "./src/index.tsx",
-		"./style": "./style/tokens.css"
+		"./style": "./style/tokens.css",
+		"./*": "./src/components/*.tsx"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit"
