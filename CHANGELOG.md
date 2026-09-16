@@ -10,6 +10,8 @@ changes.
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-09-16
+
 ### Added
 
 - A new icon-tiles toolbar layout for the launch window, now the default.
