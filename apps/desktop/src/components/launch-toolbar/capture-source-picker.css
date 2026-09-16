@@ -1,0 +1,424 @@
+.capture-source-control {
+	flex-shrink: 0;
+}
+.capture-source-buttons {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+.capture-source-button {
+	display: flex;
+	align-items: center;
+	height: 38px;
+	border: 1px solid #e6e7e4;
+	border-radius: 9px;
+	background: #fff;
+	color: #767c84;
+	box-shadow: 0 1px 2px #1e252b0a;
+	transition:
+		background-color 120ms ease-out,
+		border-color 120ms ease-out,
+		color 120ms ease-out,
+		box-shadow 120ms ease-out;
+}
+.capture-source-button:hover,
+.capture-source-button.is-open {
+	border-color: #e2c47a;
+	background: #fff8e8;
+	color: #795b20;
+}
+.capture-source-button.is-selected {
+	border-color: #e8c978;
+	background: #fff3d4;
+	color: #805f20;
+	box-shadow: 0 1px 2px #bd8b1e18;
+}
+.capture-source-button-main {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	min-width: 62px;
+	height: 38px;
+	padding: 4px 9px;
+	border: 0;
+	border-radius: 8px;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+	font-size: 10px;
+}
+.capture-source-button-main svg {
+	width: 16px;
+	height: 16px;
+}
+.capture-source-button-main:active,
+.capture-source-button-menu:active {
+	scale: 0.96;
+}
+.capture-source-button-menu {
+	display: grid;
+	place-items: center;
+	width: 21px;
+	height: 28px;
+	margin-right: 4px;
+	border: 0;
+	border-left: 1px solid #e6d4a8;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+}
+.capture-source-button-menu svg {
+	width: 12px;
+	height: 12px;
+	transition: transform 150ms ease-out;
+}
+.capture-source-button.is-open .capture-source-button-menu svg {
+	transform: rotate(180deg);
+}
+.capture-source-positioner {
+	z-index: 1000;
+}
+.capture-source-panel {
+	box-sizing: border-box;
+	width: min(364px, calc(100vw - 24px));
+	max-height: var(--available-height);
+	overflow: auto;
+	padding: 12px;
+	border-radius: 20px;
+	background: #fffefa;
+	color: #343632;
+	font:
+		12px / 1.45 -apple-system,
+		BlinkMacSystemFont,
+		"Segoe UI",
+		sans-serif;
+	box-shadow:
+		0 0 0 1px #0000000f,
+		0 4px 10px -4px #0000001a,
+		0 24px 64px -12px #00000033;
+	transform-origin: var(--transform-origin);
+	opacity: 1;
+	scale: 1;
+	translate: 0 0;
+	transition:
+		opacity 150ms ease-out,
+		scale 200ms cubic-bezier(0.2, 0, 0, 1),
+		translate 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+.capture-source-panel[data-starting-style],
+.capture-source-panel[data-ending-style] {
+	opacity: 0;
+	scale: 0.96;
+	translate: 0 -5px;
+}
+.capture-source-heading {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	padding: 8px 6px 18px;
+	gap: 8px;
+}
+.capture-source-heading h2 {
+	margin: 0;
+	font-size: 14px;
+	font-weight: 600;
+	letter-spacing: -0.2px;
+}
+.capture-source-heading p {
+	margin: 4px 0 0;
+	font-size: 10px;
+	color: #85857c;
+}
+.capture-source-heading button {
+	display: grid;
+	place-items: center;
+	width: 24px;
+	height: 24px;
+	border-radius: 50%;
+	background: #efeee8;
+	color: #85857c;
+	cursor: pointer;
+	flex-shrink: 0;
+}
+.capture-source-heading button svg {
+	width: 12px;
+	height: 12px;
+}
+.capture-source-categories {
+	display: flex;
+	padding: 4px;
+	border-radius: 12px;
+	background: #f1f0e9;
+	gap: 4px;
+}
+.capture-source-categories button {
+	position: relative;
+	isolation: isolate;
+	display: flex;
+	flex: 1;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	height: 34px;
+	border-radius: 8px;
+	border: 0;
+	background: transparent;
+	color: #85857c;
+	cursor: pointer;
+	font-size: 11px;
+}
+.capture-source-categories button[aria-selected="true"] {
+	color: #805f20;
+	font-weight: 600;
+}
+.capture-source-categories svg {
+	width: 14px;
+	height: 14px;
+}
+.capture-source-tab-highlight {
+	position: absolute;
+	z-index: -1;
+	inset: 0;
+	border-radius: 8px;
+	background: #fff2ca;
+	box-shadow:
+		0 0 0 1px #e9cc8938,
+		0 1px 2px #00000008;
+}
+.capture-source-body {
+	min-height: 238px;
+	padding: 16px 0 8px;
+}
+.capture-source-search {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	height: 34px;
+	padding: 0 10px;
+	border: 1px solid #e8e7df;
+	border-radius: 8px;
+	color: #939489;
+	background: #fff;
+}
+.capture-source-search > svg {
+	width: 14px;
+	height: 14px;
+}
+.capture-source-search input {
+	width: 100%;
+	min-width: 0;
+	border: 0;
+	outline: none;
+	font: inherit;
+	font-size: 11px;
+	background: transparent;
+	color: #44473d;
+}
+.capture-source-search button {
+	cursor: pointer;
+}
+.capture-source-search button svg {
+	width: 12px;
+	height: 12px;
+}
+.capture-source-search:focus-within {
+	outline: 2px solid #b28b38;
+	outline-offset: 2px;
+}
+.capture-source-list-heading {
+	display: flex;
+	justify-content: space-between;
+	margin: 16px 6px 8px;
+	color: #929186;
+	font-size: 10px;
+}
+.capture-source-list {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+}
+.capture-source-option {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 10px;
+	min-height: 59px;
+	border: 1px solid transparent;
+	border-radius: 12px;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+	text-align: left;
+	transition: background-color 150ms ease-out;
+}
+.capture-source-option:hover {
+	background: #f5f4ed;
+}
+.capture-source-option[aria-pressed="true"] {
+	border-color: #edcf84;
+	background: #fff6df;
+}
+.capture-source-option-icon {
+	display: grid;
+	place-items: center;
+	width: 40px;
+	height: 36px;
+	border-radius: 7px;
+	color: #878b7e;
+	background: #eeeee6;
+}
+.capture-source-option[aria-pressed="true"] .capture-source-option-icon {
+	background: #f6e8ba;
+	color: #967228;
+}
+.capture-source-option-icon svg {
+	width: 24px;
+	height: 24px;
+	stroke-width: 1.5;
+}
+.capture-source-option-copy {
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	flex-direction: column;
+	gap: 3px;
+}
+.capture-source-option-copy b {
+	font-size: 12px;
+	font-weight: 600;
+}
+.capture-source-option-copy small {
+	font-size: 10px;
+	color: #8a8c80;
+}
+.capture-source-check {
+	width: 16px;
+	height: 16px;
+	color: #a27b29;
+}
+.capture-source-check svg {
+	width: 16px;
+	height: 16px;
+}
+.capture-source-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding: 20px 8px;
+	gap: 7px;
+	text-align: center;
+	color: #8a8c80;
+}
+.capture-source-empty > svg {
+	width: 22px;
+	height: 22px;
+}
+.capture-source-empty b {
+	max-width: 100%;
+	overflow-wrap: anywhere;
+	color: #515448;
+	font-weight: 500;
+}
+.capture-source-empty span {
+	font-size: 10px;
+}
+.capture-source-area {
+	padding: 8px 16px 12px;
+	text-align: center;
+}
+.capture-source-region {
+	display: grid;
+	place-items: center;
+	width: 112px;
+	height: 76px;
+	margin: 0 auto 16px;
+	border-radius: 12px;
+	background: #f6f0df;
+	color: #b29147;
+}
+.capture-source-region svg {
+	width: 45px;
+	height: 45px;
+	stroke-width: 1;
+}
+.capture-source-area h3 {
+	margin: 0 0 8px;
+	font-size: 15px;
+	font-weight: 500;
+}
+.capture-source-area p {
+	margin: 0;
+	font-size: 11px;
+	line-height: 1.6;
+	color: #898a7e;
+}
+.capture-source-footer {
+	border-top: 1px solid #ebe9df;
+	padding-top: 10px;
+}
+.capture-source-pick {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	padding: 12px;
+	border-radius: 12px;
+	border: 0;
+	background: #363c32;
+	color: #fffef6;
+	text-align: left;
+	cursor: pointer;
+	transition:
+		background-color 150ms ease-out,
+		scale 150ms ease-out;
+}
+.capture-source-pick:hover {
+	background: #4d5646;
+}
+.capture-source-pick:active {
+	scale: 0.96;
+}
+.capture-source-pick > svg {
+	width: 19px;
+	height: 19px;
+}
+.capture-source-pick > span:nth-child(2) {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 3px;
+}
+.capture-source-pick b {
+	font-size: 11px;
+	font-weight: 600;
+}
+.capture-source-pick small {
+	font-size: 9px;
+	color: #bbc2b4;
+}
+.capture-source-footer > p {
+	margin: 10px 0 0;
+	text-align: center;
+	font-size: 9px;
+	color: #a3a397;
+}
+.capture-source-button-main:focus-visible,
+.capture-source-button-menu:focus-visible,
+.capture-source-panel button:focus-visible {
+	outline: 2px solid #b28b38;
+	outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+	.capture-source-panel,
+	.capture-source-button,
+	.capture-source-button-menu svg,
+	.capture-source-pick {
+		transition: none;
+	}
+	.capture-source-panel[data-starting-style],
+	.capture-source-panel[data-ending-style] {
+		scale: 1;
+		translate: none;
+	}
+}

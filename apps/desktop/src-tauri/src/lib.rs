@@ -22,6 +22,7 @@ mod gpu_context;
 mod hotkeys;
 mod http_client;
 mod import;
+mod launch_window;
 mod library;
 #[cfg(target_os = "windows")]
 mod nvapi_power_policy;
@@ -1258,6 +1259,7 @@ fn specta_bindings() -> tauri_specta::Builder {
             windows::set_window_transparent,
             windows::apply_macos_liquid_glass_background,
             windows::show_window,
+            tray::quit_application,
             windows::is_camera_window_open,
             input_commands::set_mic_input,
             input_commands::set_camera_input,
@@ -1411,6 +1413,7 @@ pub fn run() {
             let app = app.handle().clone();
 
             general_settings::init(&app);
+            launch_window::initialize(&app)?;
 
             // Only macOS ever prompts here (Windows/Linux report Granted with
             // no dialog) — spawned rather than requested inline so a

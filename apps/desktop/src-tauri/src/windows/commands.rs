@@ -39,6 +39,39 @@ pub(crate) fn lock_window_text_scale(_window: &WebviewWindow<Wry>) {
     }
 }
 
+/// WebView2 paints its own opaque background by default even when the host
+/// Tauri window is `.transparent(true)` — the window-level flag only affects
+/// the native frame, not the browser control sitting inside it.
+pub(crate) fn clear_webview_background(_window: &WebviewWindow<Wry>) {
+    #[cfg(windows)]
+    {
+        if let Err(e) = _window.with_webview(move |webview| unsafe {
+            use webview2_com::Microsoft::Web::WebView2::Win32::{
+                COREWEBVIEW2_COLOR, ICoreWebView2Controller2,
+            };
+            use windows_core::Interface;
+
+            let controller = webview.controller();
+
+            let Ok(controller2) = controller.cast::<ICoreWebView2Controller2>() else {
+                warn!("Failed to access WebView2 controller background APIs");
+                return;
+            };
+
+            if let Err(e) = controller2.SetDefaultBackgroundColor(COREWEBVIEW2_COLOR {
+                A: 0,
+                R: 0,
+                G: 0,
+                B: 0,
+            }) {
+                warn!("Failed to clear WebView background color: {}", e);
+            }
+        }) {
+            warn!("Failed to access platform WebView: {}", e);
+        }
+    }
+}
+
 /// `lock_window_text_scale` disables WebView2's own monitor-scale detection
 /// (so the Windows text-size setting can't zoom the UI), which also stops it
 /// following per-monitor DPI. The new scale factor must be forwarded here on

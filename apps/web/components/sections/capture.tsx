@@ -1,4 +1,5 @@
 import { Camera, MousePointer2, Scan, Video } from "lucide-react";
+import { CaptureModeToggle } from "@/components/previews/capture-mode-toggle";
 import { RecordingControls } from "@/components/previews/recording-controls";
 import FeatureCopy from "@/components/ui/feature-copy";
 import SectionHeading from "@/components/ui/section-heading";
@@ -10,6 +11,7 @@ export default function CaptureSection() {
 				label="01 / Capture"
 				title="Whatever’s on your screen. Make it yours."
 			/>
+			<CaptureModeToggle />
 			<div id="screenshots" className="feature-row">
 				<FeatureCopy
 					icon={<Camera size={18} />}

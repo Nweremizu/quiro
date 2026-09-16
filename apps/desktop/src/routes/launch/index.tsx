@@ -1,14 +1,18 @@
 import { cn, toast } from "@quiro/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import {
 	currentMonitor,
 	getCurrentWindow,
 	LogicalSize,
 	PhysicalPosition,
 } from "@tauri-apps/api/window";
+import { Store } from "@tauri-apps/plugin-store";
+import { check } from "@tauri-apps/plugin-updater";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { cameraSettingsKey } from "@/components/DeviceMenu";
 import {
 	mergeRecentMedia,
@@ -17,7 +21,11 @@ import {
 } from "@/components/LibraryMenu";
 import { Show } from "@/components/Show";
 import { Tooltip } from "@/components/Tooltip";
-import { mainWindowUIStore, recordingSettingsStore } from "@/store";
+import {
+	generalSettingsStore,
+	mainWindowUIStore,
+	recordingSettingsStore,
+} from "@/store";
 import { useTauriEventListener } from "@/utils/createEventListner";
 import {
 	type CameraWithDetails,
@@ -59,12 +67,14 @@ import CameraSelect from "./camera-select";
 import MenuDropdownButton from "./menu-dropdown-button";
 import MenuSelectionButton from "./menu-selection-button";
 import MicrophoneSelect from "./microphone-select";
+import MoreOptionsPanel from "./more-options-panel";
 import {
 	RecordingOptionsProvider,
 	useRecordingOptions,
 } from "./options-context";
 import { QuiroMode } from "./quiro-mode";
 import SystemAudio from "./system-audio";
+import { LaunchToolbar } from "./toolbar";
 
 async function openDebugWindow() {
 	try {
@@ -112,8 +122,13 @@ const nextAnimationFrame = () =>
 const clamp = (value: number, minimum: number, maximum: number) =>
 	Math.min(Math.max(value, minimum), maximum);
 
-async function resizeMainWindow(expanded: boolean, animate: boolean) {
+async function resizeMainWindow(
+	expanded: boolean,
+	animate: boolean,
+	toolbarSize?: { width: number; height: number },
+) {
 	const currentWindow = getCurrentWindow();
+	await currentWindow.setMinSize(new LogicalSize(330, toolbarSize ? 60 : 395));
 	const [physicalSize, outerSize, scaleFactor, physicalPosition, monitor] =
 		await Promise.all([
 			currentWindow.innerSize(),
@@ -130,9 +145,9 @@ async function resizeMainWindow(expanded: boolean, animate: boolean) {
 		0,
 		(outerSize.height - physicalSize.height) / scaleFactor,
 	);
-	const preferredSize = expanded
-		? MAIN_WINDOW_SIZE.expanded
-		: MAIN_WINDOW_SIZE.compact;
+	const preferredSize =
+		toolbarSize ??
+		(expanded ? MAIN_WINDOW_SIZE.expanded : MAIN_WINDOW_SIZE.compact);
 	const availableWidth = monitor
 		? monitor.workArea.size.width / scaleFactor -
 			frameWidth -
@@ -144,11 +159,13 @@ async function resizeMainWindow(expanded: boolean, animate: boolean) {
 			MAIN_WINDOW_SCREEN_PADDING * 2
 		: preferredSize.height;
 	const targetWidth = Math.max(
-		MAIN_WINDOW_SIZE.compact.width,
+		toolbarSize
+			? Math.min(330, availableWidth)
+			: MAIN_WINDOW_SIZE.compact.width,
 		Math.min(preferredSize.width, availableWidth),
 	);
 	const targetHeight = Math.max(
-		MAIN_WINDOW_SIZE.compact.height,
+		toolbarSize ? 60 : MAIN_WINDOW_SIZE.compact.height,
 		Math.min(preferredSize.height, availableHeight),
 	);
 	const startWidth = physicalSize.width / scaleFactor;
@@ -271,6 +288,59 @@ export default function LaunchRoute() {
 export function LaunchRoutePage() {
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
+	const [searchParams] = useSearchParams();
+	const toolbar = searchParams.get("launchWindow") === "toolbar";
+	const switchPending = useRef(false);
+	const switchLaunchWindow = async () => {
+		if (switchPending.current) return;
+		switchPending.current = true;
+		try {
+			await commands.closeTargetSelectOverlays();
+			const store = await Store.load("store");
+			await store.set("launch_window", toolbar ? "classic" : "toolbar");
+			await store.save();
+			closeAllMenus();
+			setOptions({ targetMode: null, targetModeDismissal: "cancelled" });
+			navigate(toolbar ? "/" : "/?launchWindow=toolbar", { replace: true });
+		} catch (error) {
+			toast.error(`Unable to switch launch window: ${error}`);
+		} finally {
+			switchPending.current = false;
+		}
+	};
+	const updateCheckPending = useRef(false);
+	const checkForUpdates = async () => {
+		if (updateCheckPending.current) return;
+		updateCheckPending.current = true;
+		try {
+			const update = await check();
+			if (update) {
+				toast.success(
+					`Version ${update.version} is available. Open Settings to install it.`,
+				);
+			} else {
+				toast.success("Quiro is up to date.");
+			}
+		} catch (error) {
+			toast.error(`Couldn't check for updates: ${error}`);
+		} finally {
+			updateCheckPending.current = false;
+		}
+	};
+	useEffect(() => {
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (
+				(event.ctrlKey || event.metaKey) &&
+				event.shiftKey &&
+				event.key.toLowerCase() === "l"
+			) {
+				event.preventDefault();
+				void switchLaunchWindow();
+			}
+		};
+		window.addEventListener("keydown", onKeyDown);
+		return () => window.removeEventListener("keydown", onKeyDown);
+	});
 	const [isExpanded, setIsExpanded] = useState(false);
 	const { rawOptions, setOptions } = useRecordingOptions();
 	const shortcutPending = useRef(false);
@@ -323,6 +393,7 @@ export function LaunchRoutePage() {
 	isWindowResizingRef.current = isWindowResizing;
 
 	const recordingSettingsQuery = recordingDeviceSettingsStore.useQuery();
+	const generalSettings = generalSettingsStore.useQuery();
 
 	const toggleMainWindowExpanded = async () => {
 		if (isWindowResizing) return;
@@ -426,6 +497,7 @@ export function LaunchRoutePage() {
 	const [modeInfoMenuOpen, setModeInfoMenuOpen] = useState(false);
 	const [cameraMenuOpen, setCameraMenuOpen] = useState(false);
 	const [microphoneMenuOpen, setMicrophoneMenuOpen] = useState(false);
+	const [moreMenuOpen, setMoreMenuOpen] = useState(false);
 	const [cameraInitialSettings, setCameraInitialSettings] =
 		useState<CameraWithDetails | null>(null);
 	const [openCameraSettingsWhenReady, setOpenCameraSettingsWhenReady] =
@@ -445,6 +517,7 @@ export function LaunchRoutePage() {
 		| "modeInfo"
 		| "camera"
 		| "microphone"
+		| "more"
 		| null = displayMenuOpen
 		? "display"
 		: windowMenuOpen
@@ -459,14 +532,74 @@ export function LaunchRoutePage() {
 							? "camera"
 							: microphoneMenuOpen
 								? "microphone"
-								: null;
+								: moreMenuOpen
+									? "more"
+									: null;
 
 	const showRecents = isExpanded && activeMenu === null;
+	const resizeQueue = useRef(Promise.resolve());
+	const previousToolbar = useRef(toolbar);
+	const previousActiveMenu = useRef(activeMenu);
+	const previousToolbarResizeKey = useRef<string | null>(null);
+	const recordingMode = rawOptions.mode !== "screenshot";
 
 	const setCamera = createCameraMutation();
 	const devices = useStableDevicesQuery(enableDeviceQueries);
 	const permissions = useQuery(permissionsQuery);
 	const currentPermissions = devices.permissions ?? permissions.data;
+
+	useEffect(() => {
+		const switched = previousToolbar.current !== toolbar;
+		previousToolbar.current = toolbar;
+		const toolbarResizeKey = toolbar
+			? activeMenu === null
+				? "closed"
+				: "open"
+			: null;
+		if (
+			toolbar &&
+			!switched &&
+			previousToolbarResizeKey.current === toolbarResizeKey
+		) {
+			return;
+		}
+		previousToolbarResizeKey.current = toolbarResizeKey;
+		// A camera/microphone menu opening for the first time flips
+		// enableDeviceQueries on in the same click, so its device list is still
+		// fetching right as this effect fires. Animating the window's grow at
+		// that moment races the eased resize loop against the loading→loaded
+		// re-render, which is what reads as "lag" — snapping straight to size
+		// avoids the race instead of trying to out-schedule it.
+		const opening = previousActiveMenu.current === null && activeMenu !== null;
+		const openingWhileLoading =
+			opening &&
+			(activeMenu === "camera" || activeMenu === "microphone") &&
+			enableDeviceQueries &&
+			devices.isPending;
+		previousActiveMenu.current = activeMenu;
+		if (!toolbar && !switched) return;
+		let cancelled = false;
+		resizeQueue.current = resizeQueue.current
+			.then(async () => {
+				if (cancelled) return;
+				await resizeMainWindow(
+					isExpanded,
+					!toolbar && !openingWhileLoading,
+					toolbar
+						? {
+								width: 640,
+								height: activeMenu ? 440 : 60,
+							}
+						: undefined,
+				);
+			})
+			.catch((error) => {
+				toast.error(`Unable to resize launch window: ${error}`);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [toolbar, activeMenu, isExpanded, enableDeviceQueries, devices.isPending]);
 
 	const screens = useQuery({
 		...listScreens,
@@ -511,11 +644,36 @@ export function LaunchRoutePage() {
 	// A screenshot taken from the target picker lands while this window is
 	// already open, so the library list would otherwise show stale contents
 	// until it happened to refetch.
-	useTauriEventListener(events.newScreenshotAdded, () => {
+	useTauriEventListener(events.newScreenshotAdded, (event) => {
 		void queryClient.invalidateQueries({
 			queryKey: listScreenshotsQuery.queryKey,
 		});
+		void commands.showWindow({ ScreenshotEditor: { path: event.path } });
 	});
+
+	useEffect(() => {
+		let cancelled = false;
+		let unlisten: (() => void) | undefined;
+
+		listen<string>("recording-stopped", (event) => {
+			if (cancelled) return;
+			void commands.showWindow({ Editor: { path: event.payload } });
+		})
+			.then((cleanup) => {
+				if (cancelled) cleanup();
+				else unlisten = cleanup;
+			})
+			.catch((error) => {
+				if (!cancelled) {
+					toast.error(`Unable to open the recording editor: ${error}`);
+				}
+			});
+
+		return () => {
+			cancelled = true;
+			unlisten?.();
+		};
+	}, []);
 
 	// Recording start/stop happens from the picker overlay, a different
 	// window — this is hidden while a recording runs (see recording.rs), so
@@ -605,6 +763,7 @@ export function LaunchRoutePage() {
 		setModeInfoMenuOpen(false);
 		setCameraMenuOpen(false);
 		setMicrophoneMenuOpen(false);
+		setMoreMenuOpen(false);
 	};
 
 	// The main Display/Window/Area buttons enter an on-screen picker: Rust
@@ -635,7 +794,12 @@ export function LaunchRoutePage() {
 			await commands.closeTargetSelectOverlays();
 		}
 
-		await commands.openTargetSelectOverlays(null, null, nextMode);
+		const result = await commands.openTargetSelectOverlays(
+			null,
+			null,
+			nextMode,
+		);
+		if (result.status === "error") throw new Error(result.error);
 		setOptions({ targetMode: nextMode, targetModeSource: "main" });
 	};
 
@@ -1072,10 +1236,115 @@ export function LaunchRoutePage() {
 						initialSettingsTarget={microphoneInitialSettings}
 					/>
 				);
+			case "more":
+				return (
+					<MoreOptionsPanel
+						recording={recordingMode}
+						countdown={generalSettings.data?.recordingCountdown ?? 0}
+						onBack={closeAllMenus}
+						onHome={() => navigate("/home")}
+						onCountdown={() => {
+							const delays = [0, 3, 5, 10];
+							const index = delays.indexOf(
+								generalSettings.data?.recordingCountdown ?? 0,
+							);
+							void generalSettingsStore
+								.set({
+									recordingCountdown:
+										delays[(index + 1) % delays.length] || null,
+								})
+								.catch((error) =>
+									toast.error(`Unable to save delay: ${error}`),
+								);
+						}}
+						onSettings={() => {
+							void commands.showWindow({ Settings: { page: null } });
+						}}
+						onHelp={() => {
+							void commands.showWindow("Onboarding");
+						}}
+						onCheckForUpdates={() => {
+							void checkForUpdates();
+						}}
+						onQuit={() => {
+							void invoke("quit_application");
+						}}
+					/>
+				);
 			default:
 				return null;
 		}
 	};
+
+	if (toolbar) {
+		return (
+			<LaunchToolbar
+				recording={recordingMode}
+				targetMode={
+					rawOptions.targetMode === "camera" ? null : rawOptions.targetMode
+				}
+				microphone={Boolean(rawOptions.micName)}
+				microphoneLabel={rawOptions.micName ?? "No microphone selected"}
+				systemAudio={rawOptions.captureSystemAudio ?? false}
+				camera={rawOptions.cameraID !== null}
+				cameraLabel={
+					options.camera()?.display_name ??
+					rawOptions.cameraLabel ??
+					"No webcam selected"
+				}
+				moreOpen={moreMenuOpen}
+				panel={renderActiveMenu()}
+				panelKey={activeMenu}
+				onMode={(recording) => {
+					if (shortcutPending.current) return;
+					shortcutPending.current = true;
+					void commands
+						.closeTargetSelectOverlays()
+						.then(() => {
+							closeAllMenus();
+							setOptions({
+								mode: recording ? "studio" : "screenshot",
+								targetMode: null,
+								targetModeDismissal: "cancelled",
+							});
+						})
+						.catch((error) =>
+							toast.error(`Unable to change capture mode: ${error}`),
+						)
+						.finally(() => {
+							shortcutPending.current = false;
+						});
+				}}
+				onTarget={(mode) => {
+					void toggleTargetMode(mode).catch((error) =>
+						toast.error(`Unable to open picker: ${error}`),
+					);
+				}}
+				onBrowse={(mode) => {
+					const wasOpen = mode === "display" ? displayMenuOpen : windowMenuOpen;
+					closeAllMenus();
+					if (mode === "display") setDisplayMenuOpen(!wasOpen);
+					else setWindowMenuOpen(!wasOpen);
+				}}
+				onMicrophone={() => openMicrophoneMenu(null)}
+				onSystemAudio={() =>
+					setOptions({ captureSystemAudio: !rawOptions.captureSystemAudio })
+				}
+				onCamera={() => openCameraMenu(null)}
+				onMore={() => {
+					const wasOpen = moreMenuOpen;
+					closeAllMenus();
+					if (!wasOpen) setMoreMenuOpen(true);
+				}}
+				onMinimize={() => {
+					void getCurrentWindow().hide();
+				}}
+				onClose={() => {
+					void getCurrentWindow().close();
+				}}
+			/>
+		);
+	}
 
 	return (
 		<RecordingOptionsProvider>
@@ -1097,6 +1366,15 @@ export function LaunchRoutePage() {
 							className="flex gap-1 items-center shrink-0"
 							data-tauri-drag-region
 						>
+							<button
+								type="button"
+								onClick={() => void switchLaunchWindow()}
+								title="Switch to toolbar (Ctrl/Cmd+Shift+L)"
+								aria-label="Switch to toolbar launch window"
+								className="rounded px-1 text-[10px] text-gray-11 hover:bg-gray-4"
+							>
+								Toolbar
+							</button>
 							<Tooltip content={<span>Home</span>}>
 								<button
 									type="button"

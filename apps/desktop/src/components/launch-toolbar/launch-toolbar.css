@@ -1,0 +1,156 @@
+.launch-toolbar {
+	position: relative;
+	isolation: isolate;
+	--launch-motion-fast: 150ms;
+	--launch-motion-base: 200ms;
+	--launch-motion-medium: 280ms;
+	--launch-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+	--launch-ease-morph: cubic-bezier(0.65, 0, 0.35, 1);
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	width: max-content;
+	height: 48px;
+	padding: 3px 10px 3px 3px;
+	border: 1px solid #e9eaec;
+	border-radius: 13px;
+	background: #fff;
+	color: #777e87;
+	box-shadow:
+		0 1px 2px #18223008,
+		0 8px 24px -12px #18223026;
+	font-family: Arial, sans-serif;
+	transition: box-shadow var(--launch-motion-medium) var(--launch-ease-morph);
+}
+.launch-toolbar-button {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 3px;
+	width: 40px;
+	height: 36px;
+	flex-shrink: 0;
+	border: 0;
+	border-radius: 7px;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+	transition:
+		background-color var(--launch-motion-fast) var(--launch-ease-out),
+		color var(--launch-motion-fast) var(--launch-ease-out);
+}
+.launch-toolbar-button svg {
+	width: 16px;
+	height: 16px;
+}
+.launch-toolbar-button span {
+	font-size: 8px;
+	line-height: 10px;
+}
+.launch-toolbar-button small {
+	position: absolute;
+	right: 1px;
+	top: 0;
+	color: #ff5b28;
+	font-size: 9px;
+}
+.launch-toolbar-button:hover {
+	background: #f2f3f5;
+	color: #444b55;
+}
+.launch-toolbar-button:disabled {
+	pointer-events: none;
+}
+.launch-toolbar-button:focus-visible {
+	outline: 2px solid #ff5b28;
+	outline-offset: 2px;
+}
+.launch-toolbar-button[aria-pressed="true"] {
+	color: #ff5b28;
+}
+.launch-toolbar-modes {
+	position: relative;
+	display: flex;
+	gap: 2px;
+	padding: 2px;
+	border: 1px solid #e7e8eb;
+	border-radius: 10px;
+	background: #f5f6f7;
+}
+.launch-toolbar-mode-highlight {
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 34px;
+	height: 34px;
+	border-radius: 7px;
+	background: #fff;
+	box-shadow: 0 1px 3px #2026301a;
+	pointer-events: none;
+}
+.launch-toolbar-modes .launch-toolbar-button {
+	z-index: 1;
+	width: 34px;
+	height: 34px;
+}
+.launch-toolbar-modes .launch-toolbar-button[aria-pressed="true"] {
+	background: transparent;
+	box-shadow: none;
+}
+.launch-toolbar-modes svg {
+	fill: currentColor;
+	stroke-width: 1.5;
+}
+.launch-toolbar-recording-content {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	flex-shrink: 0;
+}
+.launch-toolbar-icon-slot {
+	position: relative;
+	display: block;
+	width: 16px;
+	height: 16px;
+}
+.launch-toolbar-icon-layer {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: center;
+}
+.launch-toolbar-divider {
+	width: 3px;
+	height: 19px;
+	margin: 0 6px;
+	border-radius: 3px;
+	background: #e7e8eb;
+	flex-shrink: 0;
+}
+.launch-toolbar-audio {
+	display: flex;
+	gap: 4px;
+}
+.launch-toolbar-window-actions {
+	display: flex;
+}
+.launch-toolbar-button-compact {
+	width: 24px;
+}
+.launch-toolbar-button-compact svg {
+	width: 13px;
+	height: 13px;
+}
+@media (prefers-reduced-motion: reduce) {
+	.launch-toolbar,
+	.launch-toolbar-button,
+	.launch-toolbar-mode-highlight,
+	.launch-toolbar-target-control,
+	.launch-toolbar-target-menu-button svg,
+	.launch-toolbar-target-popover,
+	.launch-toolbar-recording-content {
+		transition-duration: 0.01ms;
+	}
+}

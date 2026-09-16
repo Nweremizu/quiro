@@ -19,9 +19,9 @@ import {
 	useMemo,
 	useState,
 } from "react";
+import { CaptureModeSwitch } from "@/components/launch-toolbar/launch-toolbar";
 import MacOsTitlebarControls from "@/components/titlebar/macos-titlebar-control";
 import WindowsTitlebarControls from "@/components/titlebar/windows11-titlebar-control";
-import { QuiroModeControl } from "@/routes/launch/quiro-mode";
 import { generalSettingsStore } from "@/store";
 import {
 	isPermissionGranted,
@@ -993,7 +993,12 @@ function WorkflowStep({ active }: { active: boolean }) {
 					transform: visible ? "translateY(0)" : "translateY(10px)",
 				}}
 			>
-				<QuiroModeControl mode={selectedMode} onModeChange={setSelectedMode} />
+				<CaptureModeSwitch
+					mode={isRecording ? "recording" : "screenshot"}
+					onChange={(mode) =>
+						setSelectedMode(mode === "recording" ? "studio" : "screenshot")
+					}
+				/>
 				<div className="flex items-center gap-3 text-center">
 					<div className="grid size-10 place-items-center rounded-xl bg-accent-surface text-accent-solid">
 						{isRecording ? (

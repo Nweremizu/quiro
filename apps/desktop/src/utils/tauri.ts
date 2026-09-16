@@ -673,6 +673,9 @@ async applyMacosLiquidGlassBackground(enabled: boolean, radius: number) : Promis
 async showWindow(window: ShowQuiroWindow) : Promise<void> {
     await TAURI_INVOKE("show_window", { window });
 },
+async quitApplication() : Promise<void> {
+    await TAURI_INVOKE("quit_application");
+},
 async isCameraWindowOpen() : Promise<boolean> {
     return await TAURI_INVOKE("is_camera_window_open");
 },

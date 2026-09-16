@@ -68,16 +68,6 @@ pub(crate) async fn try_reuse_existing(
                 ensure_settings_window_bounds(&window);
             }
 
-            if let ShowQuiroWindow::Main { init_target_mode } = this {
-                emit_app_event(
-                    app,
-                    RequestSetTargetMode {
-                        target_mode: *init_target_mode,
-                        display_id: cursor_display_id,
-                    },
-                );
-            }
-
             if should_restore_main_window_inputs {
                 restore_hidden_target_select_overlays(app);
 

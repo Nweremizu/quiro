@@ -42,7 +42,9 @@ function useAppliedTheme() {
 export default function WindowLayout() {
 	const location = useLocation();
 	const unlistenResizeRef = useRef<UnlistenFn | undefined>(undefined);
-	const isMacOS = ostype() === "macos";
+	const toolbar =
+		location.pathname === "/" &&
+		new URLSearchParams(location.search).get("launchWindow") === "toolbar";
 
 	useAppliedTheme();
 
@@ -101,10 +103,10 @@ export default function WindowLayout() {
 			<div
 				className={cn(
 					"cap-window-shell flex overflow-hidden flex-col w-screen h-screen max-h-screen divide-y divide-gray-5 bg-gray-1",
-					isMacOS && "rounded-[16px]",
+					toolbar && "rounded-2xl bg-transparent",
 				)}
 			>
-				<Header />
+				{!toolbar && <Header />}
 				<Suspense fallback={<FullPageLoader />}>
 					<Inner>
 						<Suspense fallback={null}>

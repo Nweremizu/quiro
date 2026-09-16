@@ -12,14 +12,25 @@ changes.
 
 ### Added
 
+- A new icon-tiles toolbar layout for the launch window, now the default.
+  It shares recording settings, capture targets, device menus, and capture
+  commands with the classic launch window. Press Ctrl+Shift+L
+  (Cmd+Shift+L on macOS) to switch layouts, or launch with
+  `--launch-window=toolbar` / `--launch-window=classic`; the choice is
+  remembered for next time. See `apps/desktop/LAUNCH-WINDOWS.md`.
 - Linux downloads and in-app updates: the website's download page now offers
   an AppImage alongside Windows/macOS, and the release pipeline publishes it
   to R2 so the desktop updater can serve it too.
 - The in-app changelog now fetches from quiro.app first (so it can show
   what's new before you update), falling back to the bundled copy offline.
+- Website: an interactive capture-mode toggle in the Capture section preview.
 
 ### Fixed
 
+- Windows: the launch window's undecorated frame showed DWM's default
+  rounded corners, a 1px accent border, and an opaque WebView2 background,
+  all fighting the app's own CSS chrome. All three are now disabled for the
+  toolbar layout.
 - `pnpm release` reformatted every JSON version file through
   `JSON.stringify`, which disagreed with Biome's formatter and broke CI's
   lint job on release commits (as it did for v0.1.3). It now does a surgical

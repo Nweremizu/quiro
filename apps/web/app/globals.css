@@ -266,6 +266,75 @@ input {
 .feature-row.reverse {
 	grid-template-columns: 1.15fr 1fr;
 }
+.capture-mode-demo {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	margin: 28px 0 42px;
+}
+.capture-mode-toggle {
+	position: relative;
+	display: flex;
+	gap: 2px;
+	margin: 0;
+	padding: 2px;
+	border: 1px solid var(--color-gray-5);
+	border-radius: 10px;
+	background: var(--color-gray-3);
+}
+.capture-mode-toggle button {
+	position: relative;
+	z-index: 1;
+	display: grid;
+	place-items: center;
+	width: 34px;
+	height: 34px;
+	border: 0;
+	border-radius: 7px;
+	background: transparent;
+	color: var(--color-gray-10);
+	cursor: pointer;
+	transition: color 150ms var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+}
+.capture-mode-toggle button:hover {
+	color: var(--color-gray-12);
+}
+.capture-mode-toggle button[aria-pressed="true"] {
+	color: var(--color-accent-solid);
+}
+.capture-mode-toggle button:focus-visible {
+	outline: 2px solid var(--color-accent-focus-ring);
+	outline-offset: 2px;
+}
+.capture-mode-toggle button svg {
+	width: 16px;
+	height: 16px;
+}
+.capture-mode-highlight {
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 34px;
+	height: 34px;
+	border-radius: 7px;
+	background: var(--color-gray-1);
+	box-shadow: 0 1px 3px
+		color-mix(in srgb, var(--color-gray-12) 10%, transparent);
+	pointer-events: none;
+	transition: transform 200ms var(--ease-morph, cubic-bezier(0.65, 0, 0.35, 1));
+}
+.capture-mode-caption {
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--color-gray-11);
+}
+@media (prefers-reduced-motion: reduce) {
+	.capture-mode-toggle button,
+	.capture-mode-highlight {
+		transition-duration: 0.01ms;
+	}
+}
 .feature-copy h3 {
 	font-size: clamp(28px, 3vw, 36px);
 	max-width: 400px;

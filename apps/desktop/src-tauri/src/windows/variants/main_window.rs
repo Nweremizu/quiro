@@ -8,12 +8,29 @@ pub(crate) async fn show_main(
 ) -> tauri::Result<WebviewWindow> {
     let title = WindowId::Main.title();
     let should_protect = should_protect_window(app, &title);
+    let toolbar = crate::launch_window::uses_toolbar(app);
+    let (width, height) = if toolbar {
+        // Toolbar window is 640x60, but we allow it to be resized down to 330x60
+        (640.0, 60.0)
+    } else {
+        (330.0, 395.0)
+    };
 
     #[cfg(target_os = "macos")]
     let panel_activation_guard = permissions::prepare_macos_panel_window(app);
 
     let window = this
-        .window_builder(app, "/")
+        .window_builder(
+            app,
+            if toolbar {
+                "/?launchWindow=toolbar"
+            } else {
+                "/"
+            },
+        )
+        .inner_size(width, height)
+        // Toolbar window is 640x60, but we allow it to be resized down to 330x60
+        .min_inner_size(330.0, 60.0)
         .resizable(false)
         .maximized(false)
         .maximizable(false)
@@ -22,6 +39,12 @@ pub(crate) async fn show_main(
         .visible_on_all_workspaces(true)
         .content_protected(should_protect)
         .transparent(true)
+        // The default `.shadow(true)` (see window_builder_with_label) pairs a
+        // DWM-drawn drop shadow with our border/corner overrides below in a
+        // combination Windows renders inconsistently — a stray highlight
+        // sliver along the top edge. camera.rs/overlays.rs hit the same thing
+        // and already disable it for their borderless, transparent windows.
+        .shadow(!toolbar)
         .visible(false)
         .initialization_script(format!(
             "
@@ -46,7 +69,7 @@ pub(crate) async fn show_main(
             None => tauri::Position::Logical(tauri::LogicalPosition::new(pos.x, pos.y)),
         }
     } else {
-        let (pos_x, pos_y) = cursor_monitor.center_position(330.0, 395.0);
+        let (pos_x, pos_y) = cursor_monitor.center_position(width, height);
         cursor_monitor.position(pos_x, pos_y)
     };
 
@@ -103,11 +126,16 @@ pub(crate) async fn show_main(
 
         #[cfg(windows)]
         {
-            if let Err(e) = window.set_size(LogicalSize::new(330.0, 395.0)) {
+            if let Err(e) = window.set_size(LogicalSize::new(width, height)) {
                 warn!("Failed to set Main window size on Windows: {}", e);
             }
             if let Err(e) = window.set_position(main_position) {
                 warn!("Failed to position Main window on Windows: {}", e);
+            }
+            if toolbar {
+                crate::platform::win::disable_window_corner_rounding(&window);
+                crate::platform::win::disable_window_border(&window);
+                clear_webview_background(&window);
             }
         }
 

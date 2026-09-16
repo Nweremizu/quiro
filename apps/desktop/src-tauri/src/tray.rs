@@ -64,6 +64,13 @@ fn set_linux_tray_icon(tray: &tauri::tray::TrayIcon<Wry>) -> tauri::Result<()> {
 // incidental "no windows left" moment.
 pub static QUIT_REQUESTED: AtomicBool = AtomicBool::new(false);
 
+#[tauri::command]
+#[specta::specta]
+pub fn quit_application(app: AppHandle) {
+    QUIT_REQUESTED.store(true, Ordering::Release);
+    app.exit(0);
+}
+
 // Guards against stacking a listener per Quit click while a recording is
 // still finalizing — one retry armed at a time is enough.
 static RETRY_ARMED: AtomicBool = AtomicBool::new(false);
