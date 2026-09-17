@@ -4,7 +4,10 @@ import FeatureCopy from "@/components/ui/feature-copy";
 
 export default function ExportSection() {
 	return (
-		<section id="export" className="page-container section-space export-section">
+		<section
+			id="export"
+			className="page-container section-space export-section"
+		>
 			<div className="feature-row">
 				<FeatureCopy
 					icon={<Download size={18} />}

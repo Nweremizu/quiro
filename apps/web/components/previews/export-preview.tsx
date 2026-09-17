@@ -39,7 +39,10 @@ export function ExportPreview() {
 						something-worth-showing<span>.{format.name.toLowerCase()}</span>
 					</strong>
 				</div>
-				<fieldset className="export-formats" aria-label="Preview export formats">
+				<fieldset
+					className="export-formats"
+					aria-label="Preview export formats"
+				>
 					{formats.map((item) => (
 						<button
 							type="button"
