@@ -131,7 +131,18 @@ export interface EmbossButtonProps
 
 export const EmbossButton = forwardRef<HTMLButtonElement, EmbossButtonProps>(
 	(
-		{ className, variant, size, radius, emboss, layers, href, icon, children, ...props },
+		{
+			className,
+			variant,
+			size,
+			radius,
+			emboss,
+			layers,
+			href,
+			icon,
+			children,
+			...props
+		},
 		ref,
 	) => {
 		const classes = cn(

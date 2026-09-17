@@ -135,8 +135,11 @@ pub(crate) async fn show_main(
             if toolbar {
                 crate::platform::win::disable_window_corner_rounding(&window);
                 crate::platform::win::disable_window_border(&window);
-                clear_webview_background(&window);
             }
+        }
+
+        if toolbar {
+            clear_webview_background(&window);
         }
 
         window.show().ok();
