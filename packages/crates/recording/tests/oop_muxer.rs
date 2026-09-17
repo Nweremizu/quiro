@@ -3,7 +3,7 @@ use quiro_recording::oop_muxer::{
     resolve_muxer_binary,
 };
 use std::path::PathBuf;
-use std::sync::Once;
+use std::sync::{Mutex, Once};
 use tempfile::TempDir;
 
 const TEST_WIDTH: u32 = 640;
@@ -11,6 +11,11 @@ const TEST_HEIGHT: u32 = 360;
 const TEST_FPS: u32 = 30;
 
 static MUXER_BINARY: Once = Once::new();
+// cargo test runs these in parallel threads of the same process, and
+// ENV_BIN_PATH is process-wide state: without serializing every read/write of
+// it, setup_muxer_binary's first-call env::set_var can land between another
+// thread's override and its resolve_muxer_binary() read.
+static ENV_BIN_PATH_LOCK: Mutex<()> = Mutex::new(());
 
 fn setup_muxer_binary() -> PathBuf {
     let bin_name = if cfg!(windows) {
@@ -28,6 +33,7 @@ fn setup_muxer_binary() -> PathBuf {
 
     for candidate in [target_debug, target_release] {
         if candidate.exists() {
+            let _guard = ENV_BIN_PATH_LOCK.lock().unwrap();
             MUXER_BINARY.call_once(|| unsafe {
                 std::env::set_var(quiro_recording::oop_muxer::ENV_BIN_PATH, &candidate);
             });
@@ -127,6 +133,7 @@ fn subprocess_survives_kill_and_parent_reports_crashed() {
 
 #[test]
 fn resolve_muxer_binary_respects_env_override() {
+    let _guard = ENV_BIN_PATH_LOCK.lock().unwrap();
     let temp = TempDir::new().unwrap();
     let fake = temp.path().join("fake-muxer");
     std::fs::write(&fake, b"").unwrap();
@@ -142,6 +149,7 @@ fn resolve_muxer_binary_respects_env_override() {
 
 #[test]
 fn resolve_muxer_binary_fails_with_invalid_env() {
+    let _guard = ENV_BIN_PATH_LOCK.lock().unwrap();
     unsafe {
         std::env::set_var(
             quiro_recording::oop_muxer::ENV_BIN_PATH,
