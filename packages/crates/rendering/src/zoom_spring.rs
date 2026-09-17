@@ -2170,30 +2170,32 @@ mod tests {
 
     #[test]
     fn auto_follow_survives_reordered_recording_ranges() {
-        let mut project = ProjectConfiguration::default();
-        project.timeline = Some(TimelineConfiguration {
-            segments: [10.0, 0.0]
-                .into_iter()
-                .map(|start| TimelineSegment {
-                    recording_clip: 0,
-                    timescale: 1.0,
-                    start,
-                    end: start + 2.0,
-                    name: None,
-                    speed_audio_mode: None,
-                    transform: None,
-                    perspective: None,
-                })
-                .collect(),
-            zoom_segments: vec![auto_segment(0.0, 4.0, 4.0)],
-            transitions: vec![],
-            scene_segments: vec![],
-            mask_segments: vec![],
-            text_segments: vec![],
-            caption_segments: vec![],
-            keyboard_segments: vec![],
-            audio_segments: vec![],
-        });
+        let project = ProjectConfiguration {
+            timeline: Some(TimelineConfiguration {
+                segments: [10.0, 0.0]
+                    .into_iter()
+                    .map(|start| TimelineSegment {
+                        recording_clip: 0,
+                        timescale: 1.0,
+                        start,
+                        end: start + 2.0,
+                        name: None,
+                        speed_audio_mode: None,
+                        transform: None,
+                        perspective: None,
+                    })
+                    .collect(),
+                zoom_segments: vec![auto_segment(0.0, 4.0, 4.0)],
+                transitions: vec![],
+                scene_segments: vec![],
+                mask_segments: vec![],
+                text_segments: vec![],
+                caption_segments: vec![],
+                keyboard_segments: vec![],
+                audio_segments: vec![],
+            }),
+            ..Default::default()
+        };
         let cursor = CursorEvents {
             moves: vec![
                 move_event(0.0, 0.3, 0.5),
