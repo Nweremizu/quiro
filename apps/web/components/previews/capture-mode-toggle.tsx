@@ -1,6 +1,6 @@
 "use client";
 
-import { Image, Video } from "lucide-react";
+import { Image as ImageIcon, Video } from "lucide-react";
 import { useState } from "react";
 
 type CaptureMode = "screenshot" | "recording";
@@ -23,7 +23,7 @@ export function CaptureModeToggle() {
 					aria-pressed={!recording}
 					onClick={() => setMode("screenshot")}
 				>
-					<Image aria-hidden="true" />
+					<ImageIcon aria-hidden="true" />
 				</button>
 				<button
 					type="button"
