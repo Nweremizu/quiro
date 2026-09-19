@@ -39,6 +39,7 @@ mod screenshot_editor;
 mod target_select_overlay;
 mod three_spike;
 mod tray;
+mod usage_analytics;
 mod window_exclusion;
 mod windows;
 
@@ -1441,6 +1442,7 @@ pub fn run() {
             let previous_termination = crash_sentinel::init(&logs_dir, env!("CARGO_PKG_VERSION"));
             configure_windows_graphics_recovery(previous_termination);
             configure_camera_blur_recovery(&app, previous_termination);
+            usage_analytics::init(&app);
 
             camera::init_preview_profile(total_system_memory());
 

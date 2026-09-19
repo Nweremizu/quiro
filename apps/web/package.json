@@ -12,6 +12,7 @@
 	"dependencies": {
 		"@effect/platform": "^0.97.2",
 		"@quiro/ui": "workspace:*",
+		"@vercel/analytics": "^2.0.1",
 		"cn": "^0.3.0",
 		"effect": "^3.22.2",
 		"lucide-react": "^1.45.0",

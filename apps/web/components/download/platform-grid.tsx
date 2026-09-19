@@ -1,4 +1,7 @@
+"use client";
+
 import { EmbossButton } from "@quiro/ui/EmbossButton";
+import { track } from "@vercel/analytics";
 import AppleIcon from "@/components/icons/apple";
 import LinuxIcon from "@/components/icons/linux";
 import MicrosoftIcon from "@/components/icons/microsoft";
@@ -75,6 +78,12 @@ export default function PlatformGrid({
 								variant={platform.variant}
 								size="lg"
 								className="download-button"
+								onClick={() =>
+									track("download_clicked", {
+										platform: platform.name,
+										version: release?.version ?? "latest",
+									})
+								}
 							>
 								Download for {platform.name}
 							</EmbossButton>

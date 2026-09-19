@@ -97,6 +97,11 @@ jobs:
           # Auto-update signature — required for updates to install.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Anonymous install/launch analytics (usage_analytics.rs). Unlike
+          # the Apple signing vars below, an empty/unset secret here is
+          # handled explicitly in Rust (usage_analytics::init), so telemetry
+          # just stays compiled out rather than failing the build.
+          QUIRO_POSTHOG_API_KEY: ${{ secrets.QUIRO_POSTHOG_API_KEY }}
           # macOS code signing + notarization is deliberately not wired up
           # yet (no certificates until there's an Apple Developer account).
           #

@@ -1,3 +1,4 @@
+import { Analytics } from "@vercel/analytics/next";
 import type { Metadata } from "next";
 import { DM_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
@@ -48,6 +49,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
 				<main id="main-content" tabIndex={-1} className="w-full">
 					{children}
 				</main>
+				<Analytics />
 			</body>
 		</html>
 	);

@@ -10,6 +10,18 @@ changes.
 
 ## [Unreleased]
 
+### Added
+
+- Anonymous install/launch analytics for the desktop app (PostHog), plus
+  download-button and pageview tracking on the website (Vercel Analytics).
+  Both are disclosed alongside the app's existing crash reporting. The
+  desktop app sends nothing unless a build carries a PostHog project key;
+  `pnpm dev` now loads one from a local `.env` automatically.
+
+### Changed
+
+- Camera preview window now defaults to a larger 300px size (was 230px).
+
 ## [0.1.4] - 2026-09-16
 
 ### Added

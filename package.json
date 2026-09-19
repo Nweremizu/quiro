@@ -9,7 +9,7 @@
 		"node": ">=22.13"
 	},
 	"scripts": {
-		"dev": "pnpm --filter desktop tauri dev --config src-tauri/tauri.dev.conf.json",
+		"dev": "dotenv -- pnpm --filter desktop tauri dev --config src-tauri/tauri.dev.conf.json",
 		"dev:web": "pnpm --filter web dev",
 		"build": "turbo run build",
 		"build:web": "pnpm --filter web build",

@@ -1,8 +1,8 @@
-import { EmbossButton } from "@quiro/ui/EmbossButton";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { downloads, site } from "@/lib/site";
+import WindowsDownloadButton from "@/components/ui/windows-download-button";
+import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
 	title: "Getting started",
@@ -25,9 +25,7 @@ export default function DocsPage() {
 				Go from something on your screen to something ready to show. Here’s the
 				basic workflow in Quiro.
 			</p>
-			<EmbossButton href={downloads.windows} variant="accent" size="lg">
-				Download for Windows
-			</EmbossButton>
+			<WindowsDownloadButton />
 			<section>
 				<h2>01. Choose what to capture</h2>
 				<ol>
