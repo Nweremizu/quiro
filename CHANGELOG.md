@@ -10,6 +10,8 @@ changes.
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-09-19
+
 ### Added
 
 - Anonymous install/launch analytics for the desktop app (PostHog), plus
