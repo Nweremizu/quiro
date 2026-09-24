@@ -29,6 +29,7 @@
 		"@tauri-apps/plugin-store": "^2",
 		"@tauri-apps/plugin-updater": "~2.10.0",
 		"motion": "^13.1.1",
+		"posthog-js": "^1.434.11",
 		"react": "^19.1.0",
 		"react-aria-components": "^1.20.0",
 		"react-dom": "^19.1.0",

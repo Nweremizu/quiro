@@ -32,6 +32,7 @@ import {
 	type MicrophoneWithDetails,
 	useStableDevicesQuery,
 } from "@/utils/devices";
+import { captureTauriResult } from "@/utils/posthog";
 import {
 	createCameraMutation,
 	listDisplaysWithThumbnails,
@@ -89,6 +90,13 @@ const MAIN_WINDOW_SIZE = {
 	compact: { width: 330, height: 395 },
 	expanded: { width: 600, height: 660 },
 } as const;
+const LAUNCH_TOOLBAR_SIZE = {
+	minWidth: 396,
+	width: 840,
+	minHeight: 96,
+	compactHeight: 96,
+	expandedHeight: 528,
+} as const;
 const MAIN_WINDOW_SCREEN_PADDING = 16;
 const MAIN_WINDOW_RESIZE_DURATION = 200; // ms
 const CAPTURE_LIST_STALE_TIME = 5_000; // this is the time after which the capture list is considered stale and will be refreshed - 5 seconds
@@ -128,7 +136,12 @@ async function resizeMainWindow(
 	toolbarSize?: { width: number; height: number },
 ) {
 	const currentWindow = getCurrentWindow();
-	await currentWindow.setMinSize(new LogicalSize(330, toolbarSize ? 60 : 395));
+	await currentWindow.setMinSize(
+		new LogicalSize(
+			toolbarSize ? LAUNCH_TOOLBAR_SIZE.minWidth : 330,
+			toolbarSize ? LAUNCH_TOOLBAR_SIZE.minHeight : 395,
+		),
+	);
 	const [physicalSize, outerSize, scaleFactor, physicalPosition, monitor] =
 		await Promise.all([
 			currentWindow.innerSize(),
@@ -160,12 +173,14 @@ async function resizeMainWindow(
 		: preferredSize.height;
 	const targetWidth = Math.max(
 		toolbarSize
-			? Math.min(330, availableWidth)
+			? Math.min(LAUNCH_TOOLBAR_SIZE.minWidth, availableWidth)
 			: MAIN_WINDOW_SIZE.compact.width,
 		Math.min(preferredSize.width, availableWidth),
 	);
 	const targetHeight = Math.max(
-		toolbarSize ? 60 : MAIN_WINDOW_SIZE.compact.height,
+		toolbarSize
+			? LAUNCH_TOOLBAR_SIZE.minHeight
+			: MAIN_WINDOW_SIZE.compact.height,
 		Math.min(preferredSize.height, availableHeight),
 	);
 	const startWidth = physicalSize.width / scaleFactor;
@@ -290,6 +305,7 @@ export function LaunchRoutePage() {
 	const navigate = useNavigate();
 	const [searchParams] = useSearchParams();
 	const toolbar = searchParams.get("launchWindow") === "toolbar";
+	const homePath = toolbar ? "/home?launchWindow=toolbar" : "/home";
 	const switchPending = useRef(false);
 	const switchLaunchWindow = async () => {
 		if (switchPending.current) return;
@@ -316,7 +332,7 @@ export function LaunchRoutePage() {
 			const update = await check();
 			if (update) {
 				toast.success(
-					`Version ${update.version} is available. Open Settings to install it.`,
+					`Version ${update.version} is available. Open Settings to update.`,
 				);
 			} else {
 				toast.success("Quiro is up to date.");
@@ -366,12 +382,16 @@ export function LaunchRoutePage() {
 		void (async () => {
 			try {
 				await commands.closeTargetSelectOverlays();
-				const result = await commands.openTargetSelectOverlays(
-					null,
-					request.display_id,
-					mode,
+				const result = captureTauriResult(
+					"window",
+					"open_target_select_overlays",
+					await commands.openTargetSelectOverlays(
+						null,
+						request.display_id,
+						mode,
+					),
 				);
-				if (result.status === "error") throw new Error(result.error);
+				if (result.status === "error") throw new Error(String(result.error));
 				setOptions({ targetMode: mode, targetModeSource: "main" });
 			} catch (error) {
 				toast.error(
@@ -587,8 +607,10 @@ export function LaunchRoutePage() {
 					!toolbar && !openingWhileLoading,
 					toolbar
 						? {
-								width: 640,
-								height: activeMenu ? 440 : 60,
+								width: LAUNCH_TOOLBAR_SIZE.width,
+								height: activeMenu
+									? LAUNCH_TOOLBAR_SIZE.expandedHeight
+									: LAUNCH_TOOLBAR_SIZE.compactHeight,
 							}
 						: undefined,
 				);
@@ -794,12 +816,12 @@ export function LaunchRoutePage() {
 			await commands.closeTargetSelectOverlays();
 		}
 
-		const result = await commands.openTargetSelectOverlays(
-			null,
-			null,
-			nextMode,
+		const result = captureTauriResult(
+			"window",
+			"open_target_select_overlays",
+			await commands.openTargetSelectOverlays(null, null, nextMode),
 		);
-		if (result.status === "error") throw new Error(result.error);
+		if (result.status === "error") throw new Error(String(result.error));
 		setOptions({ targetMode: nextMode, targetModeSource: "main" });
 	};
 
@@ -1169,9 +1191,14 @@ export function LaunchRoutePage() {
 							// what's actually on screen behind the overlay. A failure
 							// here (window closed mid-pick, permission denied) shouldn't
 							// block opening the overlay itself.
-							commands.focusWindow(target.id).catch((error) => {
-								console.error("Failed to focus selected window:", error);
-							});
+							commands
+								.focusWindow(target.id)
+								.then((result) =>
+									captureTauriResult("window", "focus_selected_window", result),
+								)
+								.catch((error) => {
+									console.error("Failed to focus selected window:", error);
+								});
 						}}
 					/>
 				);
@@ -1242,7 +1269,7 @@ export function LaunchRoutePage() {
 						recording={recordingMode}
 						countdown={generalSettings.data?.recordingCountdown ?? 0}
 						onBack={closeAllMenus}
-						onHome={() => navigate("/home")}
+						onHome={() => navigate(homePath)}
 						onCountdown={() => {
 							const delays = [0, 3, 5, 10];
 							const index = delays.indexOf(
@@ -1378,7 +1405,7 @@ export function LaunchRoutePage() {
 							<Tooltip content={<span>Home</span>}>
 								<button
 									type="button"
-									onClick={() => navigate("/home")}
+									onClick={() => navigate(homePath)}
 									aria-label="Open home"
 									className="flex shrink-0 items-center justify-center size-5 focus:outline-hidden"
 								>

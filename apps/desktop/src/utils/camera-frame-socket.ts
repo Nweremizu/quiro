@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { captureDesktopException } from "@/utils/posthog";
 
 // Decodes the wire format the Rust side packs in frame_ws.rs
 // (pack_frame_data/pack_ws_frame): raw pixel bytes followed by a small
@@ -135,14 +136,35 @@ export function useCameraFrameSocket(
 		let pendingBuffer: ArrayBuffer | null = null;
 		let rafId: number | null = null;
 		let paintedFirstFrame = false;
+		let reportedSocketFailure = false;
 		let reportedWidth = 0;
 		let reportedHeight = 0;
 
 		const ws = new WebSocket(wsUrl);
 		ws.binaryType = "arraybuffer";
 		ws.onopen = () => !cancelled && setConnected(true);
-		ws.onclose = () => !cancelled && setConnected(false);
-		ws.onerror = () => !cancelled && setConnected(false);
+		const reportSocketFailure = (stage: string) => {
+			if (cancelled || reportedSocketFailure) return;
+			reportedSocketFailure = true;
+			captureDesktopException(new Error("Camera preview connection failed"), {
+				area: "camera",
+				operation: "preview_socket",
+				stage,
+				had_frame: paintedFirstFrame,
+			});
+		};
+		ws.onclose = (event) => {
+			if (cancelled) return;
+			setConnected(false);
+			if (!paintedFirstFrame && event.code !== 1000) {
+				reportSocketFailure("closed_before_first_frame");
+			}
+		};
+		ws.onerror = () => {
+			if (cancelled) return;
+			setConnected(false);
+			reportSocketFailure("socket_error");
+		};
 
 		const paint = () => {
 			rafId = null;

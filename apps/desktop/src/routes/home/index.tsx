@@ -21,7 +21,7 @@ import {
 	useMemo,
 	useState,
 } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { openMediaFile } from "@/components/LibraryMenu";
 import { NameDialog } from "@/components/NameDialog";
 import type { RecordingWithPath, ScreenshotWithPath } from "@/utils/queries";
@@ -424,6 +424,11 @@ function LibraryCard({
 
 export default function Home() {
 	const navigate = useNavigate();
+	const location = useLocation();
+	const launchPath =
+		new URLSearchParams(location.search).get("launchWindow") === "toolbar"
+			? "/?launchWindow=toolbar"
+			: "/";
 	const recordings = useQuery(listRecordingsQuery);
 	const screenshots = useQuery(listScreenshotsQuery);
 	const [state, setState] = useState<LibraryState>(() => readLibraryState());
@@ -672,7 +677,7 @@ export default function Home() {
 						</button>
 						<button
 							type="button"
-							onClick={() => navigate("/")}
+							onClick={() => navigate(launchPath)}
 							className="capture-emboss"
 						>
 							<IconCapture className="size-4" /> Capture

@@ -10,6 +10,34 @@ changes.
 
 ## [Unreleased]
 
+### Added
+
+- Desktop error tracking through PostHog for camera setup and frame conversion,
+  device enumeration, capture thumbnails, window operations, and unexpected
+  process termination. Camera reports include the failure stage, operating
+  system, app version, requested format, and hardware vendor/product IDs without
+  sending device serial numbers.
+- Windows support manifests Common Controls v6 for native UI compatibility.
+
+### Changed
+
+- Camera initialization now reports whether a device timed out before producing
+  frames or produced frames that Quiro could not decode. Windows camera selection
+  prefers stable device IDs and falls back to model IDs.
+- Updating from Settings now downloads and installs the update, then relaunches
+  Quiro automatically.
+- Refined desktop launch toolbar sizing, navigation, and window close behavior.
+- Recording sync checks now identify decoded source frames and tolerate dropped
+  frames and runner scheduling delays.
+- Renamed Rust example binaries to crate-specific names so workspace examples no
+  longer collide.
+
+### Fixed
+
+- Windows Media Foundation camera enumeration now retains the DirectShow device
+  when Media Foundation exposes no usable formats.
+- Removed the Dependabot configuration to stop its scheduled CI activity.
+
 ## [0.1.5] - 2026-09-19
 
 ### Added

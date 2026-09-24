@@ -11,31 +11,6 @@ use tauri::WebviewWindow;
 use winreg::RegKey;
 use winreg::enums::HKEY_LOCAL_MACHINE;
 
-/// Windows 11's DWM rounds every top-level window's corners at a fixed radius
-/// it picks itself, even for undecorated/transparent ones — that fights a
-/// custom CSS `border-radius` on the content (mismatched shadow/clip vs. the
-/// content's own corners). Opting the window out lets CSS own the shape, same
-/// as `macos::apply_squircle_corners` does for the native NSWindow layer.
-pub fn disable_window_corner_rounding(window: &WebviewWindow) {
-    use windows::Win32::Foundation::HWND;
-    use windows::Win32::Graphics::Dwm::{
-        DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND, DwmSetWindowAttribute,
-    };
-
-    let Ok(hwnd) = window.hwnd() else {
-        return;
-    };
-    let preference = DWMWCP_DONOTROUND;
-    unsafe {
-        let _ = DwmSetWindowAttribute(
-            HWND(hwnd.0),
-            DWMWA_WINDOW_CORNER_PREFERENCE,
-            &preference as *const _ as *const std::ffi::c_void,
-            std::mem::size_of_val(&preference) as u32,
-        );
-    }
-}
-
 /// Windows 11 also outlines undecorated top-level windows with a 1px
 /// accent-colored border by default. `DWMWA_COLOR_NONE` is the documented
 /// sentinel for "no border", as opposed to any real `COLORREF`.

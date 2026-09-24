@@ -23,6 +23,7 @@ import { ToolbarWindow } from "./routes/ToolbarWindow";
 import TargetSelectOverlay from "./routes/target-select-overlay";
 import WindowCaptureOccluder from "./routes/window-capture-occluder";
 import WindowLayout from "./routes/window-layout";
+import { captureDesktopException, initPostHog } from "./utils/posthog";
 
 const Debug = import.meta.env.DEV
 	? React.lazy(() => import("./routes/debug"))
@@ -51,6 +52,10 @@ const queryClient = new QueryClient({
 		},
 		mutations: {
 			onError: (error) => {
+				captureDesktopException(error, {
+					area: "frontend",
+					operation: "react_query_mutation",
+				});
 				message(`An error occurred: ${error}`, {
 					title: "Error",
 				});
@@ -63,6 +68,8 @@ const queryClient = new QueryClient({
 // points at a different route (see src-tauri/src/windows.rs), and Vite's
 // dev server + Tauri's asset protocol both fall back to index.html for
 // unmatched paths, so this needs no hash routing.
+initPostHog();
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 	<React.StrictMode>
 		<QueryClientProvider client={queryClient}>

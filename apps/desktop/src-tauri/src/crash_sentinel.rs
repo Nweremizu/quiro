@@ -1,11 +1,11 @@
 //! Detects sessions that ended without a clean shutdown.
 //!
-//! A whole class of failures never reaches Sentry's panic hook because the process
+//! A whole class of failures never reaches the panic hook because the process
 //! is killed without panicking: a macOS WindowServer/GPU wedge that soft-restarts the
 //! login session, an OOM kill, a force-quit, or power loss. We catch those after the
 //! fact: every launch arms a sentinel file with this session's context, and a clean
 //! shutdown disarms it. If a launch finds a sentinel left over from a previous run,
-//! that run died unexpectedly — report it to Sentry with the captured context.
+//! that run died unexpectedly — report it with the captured context.
 
 use std::{
     path::{Path, PathBuf},
@@ -75,8 +75,8 @@ pub struct UnexpectedTermination {
 }
 
 /// Arm the sentinel for this session and, if a previous session's sentinel survived,
-/// report that unexpected termination to Sentry. Call once at startup, after Sentry
-/// is initialised. Returns details of the previous session's unexpected termination,
+/// report that unexpected termination. Call once at startup. Returns details of the
+/// previous session's unexpected termination,
 /// or `None` if the previous session shut down cleanly.
 pub fn init(logs_dir: &Path, app_version: &str) -> Option<UnexpectedTermination> {
     let path = logs_dir.join(SENTINEL_FILE);

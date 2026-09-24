@@ -3,7 +3,7 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { type as ostype } from "@tauri-apps/plugin-os";
 import { type ReactNode, Suspense, useEffect, useRef } from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { FullPageLoader } from "@/components/loader";
 import MACOSTitlebarControls from "@/components/titlebar/macos-titlebar-control";
 
@@ -41,12 +41,50 @@ function useAppliedTheme() {
 
 export default function WindowLayout() {
 	const location = useLocation();
+	const navigate = useNavigate();
 	const unlistenResizeRef = useRef<UnlistenFn | undefined>(undefined);
 	const toolbar =
 		location.pathname === "/" &&
 		new URLSearchParams(location.search).get("launchWindow") === "toolbar";
+	const launchPath =
+		new URLSearchParams(location.search).get("launchWindow") === "toolbar"
+			? "/?launchWindow=toolbar"
+			: "/";
 
 	useAppliedTheme();
+
+	useEffect(() => {
+		let cancelled = false;
+		let unlisten: UnlistenFn | undefined;
+		const currentWindow = getCurrentWindow();
+
+		currentWindow
+			.onCloseRequested((event) => {
+				if (location.pathname !== "/home") return;
+				event.preventDefault();
+				navigate(launchPath, { replace: true });
+			})
+			.then((cleanup) => {
+				if (cancelled) cleanup();
+				else unlisten = cleanup;
+			});
+
+		return () => {
+			cancelled = true;
+			unlisten?.();
+		};
+	}, [launchPath, location.pathname, navigate]);
+
+	useEffect(() => {
+		if (toolbar) {
+			document.documentElement.setAttribute("data-transparent-window", "true");
+		} else {
+			document.documentElement.removeAttribute("data-transparent-window");
+		}
+
+		return () =>
+			document.documentElement.removeAttribute("data-transparent-window");
+	}, [toolbar]);
 
 	useEffect(() => {
 		console.log("window chrome mounted");
@@ -66,7 +104,11 @@ export default function WindowLayout() {
 
 			if (accel && e.key === "w") {
 				e.preventDefault();
-				getCurrentWindow().close();
+				if (location.pathname === "/home") {
+					navigate(launchPath, { replace: true });
+				} else {
+					void getCurrentWindow().close();
+				}
 				return;
 			}
 
@@ -88,7 +130,7 @@ export default function WindowLayout() {
 			window.removeEventListener("keydown", handleKeyDown);
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []);
+	}, [launchPath, location.pathname, navigate]);
 
 	useEffect(() => {
 		applyMacOSWindowMaterial(
@@ -102,8 +144,10 @@ export default function WindowLayout() {
 		<WindowProvider>
 			<div
 				className={cn(
-					"cap-window-shell flex overflow-hidden flex-col w-screen h-screen max-h-screen divide-y divide-gray-5 bg-gray-1",
-					toolbar && "rounded-2xl bg-transparent",
+					"cap-window-shell flex flex-col w-screen h-screen max-h-screen divide-y divide-gray-5 rounded-2xl",
+					toolbar
+						? "overflow-visible bg-transparent justify-end"
+						: "overflow-hidden bg-gray-1",
 				)}
 			>
 				{!toolbar && <Header />}
@@ -182,7 +226,12 @@ function Inner({ children }: { children: ReactNode }) {
 	return (
 		<div
 			data-tauri-drag-region="false"
-			className="cap-window-body flex overflow-hidden flex-col flex-1"
+			className={cn(
+				"cap-window-body flex flex-col flex-1",
+				new URLSearchParams(location.search).get("launchWindow") === "toolbar"
+					? "overflow-visible p-4"
+					: "overflow-hidden",
+			)}
 		>
 			{children}
 		</div>

@@ -1,5 +1,6 @@
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
+import { captureTauriCall } from "./posthog";
 import {
 	type CameraFormatInfo,
 	type CameraInfo,
@@ -33,7 +34,10 @@ export type MicrophoneWithDetails = {
 
 export const devicesSnapshot = queryOptions({
 	queryKey: ["devicesSnapshot"] as const,
-	queryFn: () => commands.getDevicesSnapshot(),
+	queryFn: () =>
+		captureTauriCall("devices", "get_devices_snapshot", () =>
+			commands.getDevicesSnapshot(),
+		),
 	staleTime: 3_000,
 	refetchInterval: 5_000,
 });
@@ -124,7 +128,11 @@ export function useCameraFormats(deviceId: string | null) {
 	return useQuery({
 		queryKey: ["cameraFormats", deviceId] as const,
 		queryFn: async () => {
-			const result = await commands.getCameraFormats(deviceId as string);
+			const result = await captureTauriCall(
+				"camera",
+				"get_camera_formats",
+				() => commands.getCameraFormats(deviceId as string),
+			);
 			if (!result) return result;
 			return {
 				...result,
@@ -143,7 +151,11 @@ export function useMicrophoneFormats(name: string | null) {
 	return useQuery({
 		queryKey: ["microphoneFormats", name] as const,
 		queryFn: async () => {
-			const result = await commands.getMicrophoneInfo(name as string);
+			const result = await captureTauriCall(
+				"microphone",
+				"get_microphone_info",
+				() => commands.getMicrophoneInfo(name as string),
+			);
 			if (!result) return result;
 			return {
 				...result,

@@ -245,16 +245,31 @@ pub(crate) async fn ensure_camera_input_active(app_state: &mut App) {
         );
         match app_state
             .camera_feed
-            .ask(feeds::camera::SetInput { id, settings })
+            .ask(feeds::camera::SetInput {
+                id: id.clone(),
+                settings,
+            })
             .await
         {
             Ok(ready_future) => {
                 if let Err(err) = ready_future.await {
+                    crate::telemetry::capture_camera_failure(
+                        "ensure_camera_input_active",
+                        &id,
+                        settings,
+                        &err.to_string(),
+                    );
                     error!("Camera failed to initialize: {err}");
                     return;
                 }
             }
             Err(err) => {
+                crate::telemetry::capture_camera_failure(
+                    "ensure_camera_input_active",
+                    &id,
+                    settings,
+                    &err.to_string(),
+                );
                 error!("Failed to send SetInput to camera feed: {err}");
                 return;
             }
@@ -396,6 +411,12 @@ pub(crate) async fn restore_main_window_inputs(app: &AppHandle) {
         match init_result {
             Ok(()) => crate::restore_camera_window(app),
             Err(error) => {
+                crate::telemetry::capture_camera_failure(
+                    "restore_main_window_inputs",
+                    &camera_id,
+                    settings,
+                    &error,
+                );
                 let message = camera_preview_error_message(&error);
                 warn!("Failed to restore camera input for main window: {error}");
                 let _ = camera_feed.ask(feeds::camera::RemoveInput).await;

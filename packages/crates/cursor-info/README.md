@@ -140,7 +140,7 @@ Open `cursors.html` in your browser to:
 Run the example to monitor cursor changes in real-time:
 
 ```bash
-cargo run --example cli
+cargo run --example cursor-info-cli
 ```
 
 This will:

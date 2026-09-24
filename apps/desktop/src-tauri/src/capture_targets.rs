@@ -63,7 +63,18 @@ pub fn list_displays_with_thumbnails() -> Vec<CaptureDisplayWithThumbnail> {
             id: info.id.to_string(),
             name: info.name,
             refresh_rate: info.refresh_rate,
-            thumbnail: capture_display_thumbnail(&display).ok(),
+            thumbnail: match capture_display_thumbnail(&display) {
+                Ok(thumbnail) => Some(thumbnail),
+                Err(error) => {
+                    crate::telemetry::capture_error(
+                        "display",
+                        "capture_display_thumbnail",
+                        "capture_failed",
+                    );
+                    tracing::debug!(%error, "Display thumbnail capture failed");
+                    None
+                }
+            },
         })
         .collect()
 }
@@ -79,7 +90,18 @@ pub fn list_windows_with_thumbnails() -> Vec<CaptureWindowWithThumbnail> {
             name: info.name,
             bounds: info.bounds,
             refresh_rate: info.refresh_rate,
-            thumbnail: capture_window_thumbnail(&window).ok(),
+            thumbnail: match capture_window_thumbnail(&window) {
+                Ok(thumbnail) => Some(thumbnail),
+                Err(error) => {
+                    crate::telemetry::capture_error(
+                        "window",
+                        "capture_window_thumbnail",
+                        "capture_failed",
+                    );
+                    tracing::debug!(%error, "Window thumbnail capture failed");
+                    None
+                }
+            },
             app_icon: window.app_icon().map(|bytes| to_png_data_uri_raw(&bytes)),
             bundle_identifier: info.bundle_identifier,
         })

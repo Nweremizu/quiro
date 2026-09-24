@@ -47,11 +47,7 @@ wgpu-hal = "25.0.0"
 wgpu-core = "25.0.0"
 flume = "0.11.0"
 thiserror = "1.0"
-sentry = { version = "0.42.0", features = [
-    "anyhow",
-    "backtrace",
-    "debug-images",
-] }
+posthog-rs = "0.26.0"
 tracing = "0.1.41"
 futures = "0.3.31"
 aho-corasick = "1.1.4"

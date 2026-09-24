@@ -14,13 +14,16 @@ fn find_device(
     info: &CameraInfo,
 ) -> Result<Option<quiro_camera_windows::VideoDeviceInfo>, quiro_camera_windows::GetDevicesError> {
     let devices = quiro_camera_windows::get_devices()?;
-    Ok(devices.into_iter().find(
-        |d| match (ModelID::from_windows(d).as_ref(), info.model_id()) {
-            (Some(a), Some(b)) => a == b,
-            (None, None) => d.id() == info.device_id(),
-            _ => false,
-        },
-    ))
+    Ok(devices
+        .iter()
+        .find(|device| device.id() == info.device_id())
+        .cloned()
+        .or_else(|| {
+            let model_id = info.model_id()?;
+            devices
+                .into_iter()
+                .find(|device| ModelID::from_windows(device).as_ref() == Some(model_id))
+        }))
 }
 
 impl CameraInfo {
@@ -36,6 +39,7 @@ impl CameraInfo {
                     height: format.height(),
                     frame_rate: format.frame_rate(),
                 },
+                pixel_format: format.pixel_format(),
                 native: format.inner,
             })
         }

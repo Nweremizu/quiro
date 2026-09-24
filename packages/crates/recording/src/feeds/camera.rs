@@ -575,8 +575,10 @@ pub enum SetInputError {
     BuildStreamCrashed, // TODO: Maybe rename this?
     #[error("InvalidFormat")]
     InvalidFormat,
-    #[error("CameraTimeout")]
+    #[error("CameraTimeout/{0}")]
     Timeout(String),
+    #[error("CameraFrameConversion/{0}")]
+    FrameConversion(String),
     #[error("StartCapturing/{0}")]
     StartCapturing(String),
     #[error("Failed to initialize camera")]
@@ -948,9 +950,14 @@ async fn setup_camera(
 
     let (ready_tx, ready_rx) = oneshot::channel();
     let mut ready_signal = Some(ready_tx);
+    let received_frames = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let conversion_error = Arc::new(std::sync::Mutex::new(None::<String>));
+    let callback_received_frames = received_frames.clone();
+    let callback_conversion_error = conversion_error.clone();
 
     let capture_handle = camera
         .start_capturing(format.clone(), move |frame| {
+            callback_received_frames.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let callback_num =
                 CAMERA_CALLBACK_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
@@ -1003,8 +1010,14 @@ async fn setup_camera(
                 return;
             }
 
-            let Ok(mut ff_frame) = frame.as_ffmpeg() else {
-                return;
+            let mut ff_frame = match frame.as_ffmpeg() {
+                Ok(ff_frame) => ff_frame,
+                Err(err) => {
+                    if let Ok(mut last_error) = callback_conversion_error.lock() {
+                        *last_error = Some(err.to_string());
+                    }
+                    return;
+                }
             };
 
             ff_frame.set_pts(Some(frame.timestamp.as_micros() as i64));
@@ -1038,7 +1051,23 @@ async fn setup_camera(
 
     let video_info = tokio::time::timeout(CAMERA_INIT_TIMEOUT, ready_rx)
         .await
-        .map_err(|e| SetInputError::Timeout(e.to_string()))?
+        .map_err(|e| {
+            let frame_count = received_frames.load(std::sync::atomic::Ordering::Relaxed);
+            if frame_count > 0 {
+                let detail = conversion_error
+                    .lock()
+                    .ok()
+                    .and_then(|error| error.clone())
+                    .unwrap_or_else(|| "No usable frame data".to_string());
+                SetInputError::FrameConversion(format!(
+                    "{detail}; selected_format={format:?}; received_frames={frame_count}"
+                ))
+            } else {
+                SetInputError::Timeout(format!(
+                    "{e}; selected_format={format:?}; received_frames=0"
+                ))
+            }
+        })?
         .map_err(|_| SetInputError::Initialisation)?;
 
     Ok(SetupCameraResult {

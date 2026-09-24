@@ -19,7 +19,6 @@ axum = { version = "0.7.5", features = ["ws"] }
 ffmpeg.workspace = true
 specta.workspace = true
 serde = { workspace = true }
-sentry.workspace = true
 futures = { workspace = true }
 tracing.workspace = true
 flume.workspace = true

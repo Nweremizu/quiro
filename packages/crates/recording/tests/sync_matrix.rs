@@ -155,6 +155,19 @@ fn make_video_frame(
             }
         }
     }
+    for bit in 0..16 {
+        let value = if frame_index & (1 << bit) == 0 {
+            0
+        } else {
+            255
+        };
+        for y in 0..8 {
+            let row = &mut data[y * stride + bit * 8 * 4..][..8 * 4];
+            for pixel in row.as_chunks_mut::<4>().0 {
+                pixel.copy_from_slice(&[value, value, value, 255]);
+            }
+        }
+    }
     frame
 }
 
@@ -262,8 +275,14 @@ async fn run_video_case(case: VideoCase) -> Result<String, String> {
         let (width, height, content) = (case.width, case.height, case.content);
         let mut rng = Rng(case.rng_seed);
         tokio::spawn(async move {
+            let mut max_lag = 0.0f64;
             for (i, &ts) in sent.iter().enumerate() {
                 tokio::time::sleep_until((base + Duration::from_secs_f64(ts)).into()).await;
+                max_lag = max_lag.max(
+                    std::time::Instant::now()
+                        .saturating_duration_since(base + Duration::from_secs_f64(ts))
+                        .as_secs_f64(),
+                );
                 let frame = FFmpegVideoFrame {
                     inner: make_video_frame(width, height, i as u64, content, &mut rng),
                     timestamp: Timestamp::Instant(base + Duration::from_secs_f64(ts)),
@@ -272,7 +291,7 @@ async fn run_video_case(case: VideoCase) -> Result<String, String> {
                     break;
                 }
             }
-            // Sender drops here, ending the stream.
+            max_lag
         })
     };
 
@@ -292,7 +311,7 @@ async fn run_video_case(case: VideoCase) -> Result<String, String> {
     }
     .map_err(|e| format!("pipeline build: {e}"))?;
 
-    emit.await.map_err(|e| format!("emit join: {e}"))?;
+    let max_emit_lag = emit.await.map_err(|e| format!("emit join: {e}"))?;
     // The verification below assumes frames were emitted in real time; when a
     // saturated runner (or a software encoder drowning in worst-case content)
     // stalls emission for seconds, pts-vs-wall comparisons are meaningless.
@@ -304,9 +323,9 @@ async fn run_video_case(case: VideoCase) -> Result<String, String> {
         tokio::time::sleep(Duration::from_millis(500)).await;
         pipeline.stop().await.map_err(|e| format!("stop: {e}"))?
     };
-    if emit_lag > 1.5 {
+    if emit_lag > 1.5 || max_emit_lag > 0.15 {
         return Ok(format!(
-            "skipped: runner fell {emit_lag:.1}s behind real-time emission"
+            "skipped: runner fell {emit_lag:.1}s behind by finish, {max_emit_lag:.1}s at worst"
         ));
     }
 
@@ -318,11 +337,24 @@ async fn run_video_case(case: VideoCase) -> Result<String, String> {
     };
     let pts = read_video_pts(&playable)?;
 
-    if pts.len() != sent.len() {
+    let frames: Vec<(usize, f64)> = if pts.len() == sent.len() {
+        pts.iter().copied().enumerate().collect()
+    } else {
+        let indexed = read_indexed_video_pts(&playable)?;
+        if indexed.len() != pts.len() {
+            return Err(format!(
+                "decoded {} frames, container has {} timestamps",
+                indexed.len(),
+                pts.len()
+            ));
+        }
+        indexed
+    };
+    if frames.is_empty() || frames.len() > sent.len() {
         return Err(format!(
-            "frame count mismatch: sent {} frames, container has {}",
+            "invalid frame count: sent {}, container has {}",
             sent.len(),
-            pts.len()
+            frames.len()
         ));
     }
 
@@ -342,13 +374,21 @@ async fn run_video_case(case: VideoCase) -> Result<String, String> {
     // generator produces (fps >= 10 keeps rel_tolerance <= ABS_TOLERANCE):
     // a constant whole-track offset does not scale with frame period.
     let sent_origin = sent[0];
-    for (i, (&p, &s)) in pts.iter().zip(&sent).enumerate() {
+    let mut previous_index = None;
+    for (i, &(sent_index, p)) in frames.iter().enumerate() {
+        if sent_index >= sent.len() || previous_index.is_some_and(|previous| sent_index <= previous)
+        {
+            return Err(format!("frame {i}: invalid source index {sent_index}"));
+        }
+        previous_index = Some(sent_index);
+        let s = sent[sent_index];
         max_abs = max_abs.max((p - (s - sent_origin)).abs());
         let rel = ((p - pts[0]) - (s - sent_origin)).abs();
         max_rel = max_rel.max(rel);
         if rel > rel_tolerance {
             return Err(format!(
-                "frame {i}: relative pts error {rel:.3}s (pts {p:.3}s vs sent {s:.3}s)"
+                "frame {i} (source {sent_index}, {} dropped): relative pts error {rel:.3}s (pts {p:.3}s vs sent {s:.3}s; max emit lag {max_emit_lag:.3}s)",
+                sent.len() - frames.len()
             ));
         }
     }
@@ -384,8 +424,9 @@ async fn run_video_case(case: VideoCase) -> Result<String, String> {
     }
 
     Ok(format!(
-        "{} frames, max abs err {:.0} ms, max rel err {:.0} ms",
-        pts.len(),
+        "{} frames ({} dropped), max abs err {:.0} ms, max rel err {:.0} ms",
+        frames.len(),
+        sent.len() - frames.len(),
         max_abs * 1000.0,
         max_rel * 1000.0
     ))
@@ -1021,6 +1062,75 @@ fn read_video_pts(path: &Path) -> Result<Vec<f64>, String> {
         .collect();
     pts.sort_by(|a, b| a.partial_cmp(b).unwrap());
     Ok(pts)
+}
+
+fn read_indexed_video_pts(path: &Path) -> Result<Vec<(usize, f64)>, String> {
+    let mut input = ffmpeg::format::input(path).map_err(|e| format!("open {e}"))?;
+    let stream = input
+        .streams()
+        .best(ffmpeg::media::Type::Video)
+        .ok_or("no video stream")?;
+    let stream_index = stream.index();
+    let time_base = stream.time_base();
+    let seconds_per_tick = f64::from(time_base.numerator()) / f64::from(time_base.denominator());
+    let context = ffmpeg::codec::Context::from_parameters(stream.parameters())
+        .map_err(|e| format!("video params: {e}"))?;
+    let mut decoder = context
+        .decoder()
+        .video()
+        .map_err(|e| format!("video decoder: {e}"))?;
+    decoder.set_packet_time_base(time_base);
+    let mut scaler = ffmpeg::software::scaling::Context::get(
+        decoder.format(),
+        decoder.width(),
+        decoder.height(),
+        ffmpeg::format::Pixel::GRAY8,
+        decoder.width(),
+        decoder.height(),
+        ffmpeg::software::scaling::Flags::BILINEAR,
+    )
+    .map_err(|e| format!("video scaler: {e}"))?;
+    let mut decoded = ffmpeg::frame::Video::empty();
+    let mut gray = ffmpeg::frame::Video::empty();
+    let mut frames = Vec::new();
+    let mut drain = |decoder: &mut ffmpeg::decoder::Video| -> Result<(), String> {
+        while decoder.receive_frame(&mut decoded).is_ok() {
+            scaler
+                .run(&decoded, &mut gray)
+                .map_err(|e| format!("scale frame: {e}"))?;
+            if gray.width() < 128 || gray.height() < 8 {
+                return Err("decoded frame is too small for its index".to_string());
+            }
+            let data = gray.data(0);
+            let stride = gray.stride(0);
+            let mut index = 0usize;
+            for bit in 0..16 {
+                let total: usize = (2..6)
+                    .flat_map(|y| (2..6).map(move |x| usize::from(data[y * stride + bit * 8 + x])))
+                    .sum();
+                if total > 16 * 128 {
+                    index |= 1 << bit;
+                }
+            }
+            let timestamp = decoded
+                .timestamp()
+                .or_else(|| decoded.pts())
+                .ok_or("decoded frame has no timestamp")?;
+            frames.push((index, timestamp as f64 * seconds_per_tick));
+        }
+        Ok(())
+    };
+    for (stream, packet) in input.packets() {
+        if stream.index() == stream_index {
+            decoder
+                .send_packet(&packet)
+                .map_err(|e| format!("send video packet: {e}"))?;
+            drain(&mut decoder)?;
+        }
+    }
+    decoder.send_eof().map_err(|e| format!("video eof: {e}"))?;
+    drain(&mut decoder)?;
+    Ok(frames)
 }
 
 fn read_audio_stats(path: &Path) -> Result<(f64, u16, f64), String> {

@@ -37,6 +37,7 @@ mod recording;
 mod recording_settings;
 mod screenshot_editor;
 mod target_select_overlay;
+mod telemetry;
 mod three_spike;
 mod tray;
 mod usage_analytics;
@@ -387,6 +388,12 @@ pub(crate) fn camera_preview_error_message(err: &str) -> String {
         return "No frames were received from this camera. It may be closed, disconnected, covered, or in use by another app.".to_string();
     }
 
+    if let Some(detail) = err.strip_prefix("CameraFrameConversion/") {
+        return format!(
+            "The camera sent video, but Quiro could not decode it. Try another camera format or resolution in camera settings. Details: {detail}"
+        );
+    }
+
     if err.contains("StartCapturing") {
         return "The system could not start this camera. It may be unavailable or in use by another app.".to_string();
     }
@@ -703,6 +710,14 @@ impl App {
                     );
                 }
                 Err(e) => {
+                    if let Some(id) = self.selected_camera_id.as_ref() {
+                        telemetry::capture_camera_failure(
+                            "restore_disconnected_camera",
+                            id,
+                            self.camera_settings_for_id(id),
+                            &e,
+                        );
+                    }
                     warn!(error = %e, "Failed to reinitialize camera after reconnect, will retry on next poll");
                     self.disconnected_inputs.insert(RecordingInputKind::Camera);
                     return Ok(());
@@ -923,12 +938,19 @@ pub mod input_commands {
                     Ok(ready) => match ready.await {
                         Ok(_) => emit_camera_preview_clear(&app_handle),
                         Err(e) => {
+                            telemetry::capture_camera_failure(
+                                "set_camera_input",
+                                id,
+                                settings,
+                                &e.to_string(),
+                            );
                             let message = camera_preview_error_message(&e.to_string());
                             emit_camera_preview_error(&app_handle, message);
                             return Err(e.to_string());
                         }
                     },
                     Err(e) => {
+                        telemetry::capture_camera_failure("set_camera_input", id, settings, &e);
                         let message = camera_preview_error_message(&e);
                         emit_camera_preview_error(&app_handle, message);
                         return Err(e);
@@ -976,7 +998,13 @@ pub(crate) fn panic_payload_message(payload: &(dyn std::any::Any + Send)) -> Str
 pub(crate) fn show_camera_window_unlocked(app: &AppHandle) {
     let app = app.clone();
     spawn_on_runtime(async move {
-        let _ = ShowQuiroWindow::Camera { centered: false }.show(&app).await;
+        if let Err(error) = (ShowQuiroWindow::Camera { centered: false })
+            .show(&app)
+            .await
+        {
+            telemetry::capture_error("camera", "show_camera_window", "window_show");
+            error!("Failed to show camera window: {error}");
+        }
     });
 }
 
@@ -999,7 +1027,13 @@ pub(crate) fn restore_camera_window(app: &AppHandle) {
                 return;
             };
             let _operation_guard = operation_lock.lock().await;
-            let _ = ShowQuiroWindow::Camera { centered: false }.show(&app).await;
+            if let Err(error) = (ShowQuiroWindow::Camera { centered: false })
+                .show(&app)
+                .await
+            {
+                telemetry::capture_error("camera", "restore_camera_window", "window_show");
+                error!("Failed to restore camera window: {error}");
+            }
         });
     }
 }
@@ -1434,6 +1468,8 @@ pub fn run() {
                 });
             }
 
+            telemetry::init();
+
             let logs_dir = app
                 .path()
                 .app_log_dir()
@@ -1442,6 +1478,9 @@ pub fn run() {
             let previous_termination = crash_sentinel::init(&logs_dir, env!("CARGO_PKG_VERSION"));
             configure_windows_graphics_recovery(previous_termination);
             configure_camera_blur_recovery(&app, previous_termination);
+            if let Some(termination) = previous_termination {
+                telemetry::capture_unexpected_termination(termination);
+            }
             usage_analytics::init(&app);
 
             camera::init_preview_profile(total_system_memory());
@@ -1458,11 +1497,15 @@ pub fn run() {
                 audio_meter::spawn_event_emitter(app.clone(), mic_samples_rx);
 
                 let camera_feed = CameraFeed::spawn(CameraFeed::default());
-                let _ = camera_feed.ask(feeds::camera::AddSender(camera_tx)).await;
+                if let Err(error) = camera_feed.ask(feeds::camera::AddSender(camera_tx)).await {
+                    telemetry::capture_error("camera", "attach_preview_feed", "feed_attach");
+                    error!("Failed to attach camera preview sender: {error}");
+                }
 
                 let (mic_error_tx, mic_error_rx) = flume::bounded(1);
                 let mic_feed = MicrophoneFeed::spawn(MicrophoneFeed::new(mic_error_tx));
                 if let Err(err) = mic_feed.ask(microphone::AddSender(mic_samples_tx)).await {
+                    telemetry::capture_error("microphone", "attach_audio_meter", "feed_attach");
                     error!("Failed to attach audio meter sender: {err}");
                 }
 
@@ -1648,12 +1691,7 @@ fn total_system_memory() -> u64 {
 mod tests {
     /// Regenerates `../src/utils/tauri.ts` without launching the app.
     ///
-    /// **Prefer `cargo run -p quiro-desktop --bin export-bindings`.** This
-    /// test does the same thing, but a test-harness binary does not load in
-    /// every environment (`STATUS_ENTRYPOINT_NOT_FOUND` at process start on
-    /// at least one Windows setup, while the app's own binary and that
-    /// `[[bin]]` both run fine), so the binary is the reliable route and
-    /// this is kept only as the in-suite equivalent.
+    /// **Prefer `cargo run -p quiro-desktop --bin export-bindings`.**
     ///
     /// `#[ignore]`d because it writes a real file as a side effect, which a
     /// plain `cargo test` run should not do silently. Run explicitly:

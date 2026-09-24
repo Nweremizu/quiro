@@ -6,7 +6,6 @@ import {
 	useReducedMotion,
 } from "motion/react";
 import type { ComponentType, ReactNode, SVGProps } from "react";
-import { Tooltip } from "@/components/Tooltip";
 import CameraIcon from "~icons/lucide/camera";
 import CameraOffIcon from "~icons/lucide/camera-off";
 import ChevronIcon from "~icons/lucide/chevron-down";
@@ -132,10 +131,8 @@ export function LaunchToolbar({
 	recording,
 	targetMode,
 	microphone,
-	microphoneLabel,
 	systemAudio,
 	camera,
-	cameraLabel,
 	moreOpen,
 	panel,
 	panelKey,
@@ -172,14 +169,14 @@ export function LaunchToolbar({
 	const reduceMotion = useReducedMotion();
 	return (
 		<div
-			className="flex h-full w-full select-none overflow-hidden p-0.5"
+			className="flex h-full w-full select-none items-center justify-center overflow-visible p-2"
 			data-tauri-drag-region
 		>
 			<motion.div
 				initial={false}
 				animate={{ maxWidth: recording ? 636 : 556 }}
 				transition={reduceMotion ? { duration: 0 } : spring}
-				className="mx-auto flex h-full w-full flex-col overflow-hidden rounded-2xl bg-gray-1 text-gray-12 ring-1 ring-gray-5 shadow-[0_1px_2px_oklch(0_0_0/8%),0_14px_36px_-18px_oklch(0_0_0/35%)]"
+				className="mx-auto flex h-full w-full flex-col overflow-hidden rounded-2xl bg-gray-1 text-gray-12 ring-1 ring-gray-5 shadow-[0_1px_2px_oklch(0_0_0/8%),0_14px_28px_-18px_oklch(0_0_0/35%)]"
 				data-tauri-drag-region
 			>
 				<div
@@ -282,23 +279,18 @@ export function LaunchToolbar({
 						aria-hidden={!recording}
 						inert={!recording}
 					>
-						<Tooltip
-							content={<span>{microphoneLabel}</span>}
-							childClass="contents"
+						<QuickAction
+							label="Choose microphone"
+							active={microphone}
+							activeAppearance="icon"
+							onClick={onMicrophone}
 						>
-							<QuickAction
-								label="Choose microphone"
+							<MorphIcon
 								active={microphone}
-								activeAppearance="icon"
-								onClick={onMicrophone}
-							>
-								<MorphIcon
-									active={microphone}
-									ActiveIcon={MicIcon}
-									InactiveIcon={MicOffIcon}
-								/>
-							</QuickAction>
-						</Tooltip>
+								ActiveIcon={MicIcon}
+								InactiveIcon={MicOffIcon}
+							/>
+						</QuickAction>
 						<QuickAction
 							label="System audio"
 							active={systemAudio}
@@ -311,20 +303,18 @@ export function LaunchToolbar({
 								InactiveIcon={VolumeOffIcon}
 							/>
 						</QuickAction>
-						<Tooltip content={<span>{cameraLabel}</span>} childClass="contents">
-							<QuickAction
-								label="Choose webcam"
+						<QuickAction
+							label="Choose webcam"
+							active={camera}
+							activeAppearance="icon"
+							onClick={onCamera}
+						>
+							<MorphIcon
 								active={camera}
-								activeAppearance="icon"
-								onClick={onCamera}
-							>
-								<MorphIcon
-									active={camera}
-									ActiveIcon={CameraIcon}
-									InactiveIcon={CameraOffIcon}
-								/>
-							</QuickAction>
-						</Tooltip>
+								ActiveIcon={CameraIcon}
+								InactiveIcon={CameraOffIcon}
+							/>
+						</QuickAction>
 					</motion.div>
 					<Separator />
 					<div className="flex shrink-0 gap-0.5">

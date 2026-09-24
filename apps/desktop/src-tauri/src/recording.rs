@@ -162,7 +162,22 @@ pub async fn start_recording(
     };
     let camera_feed = match lock_camera_feed(&app_state).await {
         Ok(feed) => feed,
-        Err(error) => fail!(error),
+        Err(error) => {
+            let selected = app_state.read().await.selected_camera_id.clone();
+            if let Some(id) = selected.as_ref() {
+                let settings =
+                    crate::recording_settings::RecordingSettingsStore::camera_settings_for(
+                        &app, id,
+                    );
+                crate::telemetry::capture_camera_failure(
+                    "start_recording_camera_lock",
+                    id,
+                    settings,
+                    &error,
+                );
+            }
+            fail!(error)
+        }
     };
 
     let pretty_name = crate::library::timestamped_pretty_name();

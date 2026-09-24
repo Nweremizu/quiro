@@ -81,7 +81,7 @@ export const cameraToolbarScale = (size: number) =>
 	0.7 +
 	((clampCameraSize(size) - CAMERA_MIN_SIZE) /
 		(CAMERA_MAX_SIZE - CAMERA_MIN_SIZE)) *
-	0.3;
+		0.3;
 
 export function cameraBorderRadius(state: CameraWindowState) {
 	if (state.shape === "round") return "9999px";

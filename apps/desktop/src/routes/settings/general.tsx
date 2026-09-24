@@ -71,8 +71,8 @@ type UpdateState =
 	| { kind: "up-to-date" }
 	| { kind: "available"; update: Update }
 	| { kind: "downloading"; progress: number | null }
-	| { kind: "ready" }
-	| { kind: "error"; message: string };
+	| { kind: "installing" }
+	| { kind: "error"; message: string; action: "check" | "install" };
 
 export default function GeneralSettings() {
 	const query = generalSettingsStore.useQuery();
@@ -165,6 +165,7 @@ export default function GeneralSettings() {
 			setUpdateState({
 				kind: "error",
 				message: error instanceof Error ? error.message : String(error),
+				action: "check",
 			});
 		}
 	};
@@ -182,11 +183,13 @@ export default function GeneralSettings() {
 					progress: total ? downloaded / total : null,
 				});
 			});
-			setUpdateState({ kind: "ready" });
+			setUpdateState({ kind: "installing" });
+			await relaunch();
 		} catch (error) {
 			setUpdateState({
 				kind: "error",
 				message: error instanceof Error ? error.message : String(error),
+				action: "install",
 			});
 		}
 	};
@@ -209,10 +212,10 @@ export default function GeneralSettings() {
 									(updateState.progress != null
 										? `Downloading update… ${Math.round(updateState.progress * 100)}%`
 										: "Downloading update…")}
-								{updateState.kind === "ready" &&
-									"Update installed. Restart to finish."}
+								{updateState.kind === "installing" &&
+									"Installing update. Quiro will reopen shortly."}
 								{updateState.kind === "error" &&
-									`Couldn't check for updates: ${updateState.message}`}
+									`${updateState.action === "check" ? "Couldn't check for updates" : "Couldn't install update"}: ${updateState.message}`}
 							</p>
 							{updateState.kind === "available" ? (
 								<Button
@@ -220,15 +223,7 @@ export default function GeneralSettings() {
 									size="sm"
 									onClick={() => void handleInstallUpdate(updateState.update)}
 								>
-									Download &amp; install
-								</Button>
-							) : updateState.kind === "ready" ? (
-								<Button
-									variant="dark"
-									size="sm"
-									onClick={() => void relaunch()}
-								>
-									Restart now
+									Update now
 								</Button>
 							) : (
 								<Button
@@ -236,12 +231,14 @@ export default function GeneralSettings() {
 									size="sm"
 									disabled={
 										updateState.kind === "checking" ||
-										updateState.kind === "downloading"
+										updateState.kind === "downloading" ||
+										updateState.kind === "installing"
 									}
 									onClick={() => void handleCheckForUpdates()}
 								>
 									{(updateState.kind === "checking" ||
-										updateState.kind === "downloading") && (
+										updateState.kind === "downloading" ||
+										updateState.kind === "installing") && (
 										<LoadingSpinner size={14} />
 									)}
 									Check for updates

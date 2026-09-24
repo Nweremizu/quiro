@@ -28,7 +28,10 @@ pub async fn get_camera_preview_state(
         .await
         .camera_preview
         .get_state()
-        .map_err(|err| format!("Error reading camera preview state: {err}"))
+        .map_err(|err| {
+            crate::telemetry::capture_error("camera", "get_camera_preview_state", "state_read");
+            format!("Error reading camera preview state: {err}")
+        })
 }
 
 /// `frame_aspect` is the live camera's width/height, so Full shape can widen
@@ -50,7 +53,10 @@ pub async fn set_camera_preview_state(
     guard
         .camera_preview
         .set_state(preview_state)
-        .map_err(|err| format!("Error saving camera preview state: {err}"))?;
+        .map_err(|err| {
+            crate::telemetry::capture_error("camera", "set_camera_preview_state", "state_write");
+            format!("Error saving camera preview state: {err}")
+        })?;
 
     // Drives the WS preview's own scaler (camera_legacy.rs watches this).
     let _ = guard.camera_preview_state_tx.send(state_for_ws.clone());

@@ -21,7 +21,11 @@ pub(crate) fn list_cameras_blocking() -> Vec<CameraInfo> {
 pub async fn list_cameras() -> Vec<CameraInfo> {
     tokio::task::spawn_blocking(list_cameras_blocking)
         .await
-        .unwrap_or_default()
+        .unwrap_or_else(|error| {
+            crate::telemetry::capture_error("camera", "list_cameras", "task_join");
+            tracing::warn!(%error, "Camera enumeration task failed");
+            Vec::new()
+        })
 }
 
 pub(crate) fn list_audio_devices_blocking() -> Vec<String> {
@@ -37,7 +41,11 @@ pub(crate) fn list_audio_devices_blocking() -> Vec<String> {
 pub async fn list_audio_devices() -> Vec<String> {
     tokio::task::spawn_blocking(list_audio_devices_blocking)
         .await
-        .unwrap_or_default()
+        .unwrap_or_else(|error| {
+            crate::telemetry::capture_error("microphone", "list_audio_devices", "task_join");
+            tracing::warn!(%error, "Microphone enumeration task failed");
+            Vec::new()
+        })
 }
 
 #[derive(Serialize, Type, Clone)]
@@ -63,6 +71,11 @@ pub struct CameraWithFormats {
 pub async fn get_camera_formats(device_id: String) -> Option<CameraWithFormats> {
     tokio::task::spawn_blocking(move || get_camera_formats_blocking(device_id))
         .await
+        .map_err(|error| {
+            crate::telemetry::capture_error("camera", "get_camera_formats", "task_join");
+            tracing::warn!(%error, "Camera format enumeration task failed");
+            error
+        })
         .ok()
         .flatten()
 }
@@ -122,6 +135,11 @@ pub struct MicrophoneInfo {
 pub async fn get_microphone_info(name: String) -> Option<MicrophoneInfo> {
     tokio::task::spawn_blocking(move || get_microphone_info_blocking(name))
         .await
+        .map_err(|error| {
+            crate::telemetry::capture_error("microphone", "get_microphone_info", "task_join");
+            tracing::warn!(%error, "Microphone format enumeration task failed");
+            error
+        })
         .ok()
         .flatten()
 }
@@ -172,7 +190,11 @@ pub struct DevicesUpdated {
 pub async fn get_devices_snapshot() -> DevicesUpdated {
     tokio::task::spawn_blocking(build_devices_snapshot)
         .await
-        .unwrap_or_else(|_| build_devices_snapshot())
+        .unwrap_or_else(|error| {
+            crate::telemetry::capture_error("devices", "get_devices_snapshot", "task_join");
+            tracing::warn!(%error, "Device snapshot task failed");
+            build_devices_snapshot()
+        })
 }
 
 pub(crate) fn build_devices_snapshot() -> DevicesUpdated {

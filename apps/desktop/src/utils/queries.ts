@@ -8,6 +8,7 @@ import {
   type RecordingMetaWithMetadata,
   type ScreenshotMetaWithMetadata,
 } from "./tauri";
+import { captureTauriCall } from "./posthog";
 
 // Hand-written, not generated — mirrors the pattern in devices.tsx. Trimmed
 // to the commands this backend actually has: no thumbnails needed for
@@ -241,13 +242,19 @@ export function createOptionsQuery() {
 
 export const listCaptureDisplaysQuery = queryOptions({
   queryKey: ["captureDisplays"] as const,
-  queryFn: () => commands.listCaptureDisplays(),
+  queryFn: () =>
+    captureTauriCall("display", "list_capture_displays", () =>
+      commands.listCaptureDisplays(),
+    ),
   staleTime: 5_000,
 });
 
 export const listCaptureWindowsQuery = queryOptions({
   queryKey: ["captureWindows"] as const,
-  queryFn: () => commands.listCaptureWindows(),
+  queryFn: () =>
+    captureTauriCall("window", "list_capture_windows", () =>
+      commands.listCaptureWindows(),
+    ),
   staleTime: 5_000,
 });
 
@@ -281,7 +288,10 @@ export const permissionsQuery = queryOptions({
 
 export const listScreens = queryOptions({
   queryKey: ["capture", "displays"] as const,
-  queryFn: () => commands.listCaptureDisplays(),
+  queryFn: () =>
+    captureTauriCall("display", "list_capture_displays", () =>
+      commands.listCaptureDisplays(),
+    ),
   refetchInterval: 10_000,
   staleTime: 5_000,
 });
@@ -289,7 +299,11 @@ export const listScreens = queryOptions({
 export const listWindows = queryOptions({
   queryKey: ["capture", "windows"] as const,
   queryFn: async () => {
-    const w = await commands.listCaptureWindows();
+    const w = await captureTauriCall(
+      "window",
+      "list_capture_windows",
+      () => commands.listCaptureWindows(),
+    );
 
     w.sort(
       (a, b) =>
@@ -305,7 +319,11 @@ export const listWindows = queryOptions({
 export const listWindowsWithThumbnails = queryOptions({
   queryKey: ["capture", "windows-thumbnails"] as const,
   queryFn: async () => {
-    const w = await commands.listWindowsWithThumbnails();
+    const w = await captureTauriCall(
+      "window",
+      "list_windows_with_thumbnails",
+      () => commands.listWindowsWithThumbnails(),
+    );
 
     w.sort(
       (a, b) =>
@@ -320,7 +338,12 @@ export const listWindowsWithThumbnails = queryOptions({
 
 export const listDisplaysWithThumbnails = queryOptions({
   queryKey: ["capture", "displays-thumbnails"] as const,
-  queryFn: () => commands.listDisplaysWithThumbnails(),
+  queryFn: () =>
+    captureTauriCall(
+      "display",
+      "list_displays_with_thumbnails",
+      () => commands.listDisplaysWithThumbnails(),
+    ),
   refetchInterval: 10_000,
   staleTime: 5_000,
 });

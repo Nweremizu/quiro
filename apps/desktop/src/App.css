@@ -55,6 +55,11 @@
 	background: transparent;
 }
 
+[data-transparent-window],
+[data-transparent-window] body {
+	overflow: hidden;
+}
+
 /* Custom scrollbar */
 .custom-scroll {
 	margin-right: 3px; /* Add margin to create space between scrollbar and window edge */

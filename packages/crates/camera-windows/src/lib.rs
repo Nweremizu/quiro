@@ -598,8 +598,8 @@ pub fn get_devices() -> Result<Vec<VideoDeviceInfo>, GetDevicesError> {
         match mf_device {
             Some((i, mf_device)) => {
                 if mf_device.formats().is_empty() {
-                    devices.push(mf_device.clone());
                     devices.swap_remove(i);
+                    devices.push(dshow_device);
                 }
             }
             None => devices.push(dshow_device),

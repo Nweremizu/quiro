@@ -2,13 +2,20 @@ import { Button, toast } from "@quiro/ui";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import type { PropsWithChildren } from "react";
 import { ErrorBoundary } from "react-error-boundary";
+import { captureDesktopException } from "@/utils/posthog";
 import ClipboardCopyIcon from "~icons/lucide/clipboard-copy";
 import TriangleAlertIcon from "~icons/lucide/triangle-alert";
 
 export function AppErrorBoundary({ children }: PropsWithChildren) {
 	return (
 		<ErrorBoundary
-			onError={(error) => console.error(error)}
+			onError={(error) => {
+				captureDesktopException(error, {
+					area: "frontend",
+					operation: "react_error_boundary",
+				});
+				console.error(error);
+			}}
 			fallbackRender={({ error }) => <Crashed error={error} />}
 		>
 			{children}

@@ -236,6 +236,11 @@ impl ShowQuiroWindow {
             });
         }
 
+        #[cfg(windows)]
+        if _id.is_transparent() {
+            clear_webview_background(&window);
+        }
+
         #[cfg(target_os = "macos")]
         if let Some(position) = _id.traffic_lights_position() {
             add_traffic_lights(&window, position);

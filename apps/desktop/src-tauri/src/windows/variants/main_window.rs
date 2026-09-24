@@ -1,5 +1,9 @@
 use crate::windows::*;
 
+const LAUNCH_TOOLBAR_WIDTH: f64 = 840.0;
+const LAUNCH_TOOLBAR_HEIGHT: f64 = 120.0;
+const LAUNCH_TOOLBAR_MIN_WIDTH: f64 = 396.0;
+
 pub(crate) async fn show_main(
     this: &ShowQuiroWindow,
     app: &AppHandle<Wry>,
@@ -10,8 +14,7 @@ pub(crate) async fn show_main(
     let should_protect = should_protect_window(app, &title);
     let toolbar = crate::launch_window::uses_toolbar(app);
     let (width, height) = if toolbar {
-        // Toolbar window is 640x60, but we allow it to be resized down to 330x60
-        (640.0, 60.0)
+        (LAUNCH_TOOLBAR_WIDTH, LAUNCH_TOOLBAR_HEIGHT)
     } else {
         (330.0, 395.0)
     };
@@ -29,8 +32,14 @@ pub(crate) async fn show_main(
             },
         )
         .inner_size(width, height)
-        // Toolbar window is 640x60, but we allow it to be resized down to 330x60
-        .min_inner_size(330.0, 60.0)
+        .min_inner_size(
+            if toolbar {
+                LAUNCH_TOOLBAR_MIN_WIDTH
+            } else {
+                330.0
+            },
+            if toolbar { LAUNCH_TOOLBAR_HEIGHT } else { 60.0 },
+        )
         .resizable(false)
         .maximized(false)
         .maximizable(false)
@@ -39,11 +48,9 @@ pub(crate) async fn show_main(
         .visible_on_all_workspaces(true)
         .content_protected(should_protect)
         .transparent(true)
-        // The default `.shadow(true)` (see window_builder_with_label) pairs a
-        // DWM-drawn drop shadow with our border/corner overrides below in a
-        // combination Windows renders inconsistently — a stray highlight
-        // sliver along the top edge. camera.rs/overlays.rs hit the same thing
-        // and already disable it for their borderless, transparent windows.
+        // The default `.shadow(true)` pairs a DWM-drawn drop shadow with the
+        // transparent toolbar's CSS shadow in a combination Windows renders
+        // inconsistently — a stray highlight sliver along the top edge.
         .shadow(!toolbar)
         .visible(false)
         .initialization_script(format!(
@@ -133,14 +140,11 @@ pub(crate) async fn show_main(
                 warn!("Failed to position Main window on Windows: {}", e);
             }
             if toolbar {
-                crate::platform::win::disable_window_corner_rounding(&window);
                 crate::platform::win::disable_window_border(&window);
             }
         }
 
-        if toolbar {
-            clear_webview_background(&window);
-        }
+        clear_webview_background(&window);
 
         window.show().ok();
     }

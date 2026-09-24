@@ -74,6 +74,8 @@ impl FormatInfo {
 pub struct Format {
     native: NativeFormat,
     info: FormatInfo,
+    #[cfg(windows)]
+    pixel_format: quiro_camera_windows::PixelFormat,
 }
 
 impl Format {
@@ -92,28 +94,29 @@ impl Deref for Format {
 
 impl Debug for Format {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Format")
-            .field("info", &self.info)
-            .field("native", {
-                #[cfg(target_os = "macos")]
-                {
-                    &"AVFoundation"
-                }
-                #[cfg(windows)]
-                {
-                    use quiro_camera_windows::VideoFormatInner;
+        let mut debug = f.debug_struct("Format");
+        debug.field("info", &self.info).field("native", {
+            #[cfg(target_os = "macos")]
+            {
+                &"AVFoundation"
+            }
+            #[cfg(windows)]
+            {
+                use quiro_camera_windows::VideoFormatInner;
 
-                    match &self.native {
-                        VideoFormatInner::DirectShow(_) => &"DirectShow",
-                        VideoFormatInner::MediaFoundation(_) => &"MediaFoundation",
-                    }
+                match &self.native {
+                    VideoFormatInner::DirectShow(_) => &"DirectShow",
+                    VideoFormatInner::MediaFoundation(_) => &"MediaFoundation",
                 }
-                #[cfg(target_os = "linux")]
-                {
-                    &"Linux"
-                }
-            })
-            .finish()
+            }
+            #[cfg(target_os = "linux")]
+            {
+                &"Linux"
+            }
+        });
+        #[cfg(windows)]
+        debug.field("pixel_format", &self.pixel_format);
+        debug.finish()
     }
 }
 
