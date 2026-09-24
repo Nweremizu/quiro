@@ -1267,6 +1267,7 @@ fn specta_bindings() -> tauri_specta::Builder {
             devices::get_microphone_info,
             devices::get_devices_snapshot,
             import::import_video,
+            import::import_video_clip,
             import::import_screenshot,
             library::list_recordings,
             library::rename_library_capture,

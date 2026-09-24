@@ -20,6 +20,7 @@ changes.
   system, app version, requested format, and hardware vendor/product IDs without
   sending device serial numbers.
 - Windows support manifests Common Controls v6 for native UI compatibility.
+- Import videos from the editor's Clips panel and append them to the timeline.
 
 ### Changed
 
@@ -39,6 +40,7 @@ changes.
 - Windows Media Foundation camera enumeration now retains the DirectShow device
   when Media Foundation exposes no usable formats.
 - Removed the Dependabot configuration to stop its scheduled CI activity.
+- Custom window close buttons now close settings, screenshot editor, and other desktop windows.
 
 ## [0.1.5] - 2026-09-19
 

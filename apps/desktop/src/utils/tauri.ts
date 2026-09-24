@@ -496,6 +496,14 @@ async importVideo(source: string) : Promise<Result<string, string>> {
     else return { status: "error", error: e  as any };
 }
 },
+async importVideoClip(source: string, config: ProjectConfiguration) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("import_video_clip", { source, config }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 /**
  * Copies `source` into the screenshots library and writes its sidecar.
  * Returns the path of the imported copy.

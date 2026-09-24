@@ -103,6 +103,7 @@ type EditorContextValue = {
 	setClipsOpen: (open: boolean) => void;
 	prettyName: string;
 	rename: (name: string) => Promise<void>;
+	importVideoClip: (source: string) => Promise<void>;
 };
 
 const EditorContext = createContext<EditorContextValue | null>(null);
@@ -199,7 +200,12 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 	const [previewQuality, setPreviewQuality] = useState<PreviewQuality>("full");
 	const [selection, setSelection] = useState<TimelineSelection>(null);
 	const [splitMode, setSplitMode] = useState(false);
-	const [clipsOpen, setClipsOpen] = useState(false);
+	const [clipsOpen, setClipsOpen] = useState(() => {
+		if (typeof window === "undefined") return false;
+		const reopen = sessionStorage.getItem("editor-clips-open-after-import");
+		sessionStorage.removeItem("editor-clips-open-after-import");
+		return reopen === "true";
+	});
 	const [prettyName, setPrettyName] = useState("");
 
 	const playingRef = useRef(false);
@@ -215,7 +221,10 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 	const lastInteractivePreviewAtRef = useRef(0);
 	const pendingProjectSaveRef = useRef<ProjectConfiguration | null>(null);
 	const projectSaveActiveRef = useRef(false);
+	const projectSavePromiseRef = useRef<Promise<void> | null>(null);
 	const projectSaveTimerRef = useRef<number | undefined>(undefined);
+	const reloadingAfterImportRef = useRef(false);
+	const importInProgressRef = useRef(false);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -360,6 +369,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 	}, [flushLiveProject]);
 
 	const togglePlay = useCallback(() => {
+		if (importInProgressRef.current) return;
 		void (async () => {
 			try {
 				if (playingRef.current) {
@@ -393,7 +403,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 		if (projectSaveActiveRef.current) return;
 		projectSaveActiveRef.current = true;
 
-		void (async () => {
+		projectSavePromiseRef.current = (async () => {
 			while (pendingProjectSaveRef.current) {
 				const next = pendingProjectSaveRef.current;
 				pendingProjectSaveRef.current = null;
@@ -407,6 +417,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 				}
 			}
 			projectSaveActiveRef.current = false;
+			projectSavePromiseRef.current = null;
 		})();
 	}, []);
 
@@ -442,6 +453,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 
 	const previewProject = useCallback(
 		(update: (project: ProjectConfiguration) => ProjectConfiguration) => {
+			if (importInProgressRef.current) return;
 			const current = projectRef.current;
 			if (!current) return;
 			const updated = update(current);
@@ -472,7 +484,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 			pendingInteractivePreviewRef.current = null;
 			window.clearTimeout(interactivePreviewTimerRef.current);
 			window.clearTimeout(projectSaveTimerRef.current);
-			flushProjectSave();
+			if (!reloadingAfterImportRef.current) flushProjectSave();
 		},
 		[flushProjectSave],
 	);
@@ -490,6 +502,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 
 	const setProject = useCallback(
 		(update: (project: ProjectConfiguration) => ProjectConfiguration) => {
+			if (importInProgressRef.current) return;
 			setProjectState((current) => {
 				if (!current) return current;
 				const updated = update(current);
@@ -511,6 +524,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 
 	const setProjectTransient = useCallback(
 		(update: (project: ProjectConfiguration) => ProjectConfiguration) => {
+			if (importInProgressRef.current) return;
 			setProjectState((current) => {
 				if (!current) return current;
 				const updated = update(current);
@@ -527,6 +541,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 	);
 
 	const undo = useCallback(() => {
+		if (importInProgressRef.current) return;
 		setHistory((entries) => {
 			const previous = entries[entries.length - 1];
 			if (!previous) return entries;
@@ -542,6 +557,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 	}, [pushProject]);
 
 	const redo = useCallback(() => {
+		if (importInProgressRef.current) return;
 		setFuture((entries) => {
 			const next = entries[entries.length - 1];
 			if (!next) return entries;
@@ -590,6 +606,40 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 		setPrettyName(trimmed);
 	}, []);
 
+	const importVideoClip = useCallback(
+		async (source: string) => {
+			if (importInProgressRef.current) {
+				throw new Error("A clip is already importing");
+			}
+			window.clearTimeout(projectSaveTimerRef.current);
+			await projectSavePromiseRef.current;
+			const config = projectRef.current;
+			if (!config) throw new Error("Editor project is not ready");
+			importInProgressRef.current = true;
+			pendingProjectSaveRef.current = null;
+
+			try {
+				if (playingRef.current) {
+					await commands.stopPlayback();
+					setPlaying(false);
+					playback.setPlaying(false);
+				}
+				const result = await commands.importVideoClip(source, config);
+				if (result.status === "error") throw new Error(result.error);
+			} catch (error) {
+				pendingProjectSaveRef.current = config;
+				flushProjectSave();
+				importInProgressRef.current = false;
+				throw error;
+			}
+
+			reloadingAfterImportRef.current = true;
+			sessionStorage.setItem("editor-clips-open-after-import", "true");
+			window.location.reload();
+		},
+		[flushProjectSave, playback],
+	);
+
 	const value = useMemo<EditorContextValue>(
 		() => ({
 			instance,
@@ -618,6 +668,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 			setClipsOpen,
 			prettyName,
 			rename,
+			importVideoClip,
 		}),
 		[
 			instance,
@@ -643,6 +694,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 			clipsOpen,
 			prettyName,
 			rename,
+			importVideoClip,
 		],
 	);
 

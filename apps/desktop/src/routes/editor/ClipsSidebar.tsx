@@ -1,10 +1,12 @@
-import { cn } from "@quiro/ui";
+import { cn, toast } from "@quiro/ui";
+import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useRef, useState } from "react";
 import { cachedFileImageUrl } from "@/utils/image-cache";
 import { commands, type TimelineSegment } from "@/utils/tauri";
 import IconLucideArrowLeft from "~icons/lucide/arrow-left";
 import IconLucideClapperboard from "~icons/lucide/clapperboard";
 import IconLucidePencil from "~icons/lucide/pencil";
+import IconLucidePlus from "~icons/lucide/plus";
 import IconLucideTrash2 from "~icons/lucide/trash-2";
 import {
 	transitionsAfterClipDelete,
@@ -13,11 +15,6 @@ import {
 import { useEditorContext } from "./context";
 import { segmentDuration, segmentOffsets } from "./Timeline/ClipTrack";
 import { rippleDeleteAllTracks } from "./timeline-utils";
-
-// Cap's clips panel: the timeline's clip track as an ordered list — thumbnail,
-// name, duration — that can be renamed, reordered by dragging, and deleted.
-// Cap's "Record a new clip" and "Import" buttons are not here: both need
-// recording-into-an-open-project and import pipelines Quiro doesn't have.
 
 function formatClipDuration(seconds: number) {
 	const total = Math.max(0, seconds);
@@ -66,15 +63,41 @@ function ClipThumbnail({
 }
 
 export function ClipsSidebar({ onClose }: { onClose: () => void }) {
-	const { project, setProject, setSelection } = useEditorContext();
+	const { project, setProject, setSelection, importVideoClip } =
+		useEditorContext();
 
 	const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
 	const [dropIndex, setDropIndex] = useState<number | null>(null);
 	const [editingIndex, setEditingIndex] = useState<number | null>(null);
 	const [draft, setDraft] = useState("");
+	const [importing, setImporting] = useState(false);
 	const listRef = useRef<HTMLDivElement | null>(null);
 
 	const segments = project?.timeline?.segments ?? [];
+
+	const importClip = async () => {
+		if (importing) return;
+		setImporting(true);
+		try {
+			const source = await open({
+				multiple: false,
+				directory: false,
+				filters: [
+					{
+						name: "Video",
+						extensions: ["mp4", "mov", "mkv", "webm", "avi", "m4v"],
+					},
+				],
+			});
+			if (!source) return;
+			await importVideoClip(source);
+		} catch (error) {
+			console.error("Failed to import video clip:", error);
+			toast.error(error instanceof Error ? error.message : String(error));
+		} finally {
+			setImporting(false);
+		}
+	};
 
 	const renameClip = (index: number, name: string) => {
 		const trimmed = name.trim();
@@ -187,6 +210,13 @@ export function ClipsSidebar({ onClose }: { onClose: () => void }) {
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-gray-3 bg-gray-1 dark:bg-gray-2">
+			{importing && (
+				<div className="fixed inset-0 z-50 flex cursor-progress items-center justify-center bg-black/20">
+					<div className="rounded-lg bg-gray-1 px-5 py-3 text-sm font-medium text-gray-12 shadow-lg">
+						Importing video…
+					</div>
+				</div>
+			)}
 			<button
 				type="button"
 				onClick={onClose}
@@ -204,6 +234,15 @@ export function ClipsSidebar({ onClose }: { onClose: () => void }) {
 							{segments.length}
 						</span>
 					)}
+					<button
+						type="button"
+						onClick={() => void importClip()}
+						disabled={importing}
+						className="ml-auto flex items-center gap-1.5 rounded-md bg-gray-3 px-2.5 py-1.5 text-xs font-medium text-gray-12 transition-colors hover:bg-gray-4 disabled:opacity-50"
+					>
+						<IconLucidePlus className="size-3.5" />
+						{importing ? "Importing…" : "Import video"}
+					</button>
 				</div>
 
 				<div className="custom-scroll -mx-1 min-h-0 flex-1 overflow-y-auto px-1">
@@ -214,7 +253,7 @@ export function ClipsSidebar({ onClose }: { onClose: () => void }) {
 							</div>
 							<p className="text-sm font-medium text-gray-12">No clips yet</p>
 							<p className="max-w-50 text-xs text-gray-10">
-								Trim or split the timeline and the pieces show up here.
+								Import a video or trim and split the timeline to add clips.
 							</p>
 						</div>
 					) : (
