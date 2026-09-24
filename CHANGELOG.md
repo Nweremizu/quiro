@@ -10,6 +10,8 @@ changes.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-24
+
 ### Added
 
 - Desktop error tracking through PostHog for camera setup and frame conversion,
