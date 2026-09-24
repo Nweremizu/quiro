@@ -290,8 +290,8 @@ importers:
         specifier: ^13.1.1
         version: 13.1.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       posthog-js:
-        specifier: ^1.434.11
-        version: 1.434.11(@types/react@19.2.18)(react@19.2.8)
+        specifier: 1.434.9
+        version: 1.434.9(@types/react@19.2.18)(react@19.2.8)
       react:
         specifier: ^19.1.0
         version: 19.2.8
@@ -4199,8 +4199,8 @@ packages:
     resolution: {integrity: sha512-u82N74LFzG8ca+dD8puPnplTXoGH4fTPpVGuIbt36G3qvNlkvfD0lEAZSxaly3KX8TS/L1A1gsCEmvKmBcVbkQ==}
     engines: {node: ^10 || ^12 || >=14}
 
-  posthog-js@1.434.11:
-    resolution: {integrity: sha512-B5DPg/SZaMEqsJIqX7lVkcH3orFFTk8Ok8q17fYYB8WS1rlzuoSqj5RD8v3JLIL+U9WDBZfzpY6XY9LvnJD1Yg==}
+  posthog-js@1.434.9:
+    resolution: {integrity: sha512-hiHVOrD0GJw6iXJv4Dg0FWPjjUAXC6j+Td+a8a+Et1qCp5nh4l0dtF4jsOBhCEnz1OOuuoi7yXE2bprZlcbWRw==}
     peerDependencies:
       '@types/react': '>=16.8.0'
       react: '>=16.8.0'
@@ -8564,7 +8564,7 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
-  posthog-js@1.434.11(@types/react@19.2.18)(react@19.2.8):
+  posthog-js@1.434.9(@types/react@19.2.18)(react@19.2.8):
     dependencies:
       '@posthog/browser-common': 0.9.0
       '@posthog/core': 1.55.1
