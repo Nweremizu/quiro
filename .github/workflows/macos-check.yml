@@ -19,7 +19,7 @@ jobs:
       # which is exactly the loop this workflow exists to shorten.
       CACHE_ON_FAILURE: "true"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: ./.github/actions/setup
         with:
