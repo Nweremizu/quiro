@@ -75,6 +75,24 @@ export default function DocsPage() {
 					The person opening an exported file doesn’t need Quiro.
 				</p>
 			</section>
+			<section id="macos-blocked">
+				<h2>macOS says Quiro can’t be opened</h2>
+				<p>
+					Quiro isn’t notarized by Apple yet, so Gatekeeper blocks it the first
+					time. Pick one:
+				</p>
+				<ol>
+					<li>
+						Open System Settings → Privacy &amp; Security, scroll down to the
+						message about Quiro being blocked, and click{" "}
+						<strong>Open Anyway</strong>. Try opening Quiro again and confirm.
+					</li>
+					<li>
+						Or, in Terminal: <code>xattr -cr /Applications/Quiro.app</code>,
+						then open Quiro normally.
+					</li>
+				</ol>
+			</section>
 			<section>
 				<h2>Need a hand?</h2>
 				<p>

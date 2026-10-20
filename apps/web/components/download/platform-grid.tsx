@@ -96,6 +96,11 @@ export default function PlatformGrid({
 							{platform.format}
 							{installer ? ` · ${formatBytes(installer.bytes)}` : ""}
 						</span>
+						{platform.name === "macOS" && (
+							<a href="/docs#macos-blocked" className="text-link">
+								macOS blocked the app? See the fix →
+							</a>
+						)}
 					</section>
 				);
 			})}

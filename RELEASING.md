@@ -83,6 +83,15 @@ variables (`RELEASE_BASE_URL`, `R2_BUCKET`), and run
 Until `RELEASE_BASE_URL` is set the release still runs — it produces a GitHub
 Release and skips the R2 push, so auto-update stays inert.
 
+**macOS without real notarization**: ad-hoc signing (`signingIdentity: "-"`)
+only helps on older macOS. On Sequoia (15) and later, Gatekeeper blocks
+unnotarized downloaded apps with no bypass button at all ("Quiro Not
+Opened" / only "Move to Trash" or "Done") — this is a Gatekeeper/OS
+behavior, not something build config can work around. Until section 3
+below is done, the [download page](apps/web/app/(main)/docs/page.tsx)
+documents the two user-side workarounds (System Settings → Privacy &
+Security → Open Anyway, or `xattr -cr`).
+
 ### 3. OS code signing (optional — builds are unsigned without it)
 
 - **macOS** notarized build: add `APPLE_CERTIFICATE`,
