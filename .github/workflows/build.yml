@@ -91,7 +91,7 @@ jobs:
           ' "${{ inputs.version }}" "$BASE_URL" "${{ inputs.channel }}"
 
       - name: Build & upload to release
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Auto-update signature — required for updates to install.
